@@ -1,50 +1,76 @@
-'use client';
+"use client";
 
-import { Canvas } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera, Sky } from '@react-three/drei';
-import { ReactNode } from 'react';
+import { Canvas, useFrame } from "@react-three/fiber";
+import {
+  OrbitControls,
+  PerspectiveCamera,
+  Sky,
+  Stars,
+} from "@react-three/drei";
+import { ReactNode, useRef, useState } from "react";
+import * as THREE from "three";
 
-interface Props {
-  children: ReactNode;
+// ──────────────────────────────────────────────────
+// 낮/밤 전환 주기 (초 단위, 60초 = 낮 30 + 밤 30)
+// ──────────────────────────────────────────────────
+const DAY_NIGHT_CYCLE = 60;
+
+interface DayNightLightsProps {
+  onNightChange: (isNight: boolean) => void;
 }
 
-export const Scene = ({ children }: Props) => {
+const DayNightLights = ({ onNightChange }: DayNightLightsProps) => {
+  const dirLightRef = useRef<THREE.DirectionalLight>(null!);
+  const ambLightRef = useRef<THREE.AmbientLight>(null!);
+  const isNightRef = useRef(false);
+
+  useFrame((state) => {
+    const t = (state.clock.elapsedTime % DAY_NIGHT_CYCLE) / DAY_NIGHT_CYCLE;
+    // t: 0=정오, 0.5=자정
+
+    // 태양 위치: 반원 궤도
+    const angle = t * Math.PI * 2 - Math.PI / 2;
+    const sunY = Math.sin(angle) * 25;
+    const sunX = Math.cos(angle) * 25;
+
+    if (dirLightRef.current) {
+      dirLightRef.current.position.set(sunX, sunY, 10);
+
+      // 낮: 강한 흰빛, 밤: 약한 파란빛
+      const dayBlend = Math.max(0, Math.sin(angle)); // 0(밤) ~ 1(낮)
+      const nightBlend = 1 - dayBlend;
+
+      dirLightRef.current.intensity = dayBlend * 2.5 + nightBlend * 0.4;
+      dirLightRef.current.color.setRGB(
+        0.9 + dayBlend * 0.1,
+        0.85 + dayBlend * 0.15,
+        0.7 + dayBlend * 0.3,
+      );
+    }
+
+    if (ambLightRef.current) {
+      const dayBlend = Math.max(0, Math.sin(angle));
+      ambLightRef.current.intensity = dayBlend * 0.8 + (1 - dayBlend) * 0.25;
+      ambLightRef.current.color.setRGB(
+        0.7 + dayBlend * 0.3,
+        0.75 + dayBlend * 0.25,
+        0.9 + dayBlend * 0.1,
+      );
+    }
+
+    // 밤 여부 판단 (태양이 지평선 아래)
+    const nowNight = sunY < 0;
+    if (nowNight !== isNightRef.current) {
+      isNightRef.current = nowNight;
+      onNightChange(nowNight);
+    }
+  });
+
   return (
-    <Canvas shadows>
-      {/* 
-        1. PerspectiveCamera: 원근감이 있는 카메라입니다. 
-           makeDefault로 설정하여 이 카메라를 기본으로 사용합니다.
-           포지션을 [5, 5, 5] 정도로 설정하여 위에서 내려다보는 시점을 만듭니다.
-      */}
-      <PerspectiveCamera 
-        makeDefault 
-        position={[14, 14, 14]} 
-        fov={40} 
-      />
-
-      {/* 
-        2. OrbitControls: 마우스로 화면을 돌려볼 수 있게 해줍니다.
-           마을을 만드는 동안 자유롭게 관찰하기 위해 추가합니다.
-      */}
-      <OrbitControls makeDefault />
-
-      {/* 
-        3. Lights: 3D 세상에는 빛이 없으면 아무것도 보이지 않습니다 (완전 암흑).
-           AmbientLight - 전체적으로 은은하게 비춰주는 환경광 (강도를 약간 낮춰 입체감을 살립니다)
-           DirectionalLight - 태양처럼 한 방향에서 쏟아지는 빛 (그림자를 만듭니다)
-      */}
-      {/* 하늘 배경 */}
-      <Sky
-        distance={450}
-        sunPosition={[10, 5, 8]}
-        inclination={0.52}
-        azimuth={0.25}
-        turbidity={6}
-        rayleigh={0.5}
-      />
-
-      <ambientLight intensity={1.0} />
+    <>
+      <ambientLight ref={ambLightRef} intensity={1.0} />
       <directionalLight
+        ref={dirLightRef}
         position={[10, 20, 10]}
         intensity={2.5}
         castShadow
@@ -54,6 +80,73 @@ export const Scene = ({ children }: Props) => {
         shadow-camera-top={30}
         shadow-camera-bottom={-30}
       />
+    </>
+  );
+};
+
+// ──────────────────────────────────────────────────
+// 다이나믹 Sky (낮/밤 전환)
+// ──────────────────────────────────────────────────
+const DynamicSky = () => {
+  const skyRef = useRef<{ sunPosition: THREE.Vector3 } | null>(null);
+
+  useFrame((state) => {
+    const t = (state.clock.elapsedTime % DAY_NIGHT_CYCLE) / DAY_NIGHT_CYCLE;
+    const angle = t * Math.PI * 2 - Math.PI / 2;
+    const sunY = Math.sin(angle);
+    const sunX = Math.cos(angle);
+
+    if (skyRef.current) {
+      // @ts-expect-error drei Sky uniform
+      skyRef.current.material.uniforms.sunPosition.value.set(
+        sunX * 10,
+        sunY * 5,
+        8,
+      );
+    }
+  });
+
+  return (
+    <Sky
+      // @ts-expect-error ref type
+      ref={skyRef}
+      distance={450}
+      sunPosition={[10, 5, 8]}
+      inclination={0.52}
+      azimuth={0.25}
+      turbidity={6}
+      rayleigh={0.5}
+    />
+  );
+};
+
+// ──────────────────────────────────────────────────
+// 메인 Scene 컴포넌트
+// ──────────────────────────────────────────────────
+interface Props {
+  children: ReactNode;
+  onNightChange?: (isNight: boolean) => void;
+}
+
+export const Scene = ({ children, onNightChange }: Props) => {
+  return (
+    <Canvas shadows>
+      {/* 
+        1. PerspectiveCamera: 원근감 카메라
+      */}
+      <PerspectiveCamera makeDefault position={[14, 14, 14]} fov={40} />
+
+      {/* 
+        2. OrbitControls: 마우스 드래그로 씬 관찰
+      */}
+      <OrbitControls makeDefault />
+
+      {/* 
+        3. 다이나믹 하늘 + 낮/밤 조명
+      */}
+      <DynamicSky />
+      <Stars radius={80} depth={50} count={4000} factor={3} fade speed={0.5} />
+      <DayNightLights onNightChange={onNightChange ?? (() => {})} />
 
       {children}
     </Canvas>

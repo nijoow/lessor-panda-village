@@ -6,11 +6,12 @@ import { Ground } from "@/components/world/Ground";
 import { Player, Controls } from "@/components/world/Player";
 import { Environment } from "@/components/world/Environment";
 import { House } from "@/components/world/House";
-import { useMemo } from "react";
+import { PetalParticles, FireflyParticles } from "@/components/world/Particles";
+import { useMemo, useState } from "react";
 
 export default function Home() {
-  // 1. 키보드 컨트롤 매핑을 정의합니다.
-  // 어떤 키(key)를 눌렀을 때 어떤 액션(name)이 실행될지 결정합니다.
+  const [isNight, setIsNight] = useState(false);
+
   const map = useMemo<KeyboardControlsEntry<Controls>[]>(
     () => [
       { name: Controls.forward, keys: ["ArrowUp", "KeyW"] },
@@ -24,10 +25,7 @@ export default function Home() {
 
   return (
     <main className="w-full h-full relative">
-      {/* 
-        2. UI Layer: 화면 위에 떠 있는 정보를 표시합니다. 
-           나중에 가구 선택창 등이 들어갈 자리입니다.
-      */}
+      {/* UI Layer */}
       <div className="absolute top-10 left-0 w-full z-10 flex flex-col items-center pointer-events-none">
         <h1 className="text-4xl font-bold text-sky-900 bg-white/50 px-6 py-2 rounded-full backdrop-blur-md">
           Panda Village 🐼
@@ -35,17 +33,25 @@ export default function Home() {
         <p className="mt-2 text-sky-800 font-medium">
           Use arrow keys or WASD to move
         </p>
+        {/* 낮/밤 상태 표시 */}
+        <div
+          className={`mt-3 px-4 py-1 rounded-full text-sm font-semibold backdrop-blur-md transition-all duration-1000 ${
+            isNight
+              ? "bg-indigo-900/60 text-yellow-200"
+              : "bg-yellow-100/60 text-orange-700"
+          }`}
+        >
+          {isNight ? "🌙 밤 — 반딧불이가 나왔어요!" : "☀️ 낮 — 꽃잎이 흩날려요!"}
+        </div>
       </div>
 
-      {/* 
-        3. KeyboardControls Wrapper: 
-           해당 영역 안에서 발생하는 키보드 입력을 감지합니다.
-      */}
       <KeyboardControls map={map}>
-        <Scene>
+        <Scene onNightChange={setIsNight}>
           <Ground />
           <Environment />
           <House position={[0, 4.5, -7]} rotation={[0, 0, 0]} scale={5} />
+          {/* 낮: 꽃잎 / 밤: 반딧불이 */}
+          {isNight ? <FireflyParticles /> : <PetalParticles />}
           <Player />
         </Scene>
       </KeyboardControls>
