@@ -1,26 +1,26 @@
-'use client';
+"use client";
 
-import { useFrame } from '@react-three/fiber';
-import { useKeyboardControls, RoundedBox, useTexture } from '@react-three/drei';
-import { useRef } from 'react';
-import * as THREE from 'three';
+import { useFrame } from "@react-three/fiber";
+import { useKeyboardControls, RoundedBox, useTexture } from "@react-three/drei";
+import { useRef } from "react";
+import * as THREE from "three";
 
 export enum Controls {
-  forward = 'forward',
-  backward = 'backward',
-  left = 'left',
-  right = 'right',
+  forward = "forward",
+  backward = "backward",
+  left = "left",
+  right = "right",
 }
 
 export const Player = () => {
   const meshRef = useRef<THREE.Mesh>(null!);
   const [, getKeys] = useKeyboardControls();
-  
+
   // 1. 텍스처를 불러옵니다.
-  const furTexture = useTexture('/textures/player/fur.png');
+  const furTexture = useTexture("/textures/player/fur.png");
 
   // 2. 이동 속도를 정의합니다.
-  const speed = 0.15;
+  const speed = 0.05;
   // 3. 부드러운 움직임을 위한 목표 위치 벡터입니다.
   const targetPosition = useRef(new THREE.Vector3(0, 0.5, 0));
 
@@ -49,12 +49,12 @@ export const Player = () => {
     meshRef.current.position.x = THREE.MathUtils.lerp(
       meshRef.current.position.x,
       targetPosition.current.x,
-      0.2
+      0.2,
     );
     meshRef.current.position.z = THREE.MathUtils.lerp(
       meshRef.current.position.z,
       targetPosition.current.z,
-      0.2
+      0.2,
     );
 
     // 6. 카메라가 캐릭터를 따라오게 만듭니다.
@@ -72,10 +72,10 @@ export const Player = () => {
       smoothness={4} // 둥근 부분의 세밀함
       castShadow
     >
-      <meshStandardMaterial 
-        map={furTexture} 
+      <meshStandardMaterial
+        map={furTexture}
         color="#ff8844" // 텍스처 위에 레드 판다 색상을 살짝 섞어줍니다.
-        roughness={0.9} 
+        roughness={0.9}
       />
     </RoundedBox>
   );
