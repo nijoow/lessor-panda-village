@@ -1,21 +1,26 @@
-'use client';
+"use client";
 
-import { KeyboardControls, KeyboardControlsEntry } from '@react-three/drei';
-import { Scene } from '@/components/Scene';
-import { Ground } from '@/components/world/Ground';
-import { Player, Controls } from '@/components/world/Player';
-import { useMemo } from 'react';
+import { KeyboardControls, KeyboardControlsEntry } from "@react-three/drei";
+import { Scene } from "@/components/Scene";
+import { Ground } from "@/components/world/Ground";
+import { Player, Controls } from "@/components/world/Player";
+import { Environment } from "@/components/world/Environment";
+import { House } from "@/components/world/House";
+import { useMemo } from "react";
 
 export default function Home() {
-  // 1. 키보드 컨트롤 매핑을 정의합니다. 
+  // 1. 키보드 컨트롤 매핑을 정의합니다.
   // 어떤 키(key)를 눌렀을 때 어떤 액션(name)이 실행될지 결정합니다.
-  const map = useMemo<KeyboardControlsEntry<Controls>[]>(() => [
-    { name: Controls.forward, keys: ['ArrowUp', 'KeyW'] },
-    { name: Controls.backward, keys: ['ArrowDown', 'KeyS'] },
-    { name: Controls.left, keys: ['ArrowLeft', 'KeyA'] },
-    { name: Controls.right, keys: ['ArrowRight', 'KeyD'] },
-    { name: Controls.run, keys: ['ShiftLeft', 'ShiftRight'] },
-  ], []);
+  const map = useMemo<KeyboardControlsEntry<Controls>[]>(
+    () => [
+      { name: Controls.forward, keys: ["ArrowUp", "KeyW"] },
+      { name: Controls.backward, keys: ["ArrowDown", "KeyS"] },
+      { name: Controls.left, keys: ["ArrowLeft", "KeyA"] },
+      { name: Controls.right, keys: ["ArrowRight", "KeyD"] },
+      { name: Controls.run, keys: ["ShiftLeft", "ShiftRight"] },
+    ],
+    [],
+  );
 
   return (
     <main className="w-full h-full relative">
@@ -27,7 +32,9 @@ export default function Home() {
         <h1 className="text-4xl font-bold text-sky-900 bg-white/50 px-6 py-2 rounded-full backdrop-blur-md">
           Panda Village 🐼
         </h1>
-        <p className="mt-2 text-sky-800 font-medium">Use arrow keys or WASD to move</p>
+        <p className="mt-2 text-sky-800 font-medium">
+          Use arrow keys or WASD to move
+        </p>
       </div>
 
       {/* 
@@ -37,6 +44,8 @@ export default function Home() {
       <KeyboardControls map={map}>
         <Scene>
           <Ground />
+          <Environment />
+          <House position={[0, 4.5, -7]} rotation={[0, 0, 0]} scale={5} />
           <Player />
         </Scene>
       </KeyboardControls>

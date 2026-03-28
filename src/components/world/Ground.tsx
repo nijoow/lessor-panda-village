@@ -1,48 +1,59 @@
-import { Grid, useTexture } from '@react-three/drei';
-import * as THREE from 'three';
-import { useMemo } from 'react';
+import { useTexture } from "@react-three/drei";
+import * as THREE from "three";
+import { useMemo } from "react";
 
 export const Ground = () => {
-  // 1. 텍스처를 불러옵니다.
-  const grassTexture = useTexture('/textures/ground/grass.png');
+  const grassTexture = useTexture("/textures/ground/grass.png");
 
-  // 2. 텍스처 복제 및 설정 (공유 텍스처의 변형 방지)
   const groundTexture = useMemo(() => {
     const t = grassTexture.clone();
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.repeat.set(8, 8);
+    t.repeat.set(20, 20); // 넓어진 ground에 맞게 타일 수 증가
+    t.anisotropy = 16;
     return t;
   }, [grassTexture]);
 
   return (
     <group>
-      {/* 
-        Ground Plane: 텍스처를 map 속성에 연결합니다.
-      */}
-      <mesh rotation-x={-Math.PI / 2} receiveShadow position-y={-0.01}>
-        <planeGeometry args={[20, 20]} />
-        <meshStandardMaterial 
-          map={groundTexture} 
-          roughness={0.8} 
-          metalness={0.2} 
+      {/* 넓어진 메인 잔디 바닥 (집 크기에 맞게 60x60) */}
+      <mesh rotation-x={-Math.PI / 2} receiveShadow position={[0, -0.01, 0]}>
+        <planeGeometry args={[80, 80, 1, 1]} />
+        <meshStandardMaterial
+          map={groundTexture}
+          color="#a8d876"
+          roughness={0.85}
+          metalness={0.0}
         />
       </mesh>
 
-      {/* 
-        2. Grid: 좌표를 쉽게 알 수 있게 격자를 그려줍니다. 
-           Drei의 Grid 컴포넌트로 간편하게 격자를 시각화할 수 있습니다.
-      */}
-      <Grid 
-        infiniteGrid 
-        fadeDistance={50} 
-        fadeStrength={5} 
-        sectionSize={3} 
-        sectionColor="#66aa66"
-        sectionThickness={1.5}
-        cellSize={1}
-        cellColor="#448844"
-        cellThickness={1}
-      />
+      {/* 안쪽 원형 잔디 (부드러운 색상 분리) */}
+      <mesh rotation-x={-Math.PI / 2} receiveShadow position={[0, -0.008, 0]}>
+        <planeGeometry args={[33, 33, 1, 1]} />
+        <meshStandardMaterial
+          color="#8fcf5a"
+          roughness={0.9}
+          metalness={0.0}
+          transparent
+          opacity={0.55}
+        />
+      </mesh>
+
+      {/* 집 앞 마당 흙길 (집 영역 앞쪽, 살짝 앞으로 이동) */}
+      <mesh rotation-x={-Math.PI / 2} receiveShadow position={[0, -0.005, 0]}>
+        <circleGeometry args={[4.5, 32]} />
+        <meshStandardMaterial color="#c4a46b" roughness={1.0} metalness={0.0} />
+      </mesh>
+
+      {/* 집까지의 흙길 (패스) */}
+      <mesh
+        rotation-x={-Math.PI / 2}
+        receiveShadow
+        position={[0, -0.004, -3.5]}
+        rotation={[Math.PI / 2, 0, 0]}
+      >
+        <planeGeometry args={[2.5, 5]} />
+        <meshStandardMaterial color="#c8a870" roughness={1.0} metalness={0.0} />
+      </mesh>
     </group>
   );
 };

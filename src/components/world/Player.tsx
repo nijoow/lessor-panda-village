@@ -125,7 +125,7 @@ export const Player = () => {
     );
 
     // 9. 카메라 트래킹 (등각 오프셋 유지)
-    const camOffset = new THREE.Vector3(8, 8, 8);
+    const camOffset = new THREE.Vector3(14, 14, 14);
     state.camera.position.lerp(
       groupRef.current.position.clone().add(camOffset),
       0.1
