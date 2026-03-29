@@ -1,10 +1,16 @@
-'use client';
+"use client";
 
-import { useFrame, useGraph } from '@react-three/fiber';
-import { useKeyboardControls, useGLTF, useAnimations } from '@react-three/drei';
-import { useRef, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
-import * as THREE from 'three';
-import { SkeletonUtils } from 'three-stdlib';
+import { useFrame, useGraph } from "@react-three/fiber";
+import { useKeyboardControls, useGLTF, useAnimations } from "@react-three/drei";
+import {
+  useRef,
+  useEffect,
+  useMemo,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
+import * as THREE from "three";
+import { SkeletonUtils } from "three-stdlib";
 
 import {
   COLLISION_TREES,
@@ -15,17 +21,17 @@ import {
   COLLISION_BENCHES,
   COLLISION_POND,
   COLLISION_LANTERNS,
-} from '@/constants/collisionMap';
+} from "@/constants/collisionMap";
 
 export enum Controls {
-  forward = 'forward',
-  backward = 'backward',
-  left = 'left',
-  right = 'right',
-  run = 'run',
-  jump = 'jump',
-  interact = 'interact',
-  nightToggle = 'nightToggle',
+  forward = "forward",
+  backward = "backward",
+  left = "left",
+  right = "right",
+  run = "run",
+  jump = "jump",
+  interact = "interact",
+  nightToggle = "nightToggle",
 }
 
 // 등각 뷰(Isometric)에서 카메라 방향을 기준으로 월드 이동 방향을 계산합니다.
@@ -81,9 +87,12 @@ const checkCollision = (x: number, z: number, y: number) => {
   if (y < 1.3) {
     const absX = Math.abs(x);
     const absZ = Math.abs(z);
-    
+
     // 남/북 울타리 (z축 기준)
-    if (absZ > FENCE_DIST - FENCE_THICKNESS && absZ < FENCE_DIST + FENCE_THICKNESS) {
+    if (
+      absZ > FENCE_DIST - FENCE_THICKNESS &&
+      absZ < FENCE_DIST + FENCE_THICKNESS
+    ) {
       if (z < 0) {
         // 북쪽 (z = -17): 전 구간 (x in [-17.5, 17.5])
         if (x > -17.5 && x < 17.5) return true;
@@ -94,7 +103,10 @@ const checkCollision = (x: number, z: number, y: number) => {
       }
     }
     // 동/서 울타리 (x축 기준)
-    if (absX > FENCE_DIST - FENCE_THICKNESS && absX < FENCE_DIST + FENCE_THICKNESS) {
+    if (
+      absX > FENCE_DIST - FENCE_THICKNESS &&
+      absX < FENCE_DIST + FENCE_THICKNESS
+    ) {
       // 동/서 울타리는 전 구간 차단
       if (z > -17.5 && z < 17.5) return true;
     }
@@ -118,7 +130,7 @@ const checkCollision = (x: number, z: number, y: number) => {
       }
     }
   }
-  
+
   // 8. 평온한 연못 충돌 (항상 충돌, 점프로 못 넘음)
   const dxP = x - COLLISION_POND.x;
   const dzP = z - COLLISION_POND.z;
@@ -136,18 +148,18 @@ const checkCollision = (x: number, z: number, y: number) => {
 
 export const Player = forwardRef<THREE.Group>((props, ref) => {
   const groupRef = useRef<THREE.Group>(null!);
-  
+
   // 외부에서 groupRef를 사용할 수 있도록 노출
   useImperativeHandle(ref, () => groupRef.current);
-  
+
   const [, getKeys] = useKeyboardControls<Controls>();
 
   // 1. 모델 로딩 (Base, Walking, Running)
   const { scene: baseScene, animations: idleAnims } = useGLTF(
-    '/models/player/base.glb'
+    "/models/player/base.glb",
   );
-  const { animations: walkAnims } = useGLTF('/models/player/walking.glb');
-  const { animations: runAnims } = useGLTF('/models/player/running.glb');
+  const { animations: walkAnims } = useGLTF("/models/player/walking.glb");
+  const { animations: runAnims } = useGLTF("/models/player/running.glb");
 
   // 2. 모델 복제 및 그래프 추출
   const clone = useMemo(() => SkeletonUtils.clone(baseScene), [baseScene]);
@@ -156,13 +168,13 @@ export const Player = forwardRef<THREE.Group>((props, ref) => {
   // 3. 모든 애니메이션 통합 관리
   const allAnimations = useMemo(
     () => [...idleAnims, ...walkAnims, ...runAnims],
-    [idleAnims, walkAnims, runAnims]
+    [idleAnims, walkAnims, runAnims],
   );
 
   const { actions } = useAnimations(allAnimations, groupRef);
 
   // 4. 현재 액션 및 물리 상태 ref로 관리
-  const currentActionRef = useRef<string>('');
+  const currentActionRef = useRef<string>("");
   const targetPosition = useRef(new THREE.Vector3(0, 0, 0));
   const targetRotation = useRef(0);
   const velocityY = useRef(0);
@@ -170,7 +182,7 @@ export const Player = forwardRef<THREE.Group>((props, ref) => {
 
   // 5. actions가 로딩되면 Idle 애니메이션 시작
   useEffect(() => {
-    const idleClipName = 'Armature|clip0|baselayer';
+    const idleClipName = "Armature|clip0|baselayer";
     const action = actions[idleClipName];
     if (action) {
       action.reset().play();
@@ -208,7 +220,7 @@ export const Player = forwardRef<THREE.Group>((props, ref) => {
     const moveRight = (right ? 1 : 0) - (left ? 1 : 0);
 
     const isMoving = moveForward !== 0 || moveRight !== 0;
-    const speed = run ? 0.18 : 0.08;
+    const speed = run ? 0.12 : 0.08;
 
     if (isMoving) {
       const moveDir = new THREE.Vector3()
@@ -234,8 +246,8 @@ export const Player = forwardRef<THREE.Group>((props, ref) => {
 
       // 애니메이션 전환
       const nextClip = run
-        ? 'Armature|running|baselayer'
-        : 'Armature|walking_man|baselayer';
+        ? "Armature|running|baselayer"
+        : "Armature|walking_man|baselayer";
       if (currentActionRef.current !== nextClip) {
         const prev = actions[currentActionRef.current];
         const next = actions[nextClip];
@@ -247,7 +259,7 @@ export const Player = forwardRef<THREE.Group>((props, ref) => {
       }
     } else {
       // 정지 시 Idle 전환
-      const idleClip = 'Armature|clip0|baselayer';
+      const idleClip = "Armature|clip0|baselayer";
       if (currentActionRef.current !== idleClip) {
         const prev = actions[currentActionRef.current];
         const next = actions[idleClip];
@@ -263,26 +275,26 @@ export const Player = forwardRef<THREE.Group>((props, ref) => {
     groupRef.current.position.x = THREE.MathUtils.lerp(
       groupRef.current.position.x,
       targetPosition.current.x,
-      0.15
+      0.15,
     );
     groupRef.current.position.y = targetPosition.current.y; // Y축은 즉시 반영 (물리)
     groupRef.current.position.z = THREE.MathUtils.lerp(
       groupRef.current.position.z,
       targetPosition.current.z,
-      0.15
+      0.15,
     );
 
     groupRef.current.rotation.y = lerpAngle(
       groupRef.current.rotation.y,
       targetRotation.current,
-      0.12
+      0.12,
     );
 
     // 9. 카메라 트래킹 (등각 오프셋 유지)
     const camOffset = new THREE.Vector3(14, 14, 14);
     state.camera.position.lerp(
       groupRef.current.position.clone().add(camOffset),
-      0.1
+      0.1,
     );
     state.camera.lookAt(groupRef.current.position);
   });
@@ -306,9 +318,9 @@ export const Player = forwardRef<THREE.Group>((props, ref) => {
   );
 });
 
-Player.displayName = 'Player';
+Player.displayName = "Player";
 
 // 사전 로딩
-useGLTF.preload('/models/player/base.glb');
-useGLTF.preload('/models/player/walking.glb');
-useGLTF.preload('/models/player/running.glb');
+useGLTF.preload("/models/player/base.glb");
+useGLTF.preload("/models/player/walking.glb");
+useGLTF.preload("/models/player/running.glb");

@@ -98,11 +98,11 @@ export const Ground = () => {
       </mesh>
 
       {/* 베이스 흙길 (Subtle) */}
-      <mesh rotation-x={-Math.PI / 2} position={[0, -0.005, -3]}>
+      <mesh rotation-x={-Math.PI / 2} position={[0, -0.005, -3]} receiveShadow>
         <circleGeometry args={[4.5, 36]} />
         <meshStandardMaterial color="#bda17a" roughness={1.0} />
       </mesh>
-      <mesh rotation-x={-Math.PI / 2} position={[-2, -0.005, 5]}>
+      <mesh rotation-x={-Math.PI / 2} position={[-2, -0.005, 5]} receiveShadow>
         <circleGeometry args={[7, 32]} />
         <meshStandardMaterial color="#bda17a" roughness={1.0} />
       </mesh>

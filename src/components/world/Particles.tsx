@@ -80,6 +80,20 @@ const generateInitialPetalData = (): ParticleInitData => {
 };
 
 // ─────────────────────────────────────────────
+// 하트 모양 꽃잎 지형 생성 함수
+// ─────────────────────────────────────────────
+const createHeartShape = () => {
+  const shape = new THREE.Shape();
+  const x = 0, y = 0;
+  shape.moveTo(x, y + 0.3);
+  shape.bezierCurveTo(x, y + 0.3, x - 0.3, y + 0.5, x - 0.5, y);
+  shape.bezierCurveTo(x - 0.5, y - 0.5, x, y - 0.7, x, y - 0.7);
+  shape.bezierCurveTo(x, y - 0.7, x + 0.5, y - 0.5, x + 0.5, y);
+  shape.bezierCurveTo(x + 0.5, y + 0.5, x, y + 0.3, x, y + 0.3);
+  return shape;
+};
+
+// ─────────────────────────────────────────────
 // 꽃잎 파티클 (낮)
 // ─────────────────────────────────────────────
 export const PetalParticles = () => {
@@ -87,6 +101,7 @@ export const PetalParticles = () => {
   const materialRef = useRef<THREE.MeshStandardMaterial>(null!);
   
   const [{ particles }] = useState(() => generateInitialPetalData());
+  const heartShape = useMemo(() => createHeartShape(), []);
 
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const color = useMemo(() => new THREE.Color(), []);
@@ -106,13 +121,16 @@ export const PetalParticles = () => {
     if (opacity <= 0) return;
 
     particles.forEach((p, i) => {
-      p.position.x += p.velocity.x + Math.sin(t * 0.5 + p.phase) * 0.008;
+      // 펄럭이는 움직임 추가 (Fluttering)
+      const flutter = Math.sin(t * 2 + p.phase) * 0.015;
+      p.position.x += p.velocity.x + flutter;
       p.position.y += p.velocity.y;
-      p.position.z += p.velocity.z + Math.cos(t * 0.3 + p.phase) * 0.008;
-      p.rotation += p.rotationSpeed;
+      p.position.z += p.velocity.z + Math.cos(t * 1.5 + p.phase) * 0.015;
+      
+      // 회전 속도에 펄럭임 반영
+      p.rotation += p.rotationSpeed + Math.sin(t * 3) * 0.01;
 
-      if (p.position.y < 0) {
-        // 재생성 시에도 나무 주변 집중 유지
+      if (p.position.y < -0.5) {
         const isConcentrated = Math.random() < 0.75;
         if (isConcentrated) {
           const angle = Math.random() * Math.PI * 2;
@@ -127,9 +145,13 @@ export const PetalParticles = () => {
       }
 
       dummy.position.copy(p.position);
-      dummy.rotation.set(p.rotation, p.rotation * 0.7, p.rotation * 0.5);
-      // 크기를 기존 0.06에서 0.10 내외로 확대
-      dummy.scale.setScalar(0.09 + Math.sin(t + p.phase) * 0.02);
+      // 입체적인 회전
+      dummy.rotation.set(
+        p.rotation + Math.sin(t + p.phase) * 0.5,
+        p.rotation * 0.7,
+        p.rotation * 0.5 + Math.cos(t * 0.8) * 0.3
+      );
+      dummy.scale.setScalar(0.08 + Math.sin(t * 0.5 + p.phase) * 0.02);
       dummy.updateMatrix();
       meshRef.current.setMatrixAt(i, dummy.matrix);
 
@@ -144,7 +166,7 @@ export const PetalParticles = () => {
 
   return (
     <instancedMesh ref={meshRef} args={[undefined, undefined, PETAL_COUNT]}>
-      <planeGeometry args={[1, 0.6]} />
+      <shapeGeometry args={[heartShape]} />
       <meshStandardMaterial
         ref={materialRef}
         side={THREE.DoubleSide}
@@ -213,8 +235,9 @@ export const FireflyParticles = () => {
       dummy.updateMatrix();
       meshRef.current.setMatrixAt(i, dummy.matrix);
 
-      const br = 0.4 + Math.abs(Math.sin(t * 3 + f.phase)) * 0.6;
-      color.setHSL(0.13 + Math.sin(f.phase) * 0.02, 1.0, br * 0.8);
+      const br = 0.5 + Math.abs(Math.sin(t * 3 + f.phase)) * 0.5;
+      // 완전한 진한 노랑/주황 계열로 색상 반경 좁힘 (0.08-0.12 HSL)
+      color.setHSL(0.09 + Math.sin(f.phase) * 0.01, 1.0, br * 0.7);
       meshRef.current.setColorAt(i, color);
     });
 
@@ -228,8 +251,8 @@ export const FireflyParticles = () => {
       <sphereGeometry args={[1, 6, 6]} />
       <meshStandardMaterial
         ref={materialRef}
-        emissive="#ffff88"
-        emissiveIntensity={3}
+        emissive="#ffa500"
+        emissiveIntensity={12}
         transparent
         opacity={0.9}
         roughness={0}

@@ -7,7 +7,8 @@ import { Player, Controls } from "@/components/world/Player";
 import { Environment } from "@/components/world/Environment";
 import { House } from "@/components/world/House";
 import { PetalParticles, FireflyParticles } from "@/components/world/Particles";
-import { useRef, useState, useEffect } from "react";
+import { LoadingScreen } from "@/components/ui/LoadingScreen";
+import { useRef, useState, useEffect, Suspense } from "react";
 import Image from "next/image";
 import * as THREE from "three";
 
@@ -46,26 +47,30 @@ interface HomeContentProps {
   playerRef: React.MutableRefObject<THREE.Group>;
 }
 
-const HomeContent = ({ isNight, playerRef }: Omit<HomeContentProps, "setIsNight">) => {
-
+const HomeContent = ({
+  isNight,
+  playerRef,
+}: Omit<HomeContentProps, "setIsNight">) => {
   return (
-    <main className="w-full h-full relative overflow-hidden">
+    <main className="w-full h-full relative overflow-hidden bg-[#fdfaf6]">
+      <LoadingScreen />
       {/* UI layer */}
-      <div className="absolute top-10 left-0 w-full z-10 flex flex-col items-center pointer-events-none select-none">
-        <h1 className="text-4xl font-black text-sky-900 drop-shadow-sm bg-white/40 px-8 py-3 rounded-full backdrop-blur-xl border border-white/20 flex items-center gap-3">
-          Red Panda Village
-          <Image 
-            src="/images/red_panda_icon.png" 
-            alt="Red Panda" 
-            width={40} 
-            height={40} 
-            className="rounded-full shadow-sm"
-          />
-        </h1>
-        <p className="mt-4 text-sky-800 font-bold bg-white/20 px-4 py-1 rounded-full backdrop-blur-md">
-          ARROWS/WASD: Move | SHIFT: Run | SPACE: Jump
-        </p>
-        
+      <div className="absolute top-10 left-0 w-full z-10 flex flex-col items-center pointer-events-none select-none ">
+        <div className="bg-white/40 rounded-full backdrop-blur-xl py-2 px-4 drop-shadow-sm border-white/60 flex flex-col items-center">
+          <h1 className="text-4xl font-black text-sky-900  flex items-center gap-3">
+            래서판다 빌리지
+            <Image
+              src="/images/red_panda_icon.png"
+              alt="Red Panda"
+              width={40}
+              height={40}
+              className="rounded-full shadow-sm"
+            />
+          </h1>
+          <p className="text-sky-800 font-bold  px-4 py-1 ">
+            화살표/WASD: 이동 | SHIFT: 달리기 | SPACE: 점프
+          </p>
+        </div>
         <div
           className={`mt-4 px-6 py-2 rounded-full text-sm font-bold shadow-xl transition-all duration-1000 ${
             isNight
@@ -83,7 +88,7 @@ const HomeContent = ({ isNight, playerRef }: Omit<HomeContentProps, "setIsNight"
         <House position={[0, 4.5, -7]} rotation={[0, 0, 0]} scale={5} />
         <FireflyParticles />
         <PetalParticles />
-        
+
         {/* Player */}
         <Player ref={playerRef} />
       </Scene>
