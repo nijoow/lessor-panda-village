@@ -49,3 +49,17 @@ export const WORLD_BOUNDS = {
   min: -39,
   max: 39,
 };
+
+// 중앙 고목 (Ancient Tree)
+export const COLLISION_LANDMARK: CollisionCircle = {
+  x: 0,
+  z: 5,
+  radius: 1.5,
+};
+
+// 벤치 충돌 박스
+export const COLLISION_BENCHES: CollisionBox[] = [
+  { minX: -4.4, maxX: -3.6, minZ: 3.9, maxZ: 6.1 }, // 왼쪽 벤치
+  { minX: 3.6, maxX: 4.4, minZ: 3.9, maxZ: 6.1 },  // 오른쪽 벤치
+  { minX: -1.1, maxX: 1.1, minZ: 8.6, maxZ: 9.4 },  // 아래쪽 벤치
+];

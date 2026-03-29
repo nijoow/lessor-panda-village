@@ -11,6 +11,8 @@ import {
   COLLISION_ROCKS,
   COLLISION_HOUSE,
   WORLD_BOUNDS,
+  COLLISION_LANDMARK,
+  COLLISION_BENCHES,
 } from '@/constants/collisionMap';
 
 export enum Controls {
@@ -86,6 +88,25 @@ const checkCollision = (x: number, z: number, y: number) => {
     // 동/서 울타리 (x축 기준)
     if (absX > FENCE_DIST - FENCE_THICKNESS && absX < FENCE_DIST + FENCE_THICKNESS) {
       if (absZ < FENCE_DIST + FENCE_THICKNESS) return true;
+    }
+  }
+
+  // 6. 랜드마크 고목 충돌 (항상 충돌, 점프로 못 넘음)
+  const dxL = x - COLLISION_LANDMARK.x;
+  const dzL = z - COLLISION_LANDMARK.z;
+  if (Math.sqrt(dxL * dxL + dzL * dzL) < COLLISION_LANDMARK.radius) return true;
+
+  // 7. 벤치 충돌 (낮은 벤치는 점프 중 y > 0.8이면 통과 가능)
+  if (y < 0.8) {
+    for (const bench of COLLISION_BENCHES) {
+      if (
+        x > bench.minX &&
+        x < bench.maxX &&
+        z > bench.minZ &&
+        z < bench.maxZ
+      ) {
+        return true;
+      }
     }
   }
 

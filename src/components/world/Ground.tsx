@@ -38,8 +38,8 @@ export const Ground = () => {
         />
       </mesh>
 
-      {/* 집 앞 마당 흙길 (집 영역 앞쪽, 살짝 앞으로 이동) */}
-      <mesh rotation-x={-Math.PI / 2} receiveShadow position={[0, -0.005, 0]}>
+      {/* 집 앞 마당 흙길 (집 영역 앞쪽) */}
+      <mesh rotation-x={-Math.PI / 2} receiveShadow position={[0, -0.005, -3]}>
         <circleGeometry args={[4.5, 32]} />
         <meshStandardMaterial color="#c4a46b" roughness={1.0} metalness={0.0} />
       </mesh>
@@ -48,10 +48,21 @@ export const Ground = () => {
       <mesh
         rotation-x={-Math.PI / 2}
         receiveShadow
-        position={[0, -0.004, -3.5]}
-        rotation={[Math.PI / 2, 0, 0]}
+        position={[0, -0.004, -5.5]}
       >
-        <planeGeometry args={[2.5, 5]} />
+        <planeGeometry args={[2.5, 4]} />
+        <meshStandardMaterial color="#c8a870" roughness={1.0} metalness={0.0} />
+      </mesh>
+
+      {/* 마을 중앙 광장 (Ancient Tree 주변) */}
+      <mesh rotation-x={-Math.PI / 2} receiveShadow position={[0, -0.005, 5]}>
+        <circleGeometry args={[6.5, 32]} />
+        <meshStandardMaterial color="#c4a46b" roughness={1.0} metalness={0.0} />
+      </mesh>
+
+      {/* 중앙 광장과 집을 잇는 메인 도로 */}
+      <mesh rotation-x={-Math.PI / 2} receiveShadow position={[0, -0.004, 1]}>
+        <planeGeometry args={[3.5, 8]} />
         <meshStandardMaterial color="#c8a870" roughness={1.0} metalness={0.0} />
       </mesh>
     </group>

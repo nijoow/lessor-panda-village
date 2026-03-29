@@ -37,6 +37,88 @@ const Tree = ({ position, scale = 1 }: TreeProps) => {
   );
 };
 
+// ---------- 거대 고목 (Ancient Tree) ----------
+const AncientTree = ({ position }: { position: [number, number, number] }) => {
+  return (
+    <group position={position}>
+      {/* 거대 나무 기둥 */}
+      <mesh castShadow position={[0, 2.5, 0]}>
+        <cylinderGeometry args={[0.8, 1.2, 5, 12]} />
+        <meshStandardMaterial color="#5e4226" roughness={0.9} />
+      </mesh>
+      {/* 잎사귀 뭉치들 (분홍색 벚꽃 느낌) */}
+      <group position={[0, 5, 0]}>
+        {/* 중앙 상단 */}
+        <mesh castShadow position={[0, 2.5, 0]}>
+          <sphereGeometry args={[2.5, 16, 16]} />
+          <meshStandardMaterial color="#ffb6c1" roughness={0.8} />
+        </mesh>
+        {/* 주변 뭉치 1 */}
+        <mesh castShadow position={[1.5, 1.2, 1.2]}>
+          <sphereGeometry args={[1.8, 12, 12]} />
+          <meshStandardMaterial color="#ffc0cb" roughness={0.8} />
+        </mesh>
+        {/* 주변 뭉치 2 */}
+        <mesh castShadow position={[-1.8, 0.8, -1.0]}>
+          <sphereGeometry args={[2.0, 12, 12]} />
+          <meshStandardMaterial color="#ffb6c1" roughness={0.8} />
+        </mesh>
+        {/* 주변 뭉치 3 */}
+        <mesh castShadow position={[0.5, 0.5, -2.0]}>
+          <sphereGeometry args={[1.6, 12, 12]} />
+          <meshStandardMaterial color="#ffc0cb" roughness={0.8} />
+        </mesh>
+        {/* 주변 뭉치 4 */}
+        <mesh castShadow position={[-1.2, 1.5, 1.8]}>
+          <sphereGeometry args={[1.9, 12, 12]} />
+          <meshStandardMaterial color="#f8bbd0" roughness={0.8} />
+        </mesh>
+      </group>
+    </group>
+  );
+};
+
+// ---------- 벤치 (마을 쉼터) ----------
+const Bench = ({
+  position,
+  rotation = 0,
+}: {
+  position: [number, number, number];
+  rotation?: number;
+}) => {
+  return (
+    <group position={position} rotation={[0, rotation, 0]}>
+      {/* 앉는 판 */}
+      <mesh castShadow position={[0, 0.45, 0]}>
+        <boxGeometry args={[2.2, 0.1, 0.8]} />
+        <meshStandardMaterial color="#8d6e63" />
+      </mesh>
+      {/* 등받이 */}
+      <mesh castShadow position={[0, 0.9, -0.35]} rotation={[-0.2, 0, 0]}>
+        <boxGeometry args={[2.2, 0.8, 0.1]} />
+        <meshStandardMaterial color="#8d6e63" />
+      </mesh>
+      {/* 다리 4개 */}
+      <mesh position={[-0.9, 0.2, 0.3]}>
+        <boxGeometry args={[0.1, 0.4, 0.1]} />
+        <meshStandardMaterial color="#5d4037" />
+      </mesh>
+      <mesh position={[0.9, 0.2, 0.3]}>
+        <boxGeometry args={[0.1, 0.4, 0.1]} />
+        <meshStandardMaterial color="#5d4037" />
+      </mesh>
+      <mesh position={[-0.9, 0.2, -0.3]}>
+        <boxGeometry args={[0.1, 0.4, 0.1]} />
+        <meshStandardMaterial color="#5d4037" />
+      </mesh>
+      <mesh position={[0.9, 0.2, -0.3]}>
+        <boxGeometry args={[0.1, 0.4, 0.1]} />
+        <meshStandardMaterial color="#5d4037" />
+      </mesh>
+    </group>
+  );
+};
+
 // ---------- 바위 ----------
 interface RockProps {
   position: [number, number, number];
@@ -247,6 +329,14 @@ export const Environment = () => {
       {/* 마을 정면 */}
       <Tree position={[-3, 0, 15]} scale={1.0} />
       <Tree position={[4, 0, 14]} scale={1.15} />
+
+      {/* === 마을 중앙 랜드마크 (Ancient Tree) === */}
+      <AncientTree position={[0, 0, 5]} />
+      
+      {/* === 중앙 화단 및 벤치 === */}
+      <Bench position={[4, 0, 5]} rotation={-Math.PI / 2} />
+      <Bench position={[-4, 0, 5]} rotation={Math.PI / 2} />
+      <Bench position={[0, 0, 9]} rotation={Math.PI} />
       {/* === 바위 (2배 크기) === */}
       <Rock position={[5, 0, 4]} scale={[2.2, 1.5, 2.4]} rotation={0.4} />
       <Rock position={[5.8, 0, 5.5]} scale={[1.4, 1.0, 1.6]} rotation={1.2} />
