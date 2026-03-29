@@ -10,48 +10,46 @@ import {
 import { ReactNode, useRef } from "react";
 import * as THREE from "three";
 
-interface DayNightLightsProps {
-  isNight: boolean;
-}
-
-const DayNightLights = ({ isNight }: DayNightLightsProps) => {
+const DayNightLights = () => {
   const dirLightRef = useRef<THREE.DirectionalLight>(null!);
   const ambLightRef = useRef<THREE.AmbientLight>(null!);
-  const currentT = useRef(0);
 
-  useFrame((state, delta) => {
-    // 0 = 정오(Day), 0.5 = 자정(Night)
-    // t=0일 때 angle = PI/2 (해/달이 머리 위에 있음)
-    // t=0.5일 때 angle = -PI/2 (해/달이 지평선 아래에 있음)
-    const targetT = isNight ? 0.5 : 0;
+  useFrame((state) => {
+    // 60초 주기로 한 바퀴 순환 (현실감 있게 연속적으로 변화)
+    const cycleTime = 60; 
+    const t = (state.clock.elapsedTime % cycleTime) / cycleTime;
     
-    currentT.current = THREE.MathUtils.lerp(currentT.current, targetT, delta * 2);
-    const t = currentT.current;
+    // t=0.25 (15초): 정오 (angle = PI/2)
+    // t=0.75 (45초): 자정 (angle = -PI/2 또는 3PI/2)
+    // t=0 / t=0.5: 일출/일몰 (angle = 0 / PI)
+    const angle = Math.PI - (t * 2 * Math.PI);
     
-    // t=0 (낮): PI/2, t=0.5 (밤): -PI/2
-    const angle = Math.PI / 2 - t * 2 * Math.PI;
-    const sunY = Math.sin(angle) * 25;
-    const sunX = Math.cos(angle) * 25;
+    const sunY = Math.sin(angle) * 30;
+    const sunX = Math.cos(angle) * 30;
 
     if (dirLightRef.current) {
-      dirLightRef.current.position.set(sunX, sunY, 10);
-      const dayBlend = Math.max(0, Math.sin(angle));
-      const nightBlend = 1 - dayBlend;
-      dirLightRef.current.intensity = dayBlend * 2.5 + nightBlend * 0.4;
-      dirLightRef.current.color.setRGB(
-        0.9 + dayBlend * 0.1,
-        0.85 + dayBlend * 0.15,
-        0.7 + dayBlend * 0.3
-      );
+      dirLightRef.current.position.set(sunX, sunY, 15);
+      
+      const dayIntensity = Math.max(0, Math.sin(angle)); // 해가 떠있을 때 (0 ~ PI)
+      const nightIntensity = Math.max(0, Math.sin(angle + Math.PI)); // 달이 떠있을 때 (PI ~ 2PI)
+      
+      // 낮에는 강한 빛, 밤에는 은은한 푸른빛
+      dirLightRef.current.intensity = dayIntensity * 2.8 + nightIntensity * 0.5;
+      
+      if (dayIntensity > 0) {
+        dirLightRef.current.color.setRGB(1, 0.95, 0.86); // 따뜻한 햇살
+      } else {
+        dirLightRef.current.color.setRGB(0.6, 0.7, 1.0); // 차가운 달빛
+      }
     }
 
     if (ambLightRef.current) {
-      const dayBlend = Math.max(0, Math.sin(angle));
-      ambLightRef.current.intensity = dayBlend * 0.8 + (1 - dayBlend) * 0.25;
+      const dayIntensity = Math.max(0, Math.sin(angle));
+      ambLightRef.current.intensity = dayIntensity * 0.9 + (1 - dayIntensity) * 0.35;
       ambLightRef.current.color.setRGB(
-        0.7 + dayBlend * 0.3,
-        0.75 + dayBlend * 0.25,
-        0.9 + dayBlend * 0.1
+        0.8 + dayIntensity * 0.2,
+        0.85 + dayIntensity * 0.15,
+        1.0
       );
     }
   });
@@ -77,22 +75,20 @@ const DayNightLights = ({ isNight }: DayNightLightsProps) => {
 // ──────────────────────────────────────────────────
 // 다이나믹 Sky (낮/밤 전환)
 // ──────────────────────────────────────────────────
-const DynamicSky = ({ isNight }: { isNight: boolean }) => {
+const DynamicSky = () => {
   const skyRef = useRef<{ sunPosition: THREE.Vector3 } | null>(null);
-  const currentSunPosition = useRef(new THREE.Vector3());
 
-  useFrame((state, delta) => {
-    const targetT = isNight ? 0.5 : 0;
-    const angle = Math.PI / 2 - targetT * 2 * Math.PI;
-    const targetSunY = Math.sin(angle);
-    const targetSunX = Math.cos(angle);
-
-    const targetPos = new THREE.Vector3(targetSunX * 20, targetSunY * 20, 10);
-    currentSunPosition.current.lerp(targetPos, delta * 2);
+  useFrame((state) => {
+    const cycleTime = 60;
+    const t = (state.clock.elapsedTime % cycleTime) / cycleTime;
+    const angle = Math.PI - (t * 2 * Math.PI);
+    
+    const sunY = Math.sin(angle);
+    const sunX = Math.cos(angle);
 
     if (skyRef.current) {
       // @ts-expect-error drei Sky uniform
-      skyRef.current.material.uniforms.sunPosition.value.copy(currentSunPosition.current);
+      skyRef.current.material.uniforms.sunPosition.value.set(sunX * 20, sunY * 20, 15);
     }
   });
 
@@ -113,12 +109,12 @@ const DynamicSky = ({ isNight }: { isNight: boolean }) => {
 // ──────────────────────────────────────────────────
 // 메인 Scene 컴포넌트
 // ──────────────────────────────────────────────────
-interface Props {
+interface SceneProps {
   children: ReactNode;
   isNight: boolean;
 }
 
-export const Scene = ({ children, isNight }: Props) => {
+export const Scene = ({ children, isNight }: SceneProps) => {
   return (
     <Canvas shadows>
       <PerspectiveCamera makeDefault position={[18, 18, 18]} fov={35} />
@@ -131,9 +127,9 @@ export const Scene = ({ children, isNight }: Props) => {
         maxPolarAngle={Math.PI / 2.5}
       />
       
-      <DynamicSky isNight={isNight} />
+      <DynamicSky />
       <Stars radius={80} depth={50} count={isNight ? 4000 : 0} factor={3} fade speed={0.5} />
-      <DayNightLights isNight={isNight} />
+      <DayNightLights />
 
       {children}
     </Canvas>

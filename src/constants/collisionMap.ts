@@ -52,7 +52,7 @@ export const WORLD_BOUNDS = {
 
 // 중앙 고목 (Ancient Tree)
 export const COLLISION_LANDMARK: CollisionCircle = {
-  x: 0,
+  x: -6,
   z: 5,
   radius: 1.5,
 };
@@ -62,4 +62,19 @@ export const COLLISION_BENCHES: CollisionBox[] = [
   { minX: -4.4, maxX: -3.6, minZ: 3.9, maxZ: 6.1 }, // 왼쪽 벤치
   { minX: 3.6, maxX: 4.4, minZ: 3.9, maxZ: 6.1 },  // 오른쪽 벤치
   { minX: -1.1, maxX: 1.1, minZ: 8.6, maxZ: 9.4 },  // 아래쪽 벤치
+];
+
+// 평온한 연못 충돌 (Pond)
+export const COLLISION_POND: CollisionCircle = {
+  x: 8,
+  z: 6,
+  radius: 3.8,
+};
+
+// 석등 충돌 (Lanterns)
+export const COLLISION_LANTERNS: CollisionCircle[] = [
+  { x: -4, z: -2, radius: 0.6 },
+  { x: 4, z: -2, radius: 0.6 },
+  { x: 4, z: 12, radius: 0.6 },
+  { x: -12, z: 5, radius: 0.6 },
 ];

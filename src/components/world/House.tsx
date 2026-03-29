@@ -18,7 +18,7 @@ interface Props {
 }
 
 export const House = ({ position = [0, 0, 0], rotation = [0, 0, 0], scale = 1 }: Props) => {
-  const { nodes } = useGLTF('/models/house/Meshy_AI_집_0328091439_texture.glb') as unknown as GLTFResult;
+  const { nodes } = useGLTF('/models/house/panda_house.glb') as unknown as GLTFResult;
 
   return (
     <group position={position} rotation={rotation} scale={scale} dispose={null}>
@@ -32,4 +32,4 @@ export const House = ({ position = [0, 0, 0], rotation = [0, 0, 0], scale = 1 }:
   );
 };
 
-useGLTF.preload('/models/house/Meshy_AI_집_0328091439_texture.glb');
+useGLTF.preload('/models/house/panda_house.glb');

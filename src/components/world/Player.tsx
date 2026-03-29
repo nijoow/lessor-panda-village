@@ -13,6 +13,8 @@ import {
   WORLD_BOUNDS,
   COLLISION_LANDMARK,
   COLLISION_BENCHES,
+  COLLISION_POND,
+  COLLISION_LANTERNS,
 } from '@/constants/collisionMap';
 
 export enum Controls {
@@ -82,12 +84,19 @@ const checkCollision = (x: number, z: number, y: number) => {
     
     // 남/북 울타리 (z축 기준)
     if (absZ > FENCE_DIST - FENCE_THICKNESS && absZ < FENCE_DIST + FENCE_THICKNESS) {
-      // 울타리 틈새 없이 전 구간 충돌 (필요시 x 범위를 제한하여 문을 만들 수 있음)
-      if (absX < FENCE_DIST + FENCE_THICKNESS) return true;
+      if (z < 0) {
+        // 북쪽 (z = -17): 전 구간 (x in [-17.5, 17.5])
+        if (x > -17.5 && x < 17.5) return true;
+      } else {
+        // 남쪽 (z = 17): 설치된 구간만 (x in [-17.5, 9.5])
+        // x=8 위치의 세그먼트가 마지막이므로 x=9.5 정도까지 차단
+        if (x > -17.5 && x < 9.5) return true;
+      }
     }
     // 동/서 울타리 (x축 기준)
     if (absX > FENCE_DIST - FENCE_THICKNESS && absX < FENCE_DIST + FENCE_THICKNESS) {
-      if (absZ < FENCE_DIST + FENCE_THICKNESS) return true;
+      // 동/서 울타리는 전 구간 차단
+      if (z > -17.5 && z < 17.5) return true;
     }
   }
 
@@ -108,6 +117,18 @@ const checkCollision = (x: number, z: number, y: number) => {
         return true;
       }
     }
+  }
+  
+  // 8. 평온한 연못 충돌 (항상 충돌, 점프로 못 넘음)
+  const dxP = x - COLLISION_POND.x;
+  const dzP = z - COLLISION_POND.z;
+  if (Math.sqrt(dxP * dxP + dzP * dzP) < COLLISION_POND.radius) return true;
+
+  // 9. 석등 충돌 (항상 충돌)
+  for (const lantern of COLLISION_LANTERNS) {
+    const dx = x - lantern.x;
+    const dz = z - lantern.z;
+    if (Math.sqrt(dx * dx + dz * dz) < lantern.radius) return true;
   }
 
   return false;

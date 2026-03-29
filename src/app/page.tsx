@@ -8,6 +8,7 @@ import { Environment } from "@/components/world/Environment";
 import { House } from "@/components/world/House";
 import { PetalParticles, FireflyParticles } from "@/components/world/Particles";
 import { useRef, useState, useEffect } from "react";
+import Image from "next/image";
 import * as THREE from "three";
 
 const keyboardMap: KeyboardControlsEntry<Controls>[] = [
@@ -18,24 +19,23 @@ const keyboardMap: KeyboardControlsEntry<Controls>[] = [
   { name: Controls.run, keys: ["ShiftLeft", "ShiftRight"] },
   { name: Controls.jump, keys: ["Space"] },
   { name: Controls.interact, keys: ["KeyE"] },
-  { name: Controls.nightToggle, keys: ["KeyN"] },
 ];
 
 export default function Home() {
   const [isNight, setIsNight] = useState(false);
   const playerRef = useRef<THREE.Group>(null!);
 
-  // 1. 자동 낮밤 전환 (45초 주기)
+  // 1. 자동 낮밤 전환 (45초 주기 - UI 동기화용)
   useEffect(() => {
     const interval = setInterval(() => {
       setIsNight((prev) => !prev);
-    }, 45000);
+    }, 30000); // 30초 주기로 낮/밤 전환 (전체 주기는 60초)
     return () => clearInterval(interval);
   }, []);
 
   return (
     <KeyboardControls map={keyboardMap}>
-      <HomeContent isNight={isNight} setIsNight={setIsNight} playerRef={playerRef} />
+      <HomeContent isNight={isNight} playerRef={playerRef} />
     </KeyboardControls>
   );
 }
@@ -46,27 +46,24 @@ interface HomeContentProps {
   playerRef: React.MutableRefObject<THREE.Group>;
 }
 
-const HomeContent = ({ isNight, setIsNight, playerRef }: HomeContentProps) => {
-  // 2. 수동 전환 감지 (N 키)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === "KeyN") {
-        setIsNight((prev) => !prev);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [setIsNight]);
+const HomeContent = ({ isNight, playerRef }: Omit<HomeContentProps, "setIsNight">) => {
 
   return (
     <main className="w-full h-full relative overflow-hidden">
       {/* UI layer */}
       <div className="absolute top-10 left-0 w-full z-10 flex flex-col items-center pointer-events-none select-none">
-        <h1 className="text-4xl font-black text-sky-900 drop-shadow-sm bg-white/40 px-8 py-3 rounded-full backdrop-blur-xl border border-white/20">
-          Panda Village 🐼
+        <h1 className="text-4xl font-black text-sky-900 drop-shadow-sm bg-white/40 px-8 py-3 rounded-full backdrop-blur-xl border border-white/20 flex items-center gap-3">
+          Red Panda Village
+          <Image 
+            src="/images/red_panda_icon.png" 
+            alt="Red Panda" 
+            width={40} 
+            height={40} 
+            className="rounded-full shadow-sm"
+          />
         </h1>
         <p className="mt-4 text-sky-800 font-bold bg-white/20 px-4 py-1 rounded-full backdrop-blur-md">
-          ARROWS/WASD: Move | SPACE: Jump | N: Toggle Day/Night
+          ARROWS/WASD: Move | SHIFT: Run | SPACE: Jump
         </p>
         
         <div
@@ -82,9 +79,10 @@ const HomeContent = ({ isNight, setIsNight, playerRef }: HomeContentProps) => {
 
       <Scene isNight={isNight}>
         <Ground />
-        <Environment />
+        <Environment isNight={isNight} />
         <House position={[0, 4.5, -7]} rotation={[0, 0, 0]} scale={5} />
-        {isNight ? <FireflyParticles /> : <PetalParticles />}
+        <FireflyParticles />
+        <PetalParticles />
         
         {/* Player */}
         <Player ref={playerRef} />

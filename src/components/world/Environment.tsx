@@ -3,6 +3,8 @@
 import { useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
+import { useGLTF } from "@react-three/drei";
+import { Pond } from "./Pond";
 
 // ---------- 나무 (집 scale=5 기준으로 3~4배 크게) ----------
 interface TreeProps {
@@ -37,44 +39,29 @@ const Tree = ({ position, scale = 1 }: TreeProps) => {
   );
 };
 
-// ---------- 거대 고목 (Ancient Tree) ----------
+// ---------- 거대 고목 (Ancient Tree - 제공된 GLB 모델) ----------
 const AncientTree = ({ position }: { position: [number, number, number] }) => {
+  const { scene } = useGLTF("/models/tree/cherry_blossom_tree.glb");
+
+  // 그림자 설정 및 최적화
+  const treeModel = useMemo(() => {
+    const clone = scene.clone();
+    clone.traverse((node) => {
+      if ((node as THREE.Mesh).isMesh) {
+        node.castShadow = true;
+        node.receiveShadow = true;
+      }
+    });
+    return clone;
+  }, [scene]);
+
   return (
-    <group position={position}>
-      {/* 거대 나무 기둥 */}
-      <mesh castShadow position={[0, 2.5, 0]}>
-        <cylinderGeometry args={[0.8, 1.2, 5, 12]} />
-        <meshStandardMaterial color="#5e4226" roughness={0.9} />
-      </mesh>
-      {/* 잎사귀 뭉치들 (분홍색 벚꽃 느낌) */}
-      <group position={[0, 5, 0]}>
-        {/* 중앙 상단 */}
-        <mesh castShadow position={[0, 2.5, 0]}>
-          <sphereGeometry args={[2.5, 16, 16]} />
-          <meshStandardMaterial color="#ffb6c1" roughness={0.8} />
-        </mesh>
-        {/* 주변 뭉치 1 */}
-        <mesh castShadow position={[1.5, 1.2, 1.2]}>
-          <sphereGeometry args={[1.8, 12, 12]} />
-          <meshStandardMaterial color="#ffc0cb" roughness={0.8} />
-        </mesh>
-        {/* 주변 뭉치 2 */}
-        <mesh castShadow position={[-1.8, 0.8, -1.0]}>
-          <sphereGeometry args={[2.0, 12, 12]} />
-          <meshStandardMaterial color="#ffb6c1" roughness={0.8} />
-        </mesh>
-        {/* 주변 뭉치 3 */}
-        <mesh castShadow position={[0.5, 0.5, -2.0]}>
-          <sphereGeometry args={[1.6, 12, 12]} />
-          <meshStandardMaterial color="#ffc0cb" roughness={0.8} />
-        </mesh>
-        {/* 주변 뭉치 4 */}
-        <mesh castShadow position={[-1.2, 1.5, 1.8]}>
-          <sphereGeometry args={[1.9, 12, 12]} />
-          <meshStandardMaterial color="#f8bbd0" roughness={0.8} />
-        </mesh>
-      </group>
-    </group>
+    <primitive
+      object={treeModel}
+      position={position}
+      scale={4.2}
+      rotation={[0, Math.PI / 4, 0]}
+    />
   );
 };
 
@@ -245,6 +232,50 @@ const Cloud = ({
   );
 };
 
+// ---------- 석등 (Lantern/Toro - 밤에 빛남) ----------
+export const Lantern = ({
+  position,
+  isNight = false,
+}: {
+  position: [number, number, number];
+  isNight?: boolean;
+}) => {
+  return (
+    <group position={position}>
+      {/* 받침대 */}
+      <mesh castShadow position={[0, 0.4, 0]}>
+        <boxGeometry args={[0.5, 0.8, 0.5]} />
+        <meshStandardMaterial color="#757575" roughness={0.9} />
+      </mesh>
+      {/* 중간 기둥 */}
+      <mesh castShadow position={[0, 1.3, 0]}>
+        <cylinderGeometry args={[0.15, 0.15, 1.0, 6]} />
+        <meshStandardMaterial color="#757575" roughness={0.9} />
+      </mesh>
+      {/* 전등갓 (하단) */}
+      <mesh castShadow position={[0, 1.9, 0]}>
+        <cylinderGeometry args={[0.5, 0.4, 0.2, 6]} />
+        <meshStandardMaterial color="#757575" roughness={0.9} />
+      </mesh>
+      {/* 전등 (빛이 나오는 곳) */}
+      <mesh position={[0, 2.2, 0]}>
+        <boxGeometry args={[0.3, 0.4, 0.3]} />
+        <meshStandardMaterial
+          color={isNight ? "#ffcc80" : "#eeeeee"}
+          emissive={isNight ? "#ff9800" : "#000000"}
+          emissiveIntensity={isNight ? 8 : 0}
+        />
+        {isNight && <pointLight color="#ff8800" intensity={15} distance={10} />}
+      </mesh>
+      {/* 지붕 */}
+      <mesh castShadow position={[0, 2.5, 0]}>
+        <cylinderGeometry args={[0.1, 0.6, 0.3, 6]} />
+        <meshStandardMaterial color="#616161" roughness={0.8} />
+      </mesh>
+    </group>
+  );
+};
+
 // ---------- 꽃 데이터 ----------
 
 // 집 주변과 잔디밭에 꽃 배치 (집 영역 0,y,-7 근방 제외)
@@ -299,7 +330,7 @@ const FLOWERS: Array<{ pos: [number, number, number]; color: string }> = [
 ];
 
 // ---------- 메인 환경 컴포넌트 ----------
-export const Environment = () => {
+export const Environment = ({ isNight = false }: { isNight?: boolean }) => {
   return (
     <group>
       {/* === 안개 (집 뒤쪽 멀리 흐릿하게) === */}
@@ -331,12 +362,21 @@ export const Environment = () => {
       <Tree position={[4, 0, 14]} scale={1.15} />
 
       {/* === 마을 중앙 랜드마크 (Ancient Tree) === */}
-      <AncientTree position={[0, 0, 5]} />
-      
+      <AncientTree position={[-1, 4, 6]} />
+
+      {/* === 석등 (길목과 중요 포인트) === */}
+      <Lantern position={[-4, 0, -2]} isNight={isNight} />
+      <Lantern position={[4, 0, -2]} isNight={isNight} />
+      <Lantern position={[4, 0, 12]} isNight={isNight} />
+      <Lantern position={[-12, 0, 5]} isNight={isNight} />
+
+      {/* === 평온한 연못 === */}
+      <Pond position={[8, 0, 6]} scale={1.2} />
+
       {/* === 중앙 화단 및 벤치 === */}
-      <Bench position={[4, 0, 5]} rotation={-Math.PI / 2} />
-      <Bench position={[-4, 0, 5]} rotation={Math.PI / 2} />
-      <Bench position={[0, 0, 9]} rotation={Math.PI} />
+      <Bench position={[3.5, 0, 5]} rotation={-Math.PI / 2} />
+      <Bench position={[-6.5, 0, 5]} rotation={Math.PI / 2} />
+      <Bench position={[-1, 0, 10.5]} rotation={Math.PI} />
       {/* === 바위 (2배 크기) === */}
       <Rock position={[5, 0, 4]} scale={[2.2, 1.5, 2.4]} rotation={0.4} />
       <Rock position={[5.8, 0, 5.5]} scale={[1.4, 1.0, 1.6]} rotation={1.2} />
@@ -382,3 +422,6 @@ export const Environment = () => {
     </group>
   );
 };
+
+// 사전 로드
+useGLTF.preload("/models/tree/cherry_blossom_tree.glb");

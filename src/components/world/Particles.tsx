@@ -1,4 +1,4 @@
-import { useRef, useMemo, useEffect, useState } from "react";
+import { useRef, useMemo, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 
@@ -7,8 +7,10 @@ import * as THREE from "three";
 // ─────────────────────────────────────────────
 const getRandomPos = (spread: number) => (Math.random() - 0.5) * spread;
 
-const PETAL_COUNT = 120;
+const PETAL_COUNT = 240;
 const PETAL_SPREAD = 28;
+const TREE_CENTER = { x: -6, z: 5 };
+const CONCENTRATION_RADIUS = 7;
 const PETAL_COLORS = [
   new THREE.Color("#ffb3c6"),
   new THREE.Color("#ffd6e7"),
@@ -33,28 +35,48 @@ interface FireflyData {
   radius: number;
 }
 
-// 초기 데이터 생성을 위한 함수 (정적 데이터 생성)
-const generatePetalDataSync = (): PetalData[] => {
-  const temp: PetalData[] = [];
+interface ParticleInitData {
+  particles: PetalData[];
+  randomOffsets: Float32Array;
+}
+
+const generateInitialPetalData = (): ParticleInitData => {
+  const particles: PetalData[] = [];
+  const randomOffsets = new Float32Array(PETAL_COUNT);
+  
   for (let i = 0; i < PETAL_COUNT; i++) {
-    temp.push({
+    const isConcentrated = Math.random() < 0.75; 
+    let x, z;
+    
+    if (isConcentrated) {
+      const angle = Math.random() * Math.PI * 2;
+      const r = Math.sqrt(Math.random()) * CONCENTRATION_RADIUS;
+      x = TREE_CENTER.x + Math.cos(angle) * r;
+      z = TREE_CENTER.z + Math.sin(angle) * r;
+    } else {
+      x = getRandomPos(PETAL_SPREAD);
+      z = getRandomPos(PETAL_SPREAD);
+    }
+
+    particles.push({
       position: new THREE.Vector3(
-        getRandomPos(PETAL_SPREAD),
-        Math.random() * 10 + 2,
-        getRandomPos(PETAL_SPREAD),
+        x,
+        Math.random() * 8 + 1,
+        z
       ),
       velocity: new THREE.Vector3(
-        getRandomPos(0.04),
-        -(Math.random() * 0.015 + 0.005),
-        getRandomPos(0.04),
+        getRandomPos(0.03),
+        -(Math.random() * 0.012 + 0.006),
+        getRandomPos(0.03)
       ),
       phase: Math.random() * Math.PI * 2,
-      rotationSpeed: getRandomPos(0.1),
+      rotationSpeed: getRandomPos(0.08),
       rotation: Math.random() * Math.PI * 2,
       colorIndex: Math.floor(Math.random() * PETAL_COLORS.length),
     });
+    randomOffsets[i] = Math.random();
   }
-  return temp;
+  return { particles, randomOffsets };
 };
 
 // ─────────────────────────────────────────────
@@ -62,24 +84,26 @@ const generatePetalDataSync = (): PetalData[] => {
 // ─────────────────────────────────────────────
 export const PetalParticles = () => {
   const meshRef = useRef<THREE.InstancedMesh>(null!);
+  const materialRef = useRef<THREE.MeshStandardMaterial>(null!);
   
-  // 렌더링 시점에 Math.random()을 호출하지 않기 위해 
-  // 초기 데이터를 lazy하게 생성하거나 정적으로 관리
-  const [particles] = useState(() => generatePetalDataSync());
-  
-  // 리셋 시 사용할 랜덤 값들도 초기 1회만 생성
-  const randomOffsets = useMemo(() => {
-    const arr = new Float32Array(PETAL_COUNT);
-    for (let i = 0; i < PETAL_COUNT; i++) arr[i] = Math.random();
-    return arr;
-  }, []);
+  const [{ particles }] = useState(() => generateInitialPetalData());
 
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const color = useMemo(() => new THREE.Color(), []);
 
   useFrame((state) => {
-    if (!meshRef.current) return;
+    if (!meshRef.current || !materialRef.current) return;
     const t = state.clock.elapsedTime;
+
+    const cycleTime = 60;
+    const cycleT = (t % cycleTime) / cycleTime;
+    const angle = Math.PI - (cycleT * 2 * Math.PI);
+    const sunAltitude = Math.sin(angle);
+    
+    const opacity = THREE.MathUtils.clamp((sunAltitude + 0.2) * 2.5, 0, 0.85);
+    materialRef.current.opacity = opacity;
+
+    if (opacity <= 0) return;
 
     particles.forEach((p, i) => {
       p.position.x += p.velocity.x + Math.sin(t * 0.5 + p.phase) * 0.008;
@@ -88,15 +112,24 @@ export const PetalParticles = () => {
       p.rotation += p.rotationSpeed;
 
       if (p.position.y < 0) {
-        const off = randomOffsets[i];
-        p.position.y = 10 + off * 4;
-        p.position.x = (off - 0.5) * PETAL_SPREAD;
-        p.position.z = (((off * 1.7) % 1) - 0.5) * PETAL_SPREAD;
+        // 재생성 시에도 나무 주변 집중 유지
+        const isConcentrated = Math.random() < 0.75;
+        if (isConcentrated) {
+          const angle = Math.random() * Math.PI * 2;
+          const r = Math.sqrt(Math.random()) * CONCENTRATION_RADIUS;
+          p.position.x = TREE_CENTER.x + Math.cos(angle) * r;
+          p.position.z = TREE_CENTER.z + Math.sin(angle) * r;
+        } else {
+          p.position.x = getRandomPos(PETAL_SPREAD);
+          p.position.z = getRandomPos(PETAL_SPREAD);
+        }
+        p.position.y = 8 + Math.random() * 4;
       }
 
       dummy.position.copy(p.position);
       dummy.rotation.set(p.rotation, p.rotation * 0.7, p.rotation * 0.5);
-      dummy.scale.setScalar(0.06 + Math.sin(t + p.phase) * 0.01);
+      // 크기를 기존 0.06에서 0.10 내외로 확대
+      dummy.scale.setScalar(0.09 + Math.sin(t + p.phase) * 0.02);
       dummy.updateMatrix();
       meshRef.current.setMatrixAt(i, dummy.matrix);
 
@@ -113,9 +146,10 @@ export const PetalParticles = () => {
     <instancedMesh ref={meshRef} args={[undefined, undefined, PETAL_COUNT]}>
       <planeGeometry args={[1, 0.6]} />
       <meshStandardMaterial
+        ref={materialRef}
         side={THREE.DoubleSide}
         transparent
-        opacity={0.82}
+        opacity={0.85}
         roughness={0.4}
       />
     </instancedMesh>
@@ -146,14 +180,28 @@ const generateFireflyDataSync = (): FireflyData[] => {
 
 export const FireflyParticles = () => {
   const meshRef = useRef<THREE.InstancedMesh>(null!);
+  const materialRef = useRef<THREE.MeshStandardMaterial>(null!);
   const [fireflies] = useState(() => generateFireflyDataSync());
 
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const color = useMemo(() => new THREE.Color(), []);
 
   useFrame((state) => {
-    if (!meshRef.current) return;
+    if (!meshRef.current || !materialRef.current) return;
     const t = state.clock.elapsedTime;
+
+    // 밤에만 은은하게 나타남
+    const cycleTime = 60;
+    const cycleT = (t % cycleTime) / cycleTime;
+    const angle = Math.PI - (cycleT * 2 * Math.PI);
+    const sunAltitude = Math.sin(angle);
+    
+    // 해가 지평선 아래로 내려갈 때(sunAltitude < 0) 불투명도 증가
+    const opacity = THREE.MathUtils.clamp(-sunAltitude * 3.0, 0, 1.0);
+    materialRef.current.opacity = opacity;
+    materialRef.current.emissiveIntensity = opacity * 6;
+
+    if (opacity <= 0) return;
 
     fireflies.forEach((f, i) => {
       const x = f.position.x + Math.sin(t * f.speed + f.phase) * f.radius;
@@ -179,6 +227,7 @@ export const FireflyParticles = () => {
     <instancedMesh ref={meshRef} args={[undefined, undefined, FIREFLY_COUNT]}>
       <sphereGeometry args={[1, 6, 6]} />
       <meshStandardMaterial
+        ref={materialRef}
         emissive="#ffff88"
         emissiveIntensity={3}
         transparent
