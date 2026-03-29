@@ -1,17 +1,14 @@
-import { useRef, useMemo } from "react";
+import { useRef, useMemo, useEffect, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 
 // ─────────────────────────────────────────────
-// 유틸리티: 보다 안정적인 랜덤값 (컴파일러 경고 방지용)
+// 유틸리티 및 상수
 // ─────────────────────────────────────────────
 const getRandomPos = (spread: number) => (Math.random() - 0.5) * spread;
 
-// ─────────────────────────────────────────────
-// 꽃잎 파티클 (낮 동안 바람에 흩날리는 효과)
-// ─────────────────────────────────────────────
 const PETAL_COUNT = 120;
-const PETAL_SPREAD = 28; // 파티클이 흩뿌려지는 범위
+const PETAL_SPREAD = 28;
 const PETAL_COLORS = [
   new THREE.Color("#ffb3c6"),
   new THREE.Color("#ffd6e7"),
@@ -20,9 +17,25 @@ const PETAL_COLORS = [
   new THREE.Color("#e8b4f8"),
 ];
 
-// 초기 데이터 생성을 컴포넌트 외부로 분리하여 'impure function' 에러 방지
-const generatePetalData = () => {
-  const temp = [];
+interface PetalData {
+  position: THREE.Vector3;
+  velocity: THREE.Vector3;
+  phase: number;
+  rotationSpeed: number;
+  rotation: number;
+  colorIndex: number;
+}
+
+interface FireflyData {
+  position: THREE.Vector3;
+  phase: number;
+  speed: number;
+  radius: number;
+}
+
+// 초기 데이터 생성을 위한 함수 (정적 데이터 생성)
+const generatePetalDataSync = (): PetalData[] => {
+  const temp: PetalData[] = [];
   for (let i = 0; i < PETAL_COUNT; i++) {
     temp.push({
       position: new THREE.Vector3(
@@ -44,11 +57,22 @@ const generatePetalData = () => {
   return temp;
 };
 
+// ─────────────────────────────────────────────
+// 꽃잎 파티클 (낮)
+// ─────────────────────────────────────────────
 export const PetalParticles = () => {
   const meshRef = useRef<THREE.InstancedMesh>(null!);
-
-  // 컴포넌트 외부의 순수(?) 함수를 호출하여 초기화
-  const particles = useMemo(() => generatePetalData(), []);
+  
+  // 렌더링 시점에 Math.random()을 호출하지 않기 위해 
+  // 초기 데이터를 lazy하게 생성하거나 정적으로 관리
+  const [particles] = useState(() => generatePetalDataSync());
+  
+  // 리셋 시 사용할 랜덤 값들도 초기 1회만 생성
+  const randomOffsets = useMemo(() => {
+    const arr = new Float32Array(PETAL_COUNT);
+    for (let i = 0; i < PETAL_COUNT; i++) arr[i] = Math.random();
+    return arr;
+  }, []);
 
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const color = useMemo(() => new THREE.Color(), []);
@@ -58,27 +82,24 @@ export const PetalParticles = () => {
     const t = state.clock.elapsedTime;
 
     particles.forEach((p, i) => {
-      // 위치 업데이트
       p.position.x += p.velocity.x + Math.sin(t * 0.5 + p.phase) * 0.008;
       p.position.y += p.velocity.y;
       p.position.z += p.velocity.z + Math.cos(t * 0.3 + p.phase) * 0.008;
       p.rotation += p.rotationSpeed;
 
-      // 바닥 아래로 내려가면 위로 리셋 (애니메이션 루프 내의 무작위성은 허용됨)
       if (p.position.y < 0) {
-        p.position.y = 10 + Math.random() * 4;
-        p.position.x = getRandomPos(PETAL_SPREAD);
-        p.position.z = getRandomPos(PETAL_SPREAD);
+        const off = randomOffsets[i];
+        p.position.y = 10 + off * 4;
+        p.position.x = (off - 0.5) * PETAL_SPREAD;
+        p.position.z = (((off * 1.7) % 1) - 0.5) * PETAL_SPREAD;
       }
 
-      // InstancedMesh 행렬 적용
       dummy.position.copy(p.position);
       dummy.rotation.set(p.rotation, p.rotation * 0.7, p.rotation * 0.5);
       dummy.scale.setScalar(0.06 + Math.sin(t + p.phase) * 0.01);
       dummy.updateMatrix();
       meshRef.current.setMatrixAt(i, dummy.matrix);
 
-      // 색상 적용
       color.copy(PETAL_COLORS[p.colorIndex]);
       meshRef.current.setColorAt(i, color);
     });
@@ -102,12 +123,12 @@ export const PetalParticles = () => {
 };
 
 // ─────────────────────────────────────────────
-// 반딧불이 파티클 (밤 동안 반짝이는 효과)
+// 반딧불이 파티클 (밤)
 // ─────────────────────────────────────────────
 const FIREFLY_COUNT = 30;
 
-const generateFireflyData = () => {
-  const temp = [];
+const generateFireflyDataSync = (): FireflyData[] => {
+  const temp: FireflyData[] = [];
   for (let i = 0; i < FIREFLY_COUNT; i++) {
     temp.push({
       position: new THREE.Vector3(
@@ -125,8 +146,7 @@ const generateFireflyData = () => {
 
 export const FireflyParticles = () => {
   const meshRef = useRef<THREE.InstancedMesh>(null!);
-
-  const fireflies = useMemo(() => generateFireflyData(), []);
+  const [fireflies] = useState(() => generateFireflyDataSync());
 
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const color = useMemo(() => new THREE.Color(), []);
@@ -136,7 +156,6 @@ export const FireflyParticles = () => {
     const t = state.clock.elapsedTime;
 
     fireflies.forEach((f, i) => {
-      // 원을 그리며 부유
       const x = f.position.x + Math.sin(t * f.speed + f.phase) * f.radius;
       const y = f.position.y + Math.sin(t * f.speed * 1.3 + f.phase) * 0.4;
       const z = f.position.z + Math.cos(t * f.speed + f.phase) * f.radius;
@@ -146,13 +165,8 @@ export const FireflyParticles = () => {
       dummy.updateMatrix();
       meshRef.current.setMatrixAt(i, dummy.matrix);
 
-      // 반짝임: 밝아졌다 어두워졌다 (따뜻한 노란색/황금색 계열)
-      const brightness = 0.4 + Math.abs(Math.sin(t * 3 + f.phase)) * 0.6;
-      color.setHSL(
-        0.13 + Math.sin(f.phase) * 0.02, // 0.11 ~ 0.15: 따뜻한 노란색
-        1.0,
-        brightness * 0.8,
-      );
+      const br = 0.4 + Math.abs(Math.sin(t * 3 + f.phase)) * 0.6;
+      color.setHSL(0.13 + Math.sin(f.phase) * 0.02, 1.0, br * 0.8);
       meshRef.current.setColorAt(i, color);
     });
 

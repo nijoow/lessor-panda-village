@@ -2,9 +2,16 @@
 
 import { useFrame, useGraph } from '@react-three/fiber';
 import { useKeyboardControls, useGLTF, useAnimations } from '@react-three/drei';
-import { useRef, useEffect, useMemo } from 'react';
+import { useRef, useEffect, useMemo, forwardRef, useImperativeHandle } from 'react';
 import * as THREE from 'three';
 import { SkeletonUtils } from 'three-stdlib';
+
+import {
+  COLLISION_TREES,
+  COLLISION_ROCKS,
+  COLLISION_HOUSE,
+  WORLD_BOUNDS,
+} from '@/constants/collisionMap';
 
 export enum Controls {
   forward = 'forward',
@@ -12,26 +19,91 @@ export enum Controls {
   left = 'left',
   right = 'right',
   run = 'run',
+  jump = 'jump',
+  interact = 'interact',
+  nightToggle = 'nightToggle',
 }
 
 // 등각 뷰(Isometric)에서 카메라 방향을 기준으로 월드 이동 방향을 계산합니다.
 // 카메라 오프셋이 (+X, +Y, +Z) 방향이므로 카메라는 남서쪽에서 바라봅니다.
-// "위" 방향키 -> 화면의 왼쪽 위 -> 월드 좌표 (-X, -Z)
-// "오른쪽" 방향키 -> 화면의 오른쪽 위 -> 월드 좌표 (+X, -Z)
-const CAM_FORWARD = new THREE.Vector3(-1, 0, -1).normalize(); // 화면 상단 방향 (World)
-const CAM_RIGHT = new THREE.Vector3(1, 0, -1).normalize();   // 화면 우측 방향 (World)
+const CAM_FORWARD = new THREE.Vector3(-1, 0, -1).normalize();
+const CAM_RIGHT = new THREE.Vector3(1, 0, -1).normalize();
 
 const lerpAngle = (start: number, end: number, t: number) => {
   const diff = ((end - start + Math.PI) % (Math.PI * 2)) - Math.PI;
   return start + diff * t;
 };
 
-export const Player = () => {
+// 충돌 체크 함수 (y값을 추가하여 점프 시 통과 여부 결정)
+const checkCollision = (x: number, z: number, y: number) => {
+  // 1. 월드 경계 체크 (가장 바깥쪽 80x80 잔디 영역)
+  if (
+    x < WORLD_BOUNDS.min ||
+    x > WORLD_BOUNDS.max ||
+    z < WORLD_BOUNDS.min ||
+    z > WORLD_BOUNDS.max
+  )
+    return true;
+
+  // 2. 나무 충돌 (항상 충돌, 점프로 못 넘음)
+  for (const tree of COLLISION_TREES) {
+    const dx = x - tree.x;
+    const dz = z - tree.z;
+    if (Math.sqrt(dx * dx + dz * dz) < tree.radius) return true;
+  }
+
+  // 3. 바위 충돌 (낮은 바위는 점프 중 y > 1.0이면 통과 가능)
+  if (y < 1.0) {
+    for (const rock of COLLISION_ROCKS) {
+      const dx = x - rock.x;
+      const dz = z - rock.z;
+      if (Math.sqrt(dx * dx + dz * dz) < rock.radius) return true;
+    }
+  }
+
+  // 4. 집 충돌 (항상 충돌, 점프로 못 넘음)
+  if (
+    x > COLLISION_HOUSE.minX &&
+    x < COLLISION_HOUSE.maxX &&
+    z > COLLISION_HOUSE.minZ &&
+    z < COLLISION_HOUSE.maxZ
+  ) {
+    return true;
+  }
+
+  // 5. 울타리 충돌 (x, z = ±17 라인에서 점프 중 y > 1.3이면 통과 가능)
+  const FENCE_DIST = 17;
+  const FENCE_THICKNESS = 0.4;
+  if (y < 1.3) {
+    const absX = Math.abs(x);
+    const absZ = Math.abs(z);
+    
+    // 남/북 울타리 (z축 기준)
+    if (absZ > FENCE_DIST - FENCE_THICKNESS && absZ < FENCE_DIST + FENCE_THICKNESS) {
+      // 울타리 틈새 없이 전 구간 충돌 (필요시 x 범위를 제한하여 문을 만들 수 있음)
+      if (absX < FENCE_DIST + FENCE_THICKNESS) return true;
+    }
+    // 동/서 울타리 (x축 기준)
+    if (absX > FENCE_DIST - FENCE_THICKNESS && absX < FENCE_DIST + FENCE_THICKNESS) {
+      if (absZ < FENCE_DIST + FENCE_THICKNESS) return true;
+    }
+  }
+
+  return false;
+};
+
+export const Player = forwardRef<THREE.Group>((props, ref) => {
   const groupRef = useRef<THREE.Group>(null!);
+  
+  // 외부에서 groupRef를 사용할 수 있도록 노출
+  useImperativeHandle(ref, () => groupRef.current);
+  
   const [, getKeys] = useKeyboardControls<Controls>();
 
   // 1. 모델 로딩 (Base, Walking, Running)
-  const { scene: baseScene, animations: idleAnims } = useGLTF('/models/player/base.glb');
+  const { scene: baseScene, animations: idleAnims } = useGLTF(
+    '/models/player/base.glb'
+  );
   const { animations: walkAnims } = useGLTF('/models/player/walking.glb');
   const { animations: runAnims } = useGLTF('/models/player/running.glb');
 
@@ -40,18 +112,19 @@ export const Player = () => {
   const { nodes, materials } = useGraph(clone);
 
   // 3. 모든 애니메이션 통합 관리
-  const allAnimations = useMemo(() => [
-    ...idleAnims,
-    ...walkAnims,
-    ...runAnims,
-  ], [idleAnims, walkAnims, runAnims]);
+  const allAnimations = useMemo(
+    () => [...idleAnims, ...walkAnims, ...runAnims],
+    [idleAnims, walkAnims, runAnims]
+  );
 
   const { actions } = useAnimations(allAnimations, groupRef);
 
-  // 4. 현재 액션을 ref로 관리 (useFrame에서 setState 호출 금지)
+  // 4. 현재 액션 및 물리 상태 ref로 관리
   const currentActionRef = useRef<string>('');
   const targetPosition = useRef(new THREE.Vector3(0, 0, 0));
   const targetRotation = useRef(0);
+  const velocityY = useRef(0);
+  const isGrounded = useRef(true);
 
   // 5. actions가 로딩되면 Idle 애니메이션 시작
   useEffect(() => {
@@ -66,9 +139,29 @@ export const Player = () => {
   useFrame((state) => {
     if (!groupRef.current) return;
 
-    const { forward, backward, left, right, run } = getKeys();
+    const { forward, backward, left, right, run, jump } = getKeys();
 
-    // 6. 카메라 기준 이동 벡터 계산
+    // 6. 점프 및 중력 물리
+    const GRAVITY = -0.006;
+    const JUMP_FORCE = 0.14;
+
+    if (jump && isGrounded.current) {
+      velocityY.current = JUMP_FORCE;
+      isGrounded.current = false;
+    }
+
+    if (!isGrounded.current) {
+      velocityY.current += GRAVITY;
+      targetPosition.current.y += velocityY.current;
+
+      if (targetPosition.current.y <= 0) {
+        targetPosition.current.y = 0;
+        velocityY.current = 0;
+        isGrounded.current = true;
+      }
+    }
+
+    // 7. 카메라 기준 이동 벡터 계산
     const moveForward = (forward ? 1 : 0) - (backward ? 1 : 0);
     const moveRight = (right ? 1 : 0) - (left ? 1 : 0);
 
@@ -76,21 +169,31 @@ export const Player = () => {
     const speed = run ? 0.18 : 0.08;
 
     if (isMoving) {
-      // 카메라 기준 방향 벡터를 세계 좌표계 이동으로 변환
       const moveDir = new THREE.Vector3()
         .addScaledVector(CAM_FORWARD, moveForward)
         .addScaledVector(CAM_RIGHT, moveRight)
         .normalize()
         .multiplyScalar(speed);
 
-      targetPosition.current.x += moveDir.x;
-      targetPosition.current.z += moveDir.z;
+      // 충돌 체크 후 이동 (현재 Y 좌표 전달)
+      const nextX = targetPosition.current.x + moveDir.x;
+      const nextZ = targetPosition.current.z + moveDir.z;
+      const currentY = targetPosition.current.y;
+
+      if (!checkCollision(nextX, targetPosition.current.z, currentY)) {
+        targetPosition.current.x = nextX;
+      }
+      if (!checkCollision(targetPosition.current.x, nextZ, currentY)) {
+        targetPosition.current.z = nextZ;
+      }
 
       // 이동 방향으로 캐릭터 회전
       targetRotation.current = Math.atan2(moveDir.x, moveDir.z);
 
-      // 7. 애니메이션 전환 (ref 기반으로 setState 없이 처리)
-      const nextClip = run ? 'Armature|running|baselayer' : 'Armature|walking_man|baselayer';
+      // 애니메이션 전환
+      const nextClip = run
+        ? 'Armature|running|baselayer'
+        : 'Armature|walking_man|baselayer';
       if (currentActionRef.current !== nextClip) {
         const prev = actions[currentActionRef.current];
         const next = actions[nextClip];
@@ -115,8 +218,17 @@ export const Player = () => {
     }
 
     // 8. 위치 및 회전 부드럽게 보간
-    groupRef.current.position.x = THREE.MathUtils.lerp(groupRef.current.position.x, targetPosition.current.x, 0.15);
-    groupRef.current.position.z = THREE.MathUtils.lerp(groupRef.current.position.z, targetPosition.current.z, 0.15);
+    groupRef.current.position.x = THREE.MathUtils.lerp(
+      groupRef.current.position.x,
+      targetPosition.current.x,
+      0.15
+    );
+    groupRef.current.position.y = targetPosition.current.y; // Y축은 즉시 반영 (물리)
+    groupRef.current.position.z = THREE.MathUtils.lerp(
+      groupRef.current.position.z,
+      targetPosition.current.z,
+      0.15
+    );
 
     groupRef.current.rotation.y = lerpAngle(
       groupRef.current.rotation.y,
@@ -150,7 +262,9 @@ export const Player = () => {
       </group>
     </group>
   );
-};
+});
+
+Player.displayName = 'Player';
 
 // 사전 로딩
 useGLTF.preload('/models/player/base.glb');
