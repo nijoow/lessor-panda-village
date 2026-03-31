@@ -6,6 +6,9 @@ import {
   PerspectiveCamera,
   Sky,
   Stars,
+  Preload,
+  AdaptiveDpr,
+  AdaptiveEvents,
 } from "@react-three/drei";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import { ReactNode, useRef, Suspense } from "react";
@@ -64,7 +67,7 @@ const DayNightLights = () => {
         position={[10, 20, 10]}
         intensity={2.5}
         castShadow
-        shadow-mapSize={[2048, 2048]}
+        shadow-mapSize={[1024, 1024]}
         shadow-camera-left={-30}
         shadow-camera-right={30}
         shadow-camera-top={30}
@@ -154,6 +157,10 @@ export const Scene = ({ children, isNight }: SceneProps) => {
           radius={0.4}
         />
       </EffectComposer>
+
+      <Preload all />
+      <AdaptiveDpr pixelated />
+      <AdaptiveEvents />
     </Canvas>
   );
 };
