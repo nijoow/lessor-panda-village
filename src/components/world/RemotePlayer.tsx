@@ -5,15 +5,18 @@ import { useGLTF, useAnimations, Billboard, Text } from "@react-three/drei";
 import { useRef, useMemo, useState } from "react";
 import * as THREE from "three";
 import { SkeletonUtils } from "three-stdlib";
-import { PlayerState } from "@/hooks/useMultiplayer";
+import { PlayerState, ChatMessage } from "@/hooks/useMultiplayer";
 import { PLAYER_ANIM } from "@/constants/playerAnimations";
+import { ChatBubble } from "./ChatBubble";
+import { getNicknameColor } from "@/utils/color";
 
 interface Props {
   id: string;
   getPlayerData: (id: string) => PlayerState | undefined;
+  lastChatMessage?: ChatMessage;
 }
 
-export const RemotePlayer = ({ id, getPlayerData }: Props) => {
+export const RemotePlayer = ({ id, getPlayerData, lastChatMessage }: Props) => {
   const groupRef = useRef<THREE.Group>(null!);
   const [nickname, setNickname] = useState<string>("Loading...");
 
@@ -59,11 +62,11 @@ export const RemotePlayer = ({ id, getPlayerData }: Props) => {
 
     // 애니메이션 동기화
     let animation = data.anim;
-    
+
     // 데이터가 'idle' 같은 단축어일 경우 상수로 매핑 (하위 호환성)
-    if (animation === 'idle') animation = PLAYER_ANIM.IDLE;
-    if (animation === 'walk') animation = PLAYER_ANIM.WALK;
-    if (animation === 'run') animation = PLAYER_ANIM.RUN;
+    if (animation === "idle") animation = PLAYER_ANIM.IDLE;
+    if (animation === "walk") animation = PLAYER_ANIM.WALK;
+    if (animation === "run") animation = PLAYER_ANIM.RUN;
 
     if (animation && currentActionRef.current !== animation) {
       const prev = actions[currentActionRef.current];
@@ -78,6 +81,14 @@ export const RemotePlayer = ({ id, getPlayerData }: Props) => {
 
   return (
     <group ref={groupRef} dispose={null}>
+      {/* Chat Bubble */}
+      {lastChatMessage && (
+        <ChatBubble
+          message={lastChatMessage.message}
+          timestamp={lastChatMessage.timestamp}
+        />
+      )}
+
       <group name="Scene">
         <group name="Armature" scale={0.01}>
           <primitive object={nodes.Hips} />
@@ -91,13 +102,13 @@ export const RemotePlayer = ({ id, getPlayerData }: Props) => {
           />
         </group>
         {/* 닉네임 표시 */}
-        <Billboard position={[0, 2.8, 0]}>
+        <Billboard position={[0, 3, 0.6]}>
           <Text
             fontSize={0.4}
-            color="#0c4a6e"
+            color={getNicknameColor(id)}
             anchorX="center"
             anchorY="middle"
-            outlineWidth={0.05}
+            outlineWidth={0.03}
             outlineColor="#ffffff"
           >
             {nickname}

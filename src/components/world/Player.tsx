@@ -18,8 +18,12 @@ import {
 import * as THREE from "three";
 import { SkeletonUtils } from "three-stdlib";
 import { PLAYER_ANIM } from "@/constants/playerAnimations";
+import { ChatBubble } from "./ChatBubble";
+import { ChatMessage } from "@/hooks/useMultiplayer";
+import { getNicknameColor } from "@/utils/color";
 
 interface Props {
+  id: string;
   nickname: string;
   onMove?: (state: {
     x: number;
@@ -28,6 +32,8 @@ interface Props {
     ry: number;
     anim: string;
   }) => void;
+  lastChatMessage?: ChatMessage;
+  inputDisabled?: boolean;
 }
 
 import {
@@ -165,7 +171,7 @@ const checkCollision = (x: number, z: number, y: number) => {
 };
 
 export const Player = forwardRef<THREE.Group, Props>(
-  ({ nickname, onMove }, ref) => {
+  ({ id, nickname, onMove, lastChatMessage, inputDisabled }, ref) => {
     const groupRef = useRef<THREE.Group>(null!);
 
     // 외부에서 groupRef를 사용할 수 있도록 노출
@@ -235,7 +241,17 @@ export const Player = forwardRef<THREE.Group, Props>(
     useFrame((state, delta) => {
       if (!groupRef.current) return;
 
-      const { forward, backward, left, right, run, jump } = getKeys();
+      const keys = getKeys();
+      const { forward, backward, left, right, run, jump } = inputDisabled
+        ? {
+            forward: false,
+            backward: false,
+            left: false,
+            right: false,
+            run: false,
+            jump: false,
+          }
+        : keys;
 
       // 6. 점프 및 중력 물리
       const GRAVITY = -0.006;
@@ -287,9 +303,7 @@ export const Player = forwardRef<THREE.Group, Props>(
         targetRotation.current = Math.atan2(moveDir.x, moveDir.z);
 
         // 애니메이션 전환
-        const nextClip = run
-          ? PLAYER_ANIM.RUN
-          : PLAYER_ANIM.WALK;
+        const nextClip = run ? PLAYER_ANIM.RUN : PLAYER_ANIM.WALK;
         if (currentActionRef.current !== nextClip) {
           const prev = actions[currentActionRef.current];
           const next = actions[nextClip];
@@ -380,6 +394,14 @@ export const Player = forwardRef<THREE.Group, Props>(
 
     return (
       <group ref={groupRef} dispose={null}>
+        {/* Chat Bubble */}
+        {lastChatMessage && (
+          <ChatBubble
+            message={lastChatMessage.message}
+            timestamp={lastChatMessage.timestamp}
+          />
+        )}
+
         <group name="Scene">
           <group name="Armature" scale={0.01}>
             <primitive object={nodes.Hips} />
@@ -393,13 +415,13 @@ export const Player = forwardRef<THREE.Group, Props>(
             />
           </group>
           {/* 닉네임 표시 */}
-          <Billboard position={[0, 2.8, 0]}>
+          <Billboard position={[0, 3, 0.6]}>
             <Text
               fontSize={0.4}
-              color="#0c4a6e"
+              color={getNicknameColor(id)}
               anchorX="center"
               anchorY="middle"
-              outlineWidth={0.05}
+              outlineWidth={0.03}
               outlineColor="#ffffff"
             >
               {nickname}

@@ -1,6 +1,10 @@
 "use client";
 
-import { KeyboardControls, KeyboardControlsEntry, useProgress } from "@react-three/drei";
+import {
+  KeyboardControls,
+  KeyboardControlsEntry,
+  useProgress,
+} from "@react-three/drei";
 import { AnimatePresence } from "framer-motion";
 import { Scene } from "@/components/Scene";
 import { Ground } from "@/components/world/Ground";
@@ -10,9 +14,10 @@ import { House } from "@/components/world/House";
 import { PetalParticles, FireflyParticles } from "@/components/world/Particles";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { NicknameOverlay } from "@/components/ui/NicknameOverlay";
+import { ChatHUD } from "@/components/ui/ChatHUD";
 import { RemotePlayer } from "@/components/world/RemotePlayer";
-import { useMultiplayer } from "@/hooks/useMultiplayer";
-import { useRef, useState, useEffect, Suspense } from "react";
+import { useMultiplayer, ChatMessage } from "@/hooks/useMultiplayer";
+import { useRef, useState, useEffect, Suspense, useCallback } from "react";
 import Image from "next/image";
 import * as THREE from "three";
 
@@ -57,22 +62,42 @@ const HomeContent = ({
 }: Omit<HomeContentProps, "setIsNight">) => {
   const { progress } = useProgress();
   const [nickname, setNickname] = useState<string | null>(null);
-  
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [lastMessagesMap, setLastMessagesMap] = useState<
+    Record<string, ChatMessage>
+  >({});
+  const [isChatFocused, setIsChatFocused] = useState(false);
+
+  // 채팅 핸들러 메모이제이션 (연결 안정성 확보)
+  const handleChatMessage = useCallback((chat: ChatMessage) => {
+    setMessages((prev) => [...prev.slice(-19), chat]);
+    setLastMessagesMap((prev) => ({ ...prev, [chat.id]: chat }));
+  }, []);
+
   // 멀티플레이어 훅 (ID 기반 최적화)
-  const { remotePlayerIds, getPlayerData, broadcastMove } = useMultiplayer(nickname);
-  
+  const { remotePlayerIds, getPlayerData, broadcastMove, broadcastChat, myId } =
+    useMultiplayer(nickname, handleChatMessage);
+
   // 로딩이 완료된 후에만 닉네임 입력창이 보이도록 함
   const showNicknameOverlay = progress === 100 && nickname === null;
 
   return (
     <main className="w-full h-full relative overflow-hidden bg-[#fdfaf6]">
       <LoadingScreen />
-      
+
       <AnimatePresence>
         {showNicknameOverlay && (
           <NicknameOverlay onJoin={(name) => setNickname(name)} />
         )}
       </AnimatePresence>
+
+      {nickname && (
+        <ChatHUD
+          messages={messages}
+          onSendMessage={broadcastChat}
+          onFocusChange={setIsChatFocused}
+        />
+      )}
 
       {/* UI layer - 닉네임 입력 후에만 표시 */}
       {nickname && (
@@ -117,15 +142,19 @@ const HomeContent = ({
             key={id}
             id={id}
             getPlayerData={getPlayerData}
+            lastChatMessage={lastMessagesMap[id]}
           />
         ))}
 
         {/* Player - 닉네임이 있을 때만 활성화 */}
         {nickname && (
-          <Player 
-            ref={playerRef} 
-            nickname={nickname} 
+          <Player
+            ref={playerRef}
+            id={myId}
+            nickname={nickname}
             onMove={broadcastMove}
+            lastChatMessage={lastMessagesMap[myId]}
+            inputDisabled={isChatFocused}
           />
         )}
       </Scene>
