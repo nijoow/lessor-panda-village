@@ -1,7 +1,13 @@
 "use client";
 
 import { useFrame, useGraph } from "@react-three/fiber";
-import { useKeyboardControls, useGLTF, useAnimations } from "@react-three/drei";
+import {
+  useKeyboardControls,
+  useGLTF,
+  useAnimations,
+  Billboard,
+  Text,
+} from "@react-three/drei";
 import {
   useRef,
   useEffect,
@@ -11,6 +17,18 @@ import {
 } from "react";
 import * as THREE from "three";
 import { SkeletonUtils } from "three-stdlib";
+import { PLAYER_ANIM } from "@/constants/playerAnimations";
+
+interface Props {
+  nickname: string;
+  onMove?: (state: {
+    x: number;
+    y: number;
+    z: number;
+    ry: number;
+    anim: string;
+  }) => void;
+}
 
 import {
   COLLISION_TREES,
@@ -146,177 +164,252 @@ const checkCollision = (x: number, z: number, y: number) => {
   return false;
 };
 
-export const Player = forwardRef<THREE.Group>((props, ref) => {
-  const groupRef = useRef<THREE.Group>(null!);
+export const Player = forwardRef<THREE.Group, Props>(
+  ({ nickname, onMove }, ref) => {
+    const groupRef = useRef<THREE.Group>(null!);
 
-  // 외부에서 groupRef를 사용할 수 있도록 노출
-  useImperativeHandle(ref, () => groupRef.current);
+    // 외부에서 groupRef를 사용할 수 있도록 노출
+    useImperativeHandle(ref, () => groupRef.current);
 
-  const [, getKeys] = useKeyboardControls<Controls>();
+    const [, getKeys] = useKeyboardControls<Controls>();
 
-  // 1. 모델 로딩 (Base, Walking, Running)
-  const { scene: baseScene, animations: idleAnims } = useGLTF(
-    "/models/player/base.glb",
-  );
-  const { animations: walkAnims } = useGLTF("/models/player/walking.glb");
-  const { animations: runAnims } = useGLTF("/models/player/running.glb");
+    // 네트워크 전송 최적화를 위한 타이머 및 상태 캐시
+    const lastUpdateRef = useRef(0);
+    const lastSentStateRef = useRef({
+      x: 0,
+      y: 0,
+      z: 0,
+      ry: 0,
+      anim: "",
+    });
 
-  // 2. 모델 복제 및 그래프 추출
-  const clone = useMemo(() => SkeletonUtils.clone(baseScene), [baseScene]);
-  const { nodes, materials } = useGraph(clone);
-
-  // 3. 모든 애니메이션 통합 관리
-  const allAnimations = useMemo(
-    () => [...idleAnims, ...walkAnims, ...runAnims],
-    [idleAnims, walkAnims, runAnims],
-  );
-
-  const { actions } = useAnimations(allAnimations, groupRef);
-
-  // 4. 현재 액션 및 물리 상태 ref로 관리
-  const currentActionRef = useRef<string>("");
-  const targetPosition = useRef(new THREE.Vector3(0, 0, 0));
-  const targetRotation = useRef(0);
-  const velocityY = useRef(0);
-  const isGrounded = useRef(true);
-
-  // 5. actions가 로딩되면 Idle 애니메이션 시작
-  useEffect(() => {
-    const idleClipName = "Armature|clip0|baselayer";
-    const action = actions[idleClipName];
-    if (action) {
-      action.reset().play();
-      currentActionRef.current = idleClipName;
-    }
-  }, [actions]);
-
-  useFrame((state) => {
-    if (!groupRef.current) return;
-
-    const { forward, backward, left, right, run, jump } = getKeys();
-
-    // 6. 점프 및 중력 물리
-    const GRAVITY = -0.006;
-    const JUMP_FORCE = 0.14;
-
-    if (jump && isGrounded.current) {
-      velocityY.current = JUMP_FORCE;
-      isGrounded.current = false;
-    }
-
-    if (!isGrounded.current) {
-      velocityY.current += GRAVITY;
-      targetPosition.current.y += velocityY.current;
-
-      if (targetPosition.current.y <= 0) {
-        targetPosition.current.y = 0;
-        velocityY.current = 0;
-        isGrounded.current = true;
+    // 초기 위치 브로드캐스트
+    useEffect(() => {
+      if (onMove) {
+        onMove({
+          x: 0,
+          y: 0,
+          z: 0,
+          ry: 0,
+          anim: PLAYER_ANIM.IDLE,
+        });
       }
-    }
+    }, [onMove]);
 
-    // 7. 카메라 기준 이동 벡터 계산
-    const moveForward = (forward ? 1 : 0) - (backward ? 1 : 0);
-    const moveRight = (right ? 1 : 0) - (left ? 1 : 0);
+    // 1. 모델 로딩 (Base, Walking, Running)
+    const { scene: baseScene, animations: idleAnims } = useGLTF(
+      "/models/player/base.glb",
+    );
+    const { animations: walkAnims } = useGLTF("/models/player/walking.glb");
+    const { animations: runAnims } = useGLTF("/models/player/running.glb");
 
-    const isMoving = moveForward !== 0 || moveRight !== 0;
-    const speed = run ? 0.12 : 0.08;
+    // 2. 모델 복제 및 그래프 추출
+    const clone = useMemo(() => SkeletonUtils.clone(baseScene), [baseScene]);
+    const { nodes, materials } = useGraph(clone);
 
-    if (isMoving) {
-      const moveDir = new THREE.Vector3()
-        .addScaledVector(CAM_FORWARD, moveForward)
-        .addScaledVector(CAM_RIGHT, moveRight)
-        .normalize()
-        .multiplyScalar(speed);
+    // 3. 모든 애니메이션 통합 관리
+    const allAnimations = useMemo(
+      () => [...idleAnims, ...walkAnims, ...runAnims],
+      [idleAnims, walkAnims, runAnims],
+    );
 
-      // 충돌 체크 후 이동 (현재 Y 좌표 전달)
-      const nextX = targetPosition.current.x + moveDir.x;
-      const nextZ = targetPosition.current.z + moveDir.z;
-      const currentY = targetPosition.current.y;
+    const { actions } = useAnimations(allAnimations, groupRef);
 
-      if (!checkCollision(nextX, targetPosition.current.z, currentY)) {
-        targetPosition.current.x = nextX;
+    // 4. 현재 액션 및 물리 상태 ref로 관리
+    const currentActionRef = useRef<string>("");
+    const targetPosition = useRef(new THREE.Vector3(0, 0, 0));
+    const targetRotation = useRef(0);
+    const velocityY = useRef(0);
+    const isGrounded = useRef(true);
+
+    // 5. actions가 로딩되면 Idle 애니메이션 시작
+    useEffect(() => {
+      const idleClipName = PLAYER_ANIM.IDLE;
+      const action = actions[idleClipName];
+      if (action) {
+        action.reset().play();
+        currentActionRef.current = idleClipName;
       }
-      if (!checkCollision(targetPosition.current.x, nextZ, currentY)) {
-        targetPosition.current.z = nextZ;
+    }, [actions]);
+
+    useFrame((state, delta) => {
+      if (!groupRef.current) return;
+
+      const { forward, backward, left, right, run, jump } = getKeys();
+
+      // 6. 점프 및 중력 물리
+      const GRAVITY = -0.006;
+      const JUMP_FORCE = 0.14;
+
+      if (jump && isGrounded.current) {
+        velocityY.current = JUMP_FORCE;
+        isGrounded.current = false;
       }
 
-      // 이동 방향으로 캐릭터 회전
-      targetRotation.current = Math.atan2(moveDir.x, moveDir.z);
+      if (!isGrounded.current) {
+        velocityY.current += GRAVITY;
+        targetPosition.current.y += velocityY.current;
 
-      // 애니메이션 전환
-      const nextClip = run
-        ? "Armature|running|baselayer"
-        : "Armature|walking_man|baselayer";
-      if (currentActionRef.current !== nextClip) {
-        const prev = actions[currentActionRef.current];
-        const next = actions[nextClip];
-        if (next) {
-          prev?.fadeOut(0.2);
-          next.reset().fadeIn(0.2).play();
-          currentActionRef.current = nextClip;
+        if (targetPosition.current.y <= 0) {
+          targetPosition.current.y = 0;
+          velocityY.current = 0;
+          isGrounded.current = true;
         }
       }
-    } else {
-      // 정지 시 Idle 전환
-      const idleClip = "Armature|clip0|baselayer";
-      if (currentActionRef.current !== idleClip) {
-        const prev = actions[currentActionRef.current];
-        const next = actions[idleClip];
-        if (next) {
-          prev?.fadeOut(0.2);
-          next.reset().fadeIn(0.2).play();
-          currentActionRef.current = idleClip;
+
+      // 7. 카메라 기준 이동 벡터 계산
+      const moveForward = (forward ? 1 : 0) - (backward ? 1 : 0);
+      const moveRight = (right ? 1 : 0) - (left ? 1 : 0);
+
+      const isMoving = moveForward !== 0 || moveRight !== 0;
+      const speed = run ? 0.12 : 0.08;
+
+      if (isMoving) {
+        const moveDir = new THREE.Vector3()
+          .addScaledVector(CAM_FORWARD, moveForward)
+          .addScaledVector(CAM_RIGHT, moveRight)
+          .normalize()
+          .multiplyScalar(speed);
+
+        // 충돌 체크 후 이동 (현재 Y 좌표 전달)
+        const nextX = targetPosition.current.x + moveDir.x;
+        const nextZ = targetPosition.current.z + moveDir.z;
+        const currentY = targetPosition.current.y;
+
+        if (!checkCollision(nextX, targetPosition.current.z, currentY)) {
+          targetPosition.current.x = nextX;
+        }
+        if (!checkCollision(targetPosition.current.x, nextZ, currentY)) {
+          targetPosition.current.z = nextZ;
+        }
+
+        // 이동 방향으로 캐릭터 회전
+        targetRotation.current = Math.atan2(moveDir.x, moveDir.z);
+
+        // 애니메이션 전환
+        const nextClip = run
+          ? PLAYER_ANIM.RUN
+          : PLAYER_ANIM.WALK;
+        if (currentActionRef.current !== nextClip) {
+          const prev = actions[currentActionRef.current];
+          const next = actions[nextClip];
+          if (next) {
+            prev?.fadeOut(0.2);
+            next.reset().fadeIn(0.2).play();
+            currentActionRef.current = nextClip;
+          }
+        }
+      } else {
+        // 정지 시 Idle 전환
+        const idleClip = PLAYER_ANIM.IDLE;
+        if (currentActionRef.current !== idleClip) {
+          const prev = actions[currentActionRef.current];
+          const next = actions[idleClip];
+          if (next) {
+            prev?.fadeOut(0.2);
+            next.reset().fadeIn(0.2).play();
+            currentActionRef.current = idleClip;
+          }
         }
       }
-    }
 
-    // 8. 위치 및 회전 부드럽게 보간
-    groupRef.current.position.x = THREE.MathUtils.lerp(
-      groupRef.current.position.x,
-      targetPosition.current.x,
-      0.15,
-    );
-    groupRef.current.position.y = targetPosition.current.y; // Y축은 즉시 반영 (물리)
-    groupRef.current.position.z = THREE.MathUtils.lerp(
-      groupRef.current.position.z,
-      targetPosition.current.z,
-      0.15,
-    );
+      // 8. 위치 및 회전 부드럽게 보간
+      groupRef.current.position.x = THREE.MathUtils.lerp(
+        groupRef.current.position.x,
+        targetPosition.current.x,
+        0.15,
+      );
+      groupRef.current.position.y = targetPosition.current.y; // Y축은 즉시 반영 (물리)
+      groupRef.current.position.z = THREE.MathUtils.lerp(
+        groupRef.current.position.z,
+        targetPosition.current.z,
+        0.15,
+      );
 
-    groupRef.current.rotation.y = lerpAngle(
-      groupRef.current.rotation.y,
-      targetRotation.current,
-      0.12,
-    );
+      groupRef.current.rotation.y = lerpAngle(
+        groupRef.current.rotation.y,
+        targetRotation.current,
+        0.12,
+      );
 
-    // 9. 카메라 트래킹 (등각 오프셋 유지)
-    const camOffset = new THREE.Vector3(14, 14, 14);
-    state.camera.position.lerp(
-      groupRef.current.position.clone().add(camOffset),
-      0.1,
-    );
-    state.camera.lookAt(groupRef.current.position);
-  });
+      // 9. 네트워크 데이터 전송 최적화 (10fps + 변화 감지)
+      lastUpdateRef.current += delta;
+      if (lastUpdateRef.current > 0.1) {
+        // 100ms 마다 체크 (요금 절감)
+        const currentPos = groupRef.current.position;
+        const currentRot = groupRef.current.rotation.y;
+        const currentAnim = currentActionRef.current;
 
-  return (
-    <group ref={groupRef} dispose={null}>
-      <group name="Scene">
-        <group name="Armature" scale={0.01}>
-          <primitive object={nodes.Hips} />
-          <skinnedMesh
-            name="char1"
-            geometry={(nodes.char1 as THREE.SkinnedMesh).geometry}
-            material={materials.Material_1}
-            skeleton={(nodes.char1 as THREE.SkinnedMesh).skeleton}
-            castShadow
-            receiveShadow
-          />
+        // 이전 전송값과 비교 (임계값 설정)
+        const hasMoved =
+          Math.abs(lastSentStateRef.current.x - currentPos.x) > 0.01 ||
+          Math.abs(lastSentStateRef.current.z - currentPos.z) > 0.01 ||
+          Math.abs(lastSentStateRef.current.y - currentPos.y) > 0.01 ||
+          Math.abs(lastSentStateRef.current.ry - currentRot) > 0.01 ||
+          lastSentStateRef.current.anim !== currentAnim;
+
+        if (hasMoved) {
+          onMove?.({
+            x: currentPos.x,
+            y: currentPos.y,
+            z: currentPos.z,
+            ry: currentRot,
+            anim: currentAnim,
+          });
+
+          // 캐시 업데이트
+          lastSentStateRef.current = {
+            x: currentPos.x,
+            y: currentPos.y,
+            z: currentPos.z,
+            ry: currentRot,
+            anim: currentAnim,
+          };
+        }
+        lastUpdateRef.current = 0;
+      }
+
+      // 10. 카메라 트래킹 (등각 오프셋 유지)
+      const camOffset = new THREE.Vector3(14, 14, 14);
+      state.camera.position.lerp(
+        groupRef.current.position.clone().add(camOffset),
+        0.1,
+      );
+      state.camera.lookAt(groupRef.current.position);
+    });
+
+    return (
+      <group ref={groupRef} dispose={null}>
+        <group name="Scene">
+          <group name="Armature" scale={0.01}>
+            <primitive object={nodes.Hips} />
+            <skinnedMesh
+              name="char1"
+              geometry={(nodes.char1 as THREE.SkinnedMesh).geometry}
+              material={materials.Material_1}
+              skeleton={(nodes.char1 as THREE.SkinnedMesh).skeleton}
+              castShadow
+              receiveShadow
+            />
+          </group>
+          {/* 닉네임 표시 */}
+          <Billboard position={[0, 2.8, 0]}>
+            <Text
+              fontSize={0.4}
+              color="#0c4a6e"
+              anchorX="center"
+              anchorY="middle"
+              outlineWidth={0.05}
+              outlineColor="#ffffff"
+            >
+              {nickname}
+            </Text>
+          </Billboard>
         </group>
       </group>
-    </group>
-  );
-});
+    );
+  },
+);
 
 Player.displayName = "Player";
 
