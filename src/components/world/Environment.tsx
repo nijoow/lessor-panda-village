@@ -3,41 +3,12 @@
 import { useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
-import { useGLTF } from "@react-three/drei";
+import { useGLTF, Instances, Instance } from "@react-three/drei";
 import { Pond } from "./Pond";
 
 // ---------- 나무 (집 scale=5 기준으로 3~4배 크게) ----------
-interface TreeProps {
-  position: [number, number, number];
-  scale?: number;
-}
 
-const Tree = ({ position, scale = 1 }: TreeProps) => {
-  return (
-    <group position={position} scale={scale}>
-      {/* 나무 기둥 */}
-      <mesh castShadow position={[0, 0.5, 0]}>
-        <cylinderGeometry args={[0.28, 0.42, 2.4, 8]} />
-        <meshStandardMaterial color="#7a5c3a" roughness={0.9} />
-      </mesh>
-      {/* 잎 레이어 1 (하단) */}
-      <mesh castShadow position={[0, 3.2, 0]}>
-        <coneGeometry args={[2.0, 2.6, 8]} />
-        <meshStandardMaterial color="#4caf63" roughness={0.8} />
-      </mesh>
-      {/* 잎 레이어 2 (중단) */}
-      <mesh castShadow position={[0, 4.7, 0]}>
-        <coneGeometry args={[1.5, 2.1, 8]} />
-        <meshStandardMaterial color="#56cc72" roughness={0.8} />
-      </mesh>
-      {/* 잎 레이어 3 (상단) */}
-      <mesh castShadow position={[0, 6.0, 0]}>
-        <coneGeometry args={[1.0, 1.8, 8]} />
-        <meshStandardMaterial color="#69e086" roughness={0.7} />
-      </mesh>
-    </group>
-  );
-};
+
 
 // ---------- 거대 고목 (Ancient Tree - 제공된 GLB 모델) ----------
 const AncientTree = ({ position }: { position: [number, number, number] }) => {
@@ -155,36 +126,7 @@ const Flower = ({ position, color, scale = 1 }: FlowerProps) => {
   );
 };
 
-// ---------- 울타리 (집 주변 용도, 더 크고 두꺼운 버전) ----------
-interface FencePostProps {
-  position: [number, number, number];
-  rotation?: number;
-}
 
-const FenceSegment = ({ position, rotation = 0 }: FencePostProps) => {
-  return (
-    <group position={position} rotation={[0, rotation, 0]}>
-      {/* 기둥 2개 */}
-      <mesh castShadow position={[-1.0, 0.9, 0]}>
-        <boxGeometry args={[0.2, 1.8, 0.2]} />
-        <meshStandardMaterial color="#c8a96a" roughness={0.9} />
-      </mesh>
-      <mesh castShadow position={[1.0, 0.9, 0]}>
-        <boxGeometry args={[0.2, 1.8, 0.2]} />
-        <meshStandardMaterial color="#c8a96a" roughness={0.9} />
-      </mesh>
-      {/* 가로대 2개 */}
-      <mesh castShadow position={[0, 1.4, 0]}>
-        <boxGeometry args={[2.0, 0.15, 0.15]} />
-        <meshStandardMaterial color="#d4b47a" roughness={0.9} />
-      </mesh>
-      <mesh castShadow position={[0, 0.6, 0]}>
-        <boxGeometry args={[2.0, 0.15, 0.15]} />
-        <meshStandardMaterial color="#d4b47a" roughness={0.9} />
-      </mesh>
-    </group>
-  );
-};
 
 // ---------- 구름 ----------
 const CLOUD_OFFSETS = [0.8, 2.1, 3.7, 5.2, 1.4, 4.6];
@@ -330,95 +272,240 @@ const FLOWERS: Array<{ pos: [number, number, number]; color: string }> = [
 ];
 
 // ---------- 메인 환경 컴포넌트 ----------
+// ---------- 메인 환경 컴포넌트 (최적화 버전) ----------
 export const Environment = ({ isNight = false }: { isNight?: boolean }) => {
+  // 인스턴스용 공통 지오메트리 & 마테리얼 생성
+  const { treeGeoms, flowerGeoms, fenceGeoms, treeMats, flowerMats, fenceMats } =
+    useMemo(() => {
+      return {
+        treeGeoms: {
+          trunk: new THREE.CylinderGeometry(0.28, 0.42, 2.4, 8),
+          leaf1: new THREE.ConeGeometry(2.0, 2.6, 8),
+          leaf2: new THREE.ConeGeometry(1.5, 2.1, 8),
+          leaf3: new THREE.ConeGeometry(1.0, 1.8, 8),
+        },
+        flowerGeoms: {
+          stem: new THREE.CylinderGeometry(0.04, 0.04, 0.3, 5),
+          head: new THREE.SphereGeometry(0.12, 8, 8),
+        },
+        fenceGeoms: {
+          post: new THREE.BoxGeometry(0.2, 1.8, 0.2),
+          rail: new THREE.BoxGeometry(2.0, 0.15, 0.15),
+        },
+        treeMats: {
+          trunk: new THREE.MeshStandardMaterial({
+            color: "#7a5c3a",
+            roughness: 0.9,
+          }),
+          leaf1: new THREE.MeshStandardMaterial({
+            color: "#4caf63",
+            roughness: 0.8,
+          }),
+          leaf2: new THREE.MeshStandardMaterial({
+            color: "#56cc72",
+            roughness: 0.8,
+          }),
+          leaf3: new THREE.MeshStandardMaterial({
+            color: "#69e086",
+            roughness: 0.7,
+          }),
+        },
+        flowerMats: {
+          stem: new THREE.MeshStandardMaterial({ color: "#4a7a3a" }),
+        },
+        fenceMats: {
+          post: new THREE.MeshStandardMaterial({
+            color: "#c8a96a",
+            roughness: 0.9,
+          }),
+          rail: new THREE.MeshStandardMaterial({
+            color: "#d4b47a",
+            roughness: 0.9,
+          }),
+        },
+      };
+    }, []);
+
+  // 나무 데이터
+  const treesData: Array<{ pos: [number, number, number]; scale: number }> = [
+    { pos: [-10, 0, -10], scale: 1.3 },
+    { pos: [-14, 0, -6], scale: 1.1 },
+    { pos: [-13, 0, -13], scale: 1.4 },
+    { pos: [8, 0, -12], scale: 1.2 },
+    { pos: [12, 0, -8], scale: 1.0 },
+    { pos: [13, 0, -13], scale: 1.35 },
+    { pos: [-12, 0, 6], scale: 1.15 },
+    { pos: [-10, 0, 13], scale: 1.0 },
+    { pos: [14, 0, 7], scale: 1.2 },
+    { pos: [-3, 0, 15], scale: 1.0 },
+    { pos: [4, 0, 14], scale: 1.15 },
+  ];
+
   return (
     <group>
-      {/* === 안개 (집 뒤쪽 멀리 흐릿하게) === */}
       <fog attach="fog" args={["#c9e8f5", 35, 80]} />
-      {/* === 구름 (높이, 스케일 2배로) === */}
+
+      {/* 나무 인스턴싱 */}
+      <group>
+        <Instances geometry={treeGeoms.trunk} material={treeMats.trunk} castShadow>
+          {treesData.map((t, i) => (
+            <Instance key={i} position={[t.pos[0], t.pos[1] + 1.2, t.pos[2]]} scale={t.scale} />
+          ))}
+        </Instances>
+        <Instances geometry={treeGeoms.leaf1} material={treeMats.leaf1} castShadow>
+          {treesData.map((t, i) => (
+            <Instance key={i} position={[t.pos[0], t.pos[1] + 3.2 * t.scale, t.pos[2]]} scale={t.scale} />
+          ))}
+        </Instances>
+        <Instances geometry={treeGeoms.leaf2} material={treeMats.leaf2} castShadow>
+          {treesData.map((t, i) => (
+            <Instance key={i} position={[t.pos[0], t.pos[1] + 4.7 * t.scale, t.pos[2]]} scale={t.scale} />
+          ))}
+        </Instances>
+        <Instances geometry={treeGeoms.leaf3} material={treeMats.leaf3} castShadow>
+          {treesData.map((t, i) => (
+            <Instance key={i} position={[t.pos[0], t.pos[1] + 6.0 * t.scale, t.pos[2]]} scale={t.scale} />
+          ))}
+        </Instances>
+      </group>
+
       <Cloud position={[12, 12, -10]} speed={0.0008} />
       <Cloud position={[-18, 14, -12]} speed={0.0006} />
       <Cloud position={[22, 10, 8]} speed={0.001} />
       <Cloud position={[-8, 13, 18]} speed={0.0007} />
       <Cloud position={[5, 11, -18]} speed={0.0009} />
-      {/* === 나무 (집 크기 기준으로 scale 1.0~1.6) ===
-           집은 y=4.5에 위치, scale=5이므로 집 높이는 약 6~8 유닛
-           나무도 비슷한 높이가 되도록 scale 1.0~1.4 */}
-      {/* 마을 왼쪽 뒤 */}
-      <Tree position={[-10, 0, -10]} scale={1.3} />
-      <Tree position={[-14, 0, -6]} scale={1.1} />
-      <Tree position={[-13, 0, -13]} scale={1.4} />
-      {/* 마을 오른쪽 뒤 */}
-      <Tree position={[8, 0, -12]} scale={1.2} />
-      <Tree position={[12, 0, -8]} scale={1.0} />
-      <Tree position={[13, 0, -13]} scale={1.35} />
-      {/* 마을 왼쪽 앞 */}
-      <Tree position={[-12, 0, 6]} scale={1.15} />
-      <Tree position={[-10, 0, 13]} scale={1.0} />
-      {/* 마을 오른쪽 앞 */}
-      <Tree position={[14, 0, 7]} scale={1.2} />
-      {/* 마을 정면 */}
-      <Tree position={[-3, 0, 15]} scale={1.0} />
-      <Tree position={[4, 0, 14]} scale={1.15} />
 
-      {/* === 마을 중앙 랜드마크 (Ancient Tree) === */}
       <AncientTree position={[-1, 4, 6]} />
 
-      {/* === 석등 (길목과 중요 포인트) === */}
       <Lantern position={[-4, 0, -2]} isNight={isNight} />
       <Lantern position={[4, 0, -2]} isNight={isNight} />
       <Lantern position={[4, 0, 12]} isNight={isNight} />
       <Lantern position={[-12, 0, 5]} isNight={isNight} />
 
-      {/* === 평온한 연못 === */}
       <Pond position={[8, 0, 6]} scale={1.2} />
 
-      {/* === 중앙 화단 및 벤치 === */}
       <Bench position={[3.5, 0, 5]} rotation={-Math.PI / 2} />
       <Bench position={[-6.5, 0, 5]} rotation={Math.PI / 2} />
       <Bench position={[-1, 0, 10.5]} rotation={Math.PI} />
-      {/* === 바위 (2배 크기) === */}
+
       <Rock position={[5, 0, 4]} scale={[2.2, 1.5, 2.4]} rotation={0.4} />
       <Rock position={[5.8, 0, 5.5]} scale={[1.4, 1.0, 1.6]} rotation={1.2} />
       <Rock position={[-6, 0, -2]} scale={[2.8, 1.8, 2.4]} rotation={0.8} />
       <Rock position={[9, 0, -3]} scale={[1.6, 1.2, 1.8]} rotation={2.1} />
       <Rock position={[-5, 0, 8]} scale={[2.0, 1.4, 2.0]} rotation={0.3} />
       <Rock position={[0, 0, 12]} scale={[1.8, 1.2, 1.6]} rotation={1.5} />
-      {/* === 꽃밭 (scale 1.5로 조금 크게) === */}
+
+      {/* 꽃 인스턴싱 (줄기) */}
+      <Instances geometry={flowerGeoms.stem} material={flowerMats.stem}>
+        {FLOWERS.map((f, i) => (
+          <Instance key={i} position={[f.pos[0], f.pos[1] + 0.15, f.pos[2]]} />
+        ))}
+      </Instances>
+      
+      {/* 꽃 머리 (색상별로 그룹화는 복잡하므로 여기선 기본 렌더링 유지하되 최적화 여지만 남겨둠) */}
       {FLOWERS.map((f, i) => (
         <Flower key={i} position={f.pos} color={f.color} scale={1} />
       ))}
-      {/* === 울타리 (집 scale에 맞게 확장 — 울타리 선이 ±17) === */}
-      {/* 남쪽 (z=17) */}
-      {[-16, -14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, 8].map((x) => (
-        <FenceSegment key={`s${x}`} position={[x, 0, 17]} />
-      ))}
-      {/* 북쪽 (z=-17) */}
-      {[-16, -14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10, 12, 14, 16].map(
-        (x) => (
-          <FenceSegment key={`n${x}`} position={[x, 0, -17]} />
-        ),
-      )}
-      {/* 서쪽 (x=-17) */}
-      {[-16, -14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10, 12, 14, 16].map(
-        (z) => (
-          <FenceSegment
-            key={`w${z}`}
-            position={[-17, 0, z]}
-            rotation={Math.PI / 2}
-          />
-        ),
-      )}
-      {/* 동쪽 (x=17) */}
-      {[-16, -14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10, 12, 14, 16].map(
-        (z) => (
-          <FenceSegment
-            key={`e${z}`}
-            position={[17, 0, z]}
-            rotation={Math.PI / 2}
-          />
-        ),
-      )}
+
+      {/* 울타리 인스턴싱 */}
+      <group>
+        {/* 기둥 인스턴싱 */}
+        <Instances
+          geometry={fenceGeoms.post}
+          material={fenceMats.post}
+          castShadow
+        >
+          {/* 남쪽 */}
+          {[-16, -14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, 8].map((x) => (
+            <group key={`s-post-${x}`}>
+              <Instance position={[x - 1.0, 0.9, 17]} />
+              <Instance position={[x + 1.0, 0.9, 17]} />
+            </group>
+          ))}
+          {/* 북쪽 */}
+          {[-16, -14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10, 12, 14, 16].map(
+            (x) => (
+              <group key={`n-post-${x}`}>
+                <Instance position={[x - 1.0, 0.9, -17]} />
+                <Instance position={[x + 1.0, 0.9, -17]} />
+              </group>
+            ),
+          )}
+          {/* 서쪽 */}
+          {[-16, -14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10, 12, 14, 16].map(
+            (z) => (
+              <group key={`w-post-${z}`}>
+                <Instance position={[-17, 0.9, z - 1.0]} />
+                <Instance position={[-17, 0.9, z + 1.0]} />
+              </group>
+            ),
+          )}
+          {/* 동쪽 */}
+          {[-16, -14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10, 12, 14, 16].map(
+            (z) => (
+              <group key={`e-post-${z}`}>
+                <Instance position={[17, 0.9, z - 1.0]} />
+                <Instance position={[17, 0.9, z + 1.0]} />
+              </group>
+            ),
+          )}
+          {/* 서쪽 (rotation 적용 필요하므로 여기선 간단히 position만 계산하거나 별도 처리) */}
+          {/* ... 서쪽/동쪽은 rotation이 있어 처리가 복잡하므로 여기까지만 인스턴싱 */}
+        </Instances>
+        <Instances
+          geometry={fenceGeoms.rail}
+          material={fenceMats.rail}
+          castShadow
+        >
+          {/* 남쪽 */}
+          {[-16, -14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, 8].map((x) => (
+            <group key={`s-rail-${x}`}>
+              <Instance position={[x, 1.4, 17]} />
+              <Instance position={[x, 0.6, 17]} />
+            </group>
+          ))}
+          {/* 북쪽 */}
+          {[-16, -14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10, 12, 14, 16].map(
+            (x) => (
+              <group key={`n-rail-${x}`}>
+                <Instance position={[x, 1.4, -17]} />
+                <Instance position={[x, 0.6, -17]} />
+              </group>
+            ),
+          )}
+          {/* 서쪽 */}
+          {[-16, -14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10, 12, 14, 16].map(
+            (z) => (
+              <group key={`w-rail-${z}`}>
+                <Instance
+                  position={[-17, 1.4, z]}
+                  rotation={[0, Math.PI / 2, 0]}
+                />
+                <Instance
+                  position={[-17, 0.6, z]}
+                  rotation={[0, Math.PI / 2, 0]}
+                />
+              </group>
+            ),
+          )}
+          {/* 동쪽 */}
+          {[-16, -14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10, 12, 14, 16].map(
+            (z) => (
+              <group key={`e-rail-${z}`}>
+                <Instance
+                  position={[17, 1.4, z]}
+                  rotation={[0, Math.PI / 2, 0]}
+                />
+                <Instance
+                  position={[17, 0.6, z]}
+                  rotation={[0, Math.PI / 2, 0]}
+                />
+              </group>
+            ),
+          )}
+        </Instances>
+      </group>
+
     </group>
   );
 };
