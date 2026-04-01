@@ -19,7 +19,6 @@ import * as THREE from "three";
 import { SkeletonUtils } from "three-stdlib";
 import { PLAYER_ANIM } from "@/constants/playerAnimations";
 import { ChatBubble } from "./ChatBubble";
-import { ChatMessage } from "@/hooks/useMultiplayer";
 import { getNicknameColor } from "@/utils/color";
 import {
   COLLISION_TREES,
@@ -42,7 +41,6 @@ interface Props {
     ry: number;
     anim: string;
   }) => void;
-  lastChatMessage?: ChatMessage;
   inputDisabled?: boolean;
 }
 
@@ -175,7 +173,7 @@ const checkCollision = (x: number, z: number, y: number) => {
 };
 
 export const Player = forwardRef<THREE.Group, Props>(
-  ({ id, nickname, onMove, lastChatMessage, inputDisabled }, ref) => {
+  ({ id, nickname, onMove, inputDisabled }, ref) => {
     const groupRef = useRef<THREE.Group>(null!);
 
     // 외부에서 groupRef를 사용할 수 있도록 노출
@@ -398,13 +396,8 @@ export const Player = forwardRef<THREE.Group, Props>(
 
     return (
       <group ref={groupRef} dispose={null}>
-        {/* Chat Bubble */}
-        {lastChatMessage && (
-          <ChatBubble
-            message={lastChatMessage.message}
-            timestamp={lastChatMessage.timestamp}
-          />
-        )}
+        {/* Chat Bubble - chatStore 직접 구독 */}
+        <ChatBubble playerId={id} />
 
         <group name="Scene">
           <group name="Armature" scale={0.01}>

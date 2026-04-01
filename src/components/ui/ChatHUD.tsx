@@ -1,17 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChatMessage } from "@/hooks/useMultiplayer";
 import { getNicknameColor } from "@/utils/color";
+import { chatStore } from "@/stores/chatStore";
 
 interface Props {
-  messages: ChatMessage[];
   onSendMessage: (message: string) => void;
   onFocusChange?: (isFocused: boolean) => void;
 }
 
-export const ChatHUD = ({ messages, onSendMessage, onFocusChange }: Props) => {
+export const ChatHUD = ({ onSendMessage, onFocusChange }: Props) => {
+  // chatStore를 구독하여 HUD만 리렌더링 (Scene는 영향 없음)
+  const messages = useSyncExternalStore(
+    chatStore.subscribe,
+    chatStore.getChatLog,
+    chatStore.getChatLog,
+  );
   const [isTyping, setIsTyping] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);

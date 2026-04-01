@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { RealtimeChannel } from "@supabase/supabase-js";
 import { PLAYER_ANIM } from "@/constants/playerAnimations";
+import { chatStore } from "@/stores/chatStore";
 
 // 플레이어 상태 정의
 export interface PlayerState {
@@ -22,21 +23,14 @@ export interface ChatMessage {
   timestamp: number;
 }
 
-export const useMultiplayer = (
-  nickname: string | null,
-  onChatMessage?: (chat: ChatMessage) => void,
-) => {
+export const useMultiplayer = (nickname: string | null) => {
   const [remotePlayerIds, setRemotePlayerIds] = useState<string[]>([]);
   const playersDataRef = useRef<Map<string, PlayerState>>(new Map());
   const channelRef = useRef<RealtimeChannel | null>(null);
   const [myId] = useState(() => Math.random().toString(36).substring(7));
-  const onChatMessageRef = useRef(onChatMessage);
   const isChannelReadyRef = useRef(false);
 
-  // 콜백 레퍼런스 최신화 (Effect 재실행 방지용)
-  useEffect(() => {
-    onChatMessageRef.current = onChatMessage;
-  }, [onChatMessage]);
+
 
   useEffect(() => {
     if (!nickname) return;
@@ -116,7 +110,7 @@ export const useMultiplayer = (
     });
 
     channel.on("broadcast", { event: "chat" }, ({ payload }) => {
-      onChatMessageRef.current?.({
+      chatStore.addMessage({
         ...payload,
         timestamp: Date.now(),
       });
@@ -183,7 +177,7 @@ export const useMultiplayer = (
       });
 
       // 로컬에서도 처리 (본인이 보낸 메시지)
-      onChatMessageRef.current?.({
+      chatStore.addMessage({
         ...payload,
         timestamp: Date.now(),
       });

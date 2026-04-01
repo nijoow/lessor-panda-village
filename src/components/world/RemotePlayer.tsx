@@ -2,10 +2,10 @@
 
 import { useGraph, useFrame } from "@react-three/fiber";
 import { useGLTF, useAnimations, Text, Billboard } from "@react-three/drei";
-import { useRef, useMemo, useState } from "react";
+import { useRef, useMemo, memo, useState } from "react";
 import * as THREE from "three";
 import { SkeletonUtils } from "three-stdlib";
-import { PlayerState, ChatMessage } from "@/hooks/useMultiplayer";
+import { PlayerState } from "@/hooks/useMultiplayer";
 import { PLAYER_ANIM } from "@/constants/playerAnimations";
 import { ChatBubble } from "./ChatBubble";
 import { getNicknameColor } from "@/utils/color";
@@ -13,7 +13,6 @@ import { getNicknameColor } from "@/utils/color";
 interface Props {
   id: string;
   getPlayerData: (id: string) => PlayerState | undefined;
-  lastChatMessage?: ChatMessage;
 }
 
 const lerpAngle = (start: number, end: number, t: number) => {
@@ -21,9 +20,10 @@ const lerpAngle = (start: number, end: number, t: number) => {
   return start + diff * t;
 };
 
-export const RemotePlayer = ({ id, getPlayerData, lastChatMessage }: Props) => {
+const RemotePlayerInner = ({ id, getPlayerData }: Props) => {
   const groupRef = useRef<THREE.Group>(null!);
-  const [nickname, setNickname] = useState<string>("Loading...");
+  // 닉네임은 useState로 관리 (변경 빈도가 매우 낮으므로 안전)
+  const [nickname, setNickname] = useState<string>('Loading...');
 
   // 1. 모델 로딩
   const { scene: baseScene, animations: idleAnims } = useGLTF(
@@ -51,12 +51,12 @@ export const RemotePlayer = ({ id, getPlayerData, lastChatMessage }: Props) => {
     const data = getPlayerData(id);
     if (!data) return;
 
-    // 닉네임 업데이트 (최초 1회 또는 변경 시)
+    // 닉네임 업데이트 (변경 시에만 setState, 매 프레임 리렌더 방지)
     if (nickname !== data.nickname) setNickname(data.nickname);
 
     // 위치 보간 (Lerp) - 순간이동 방지 및 부드러운 이동
     targetPos.set(data.x, data.y, data.z);
-    groupRef.current.position.lerp(targetPos, 0.15); // 보간 강도 조절 (0.1 ~ 0.2 권장)
+    groupRef.current.position.lerp(targetPos, 0.15);
 
     // 회전 보간 - 부드러운 방향 전환 (최단 각도 계산)
     groupRef.current.rotation.y = lerpAngle(
@@ -67,8 +67,6 @@ export const RemotePlayer = ({ id, getPlayerData, lastChatMessage }: Props) => {
 
     // 애니메이션 동기화
     let animation = data.anim;
-
-    // 데이터가 'idle' 같은 단축어일 경우 상수로 매핑 (하위 호환성)
     if (animation === "idle") animation = PLAYER_ANIM.IDLE;
     if (animation === "walk") animation = PLAYER_ANIM.WALK;
     if (animation === "run") animation = PLAYER_ANIM.RUN;
@@ -86,13 +84,8 @@ export const RemotePlayer = ({ id, getPlayerData, lastChatMessage }: Props) => {
 
   return (
     <group ref={groupRef} dispose={null}>
-      {/* Chat Bubble */}
-      {lastChatMessage && (
-        <ChatBubble
-          message={lastChatMessage.message}
-          timestamp={lastChatMessage.timestamp}
-        />
-      )}
+      {/* Chat Bubble - chatStore 직접 구독 */}
+      <ChatBubble playerId={id} />
 
       <group name="Scene">
         <group name="Armature" scale={0.01}>
@@ -131,6 +124,9 @@ export const RemotePlayer = ({ id, getPlayerData, lastChatMessage }: Props) => {
     </group>
   );
 };
+
+// React.memo: 프롭(id, getPlayerData)이 동일하면 리렌더링 차단
+export const RemotePlayer = memo(RemotePlayerInner);
 
 // 사전 로딩
 useGLTF.preload("/models/player/base.glb");

@@ -1,15 +1,27 @@
 "use client";
 
 import { Html } from "@react-three/drei";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { chatStore } from "@/stores/chatStore";
 
 interface Props {
-  message: string;
-  timestamp: number;
+  playerId: string;
 }
 
-export const ChatBubble = ({ message, timestamp }: Props) => {
+export const ChatBubble = ({ playerId }: Props) => {
+  // chatStore 변화 감지용 구독 (이 컴포넌트만 리렌더링)
+  useSyncExternalStore(
+    chatStore.subscribe,
+    chatStore.getChatLog,
+    chatStore.getChatLog,
+  );
+
+  // 이 플레이어의 최신 메시지만 추출
+  const lastMsg = chatStore.getLastMessage(playerId);
+  const message = lastMsg?.message || '';
+  const timestamp = lastMsg?.timestamp || 0;
+
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -25,7 +37,7 @@ export const ChatBubble = ({ message, timestamp }: Props) => {
     }
   }, [message, timestamp]);
 
-  if (!message) return null;
+  if (!message || !visible) return null;
 
   return (
     <Html
