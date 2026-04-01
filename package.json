@@ -1,6 +1,8 @@
 {
-  "name": "panda-village",
-  "version": "0.1.0",
+  "name": "lessor-panda-village",
+  "version": "1.0.0",
+  "description": "A multiplayer WebGL village for Red Pandas",
+  "author": "Woojin",
   "private": true,
   "scripts": {
     "dev": "next dev",
