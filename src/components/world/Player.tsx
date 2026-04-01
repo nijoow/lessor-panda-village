@@ -21,6 +21,16 @@ import { PLAYER_ANIM } from "@/constants/playerAnimations";
 import { ChatBubble } from "./ChatBubble";
 import { ChatMessage } from "@/hooks/useMultiplayer";
 import { getNicknameColor } from "@/utils/color";
+import {
+  COLLISION_TREES,
+  COLLISION_ROCKS,
+  COLLISION_HOUSE,
+  WORLD_BOUNDS,
+  COLLISION_LANDMARK,
+  COLLISION_BENCHES,
+  COLLISION_POND,
+  COLLISION_LANTERNS,
+} from "@/constants/collisionMap";
 
 interface Props {
   id: string;
@@ -35,17 +45,6 @@ interface Props {
   lastChatMessage?: ChatMessage;
   inputDisabled?: boolean;
 }
-
-import {
-  COLLISION_TREES,
-  COLLISION_ROCKS,
-  COLLISION_HOUSE,
-  WORLD_BOUNDS,
-  COLLISION_LANDMARK,
-  COLLISION_BENCHES,
-  COLLISION_POND,
-  COLLISION_LANTERNS,
-} from "@/constants/collisionMap";
 
 export enum Controls {
   forward = "forward",

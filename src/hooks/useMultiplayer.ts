@@ -1,7 +1,7 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
-import { RealtimeChannel } from '@supabase/supabase-js';
-import { PLAYER_ANIM } from '@/constants/playerAnimations';
+import { useEffect, useState, useRef, useCallback } from "react";
+import { supabase } from "@/lib/supabase";
+import { RealtimeChannel } from "@supabase/supabase-js";
+import { PLAYER_ANIM } from "@/constants/playerAnimations";
 
 // 플레이어 상태 정의
 export interface PlayerState {
@@ -43,7 +43,7 @@ export const useMultiplayer = (
 
     console.log(`[Multiplayer] Connecting: ${nickname} (${myId})`);
 
-    const channel = supabase.channel('village', {
+    const channel = supabase.channel("village", {
       config: {
         presence: { key: myId },
       },
@@ -52,24 +52,26 @@ export const useMultiplayer = (
     channelRef.current = channel;
 
     channel
-      .on('presence', { event: 'sync' }, () => {
+      .on("presence", { event: "sync" }, () => {
         const state = channel.presenceState();
-        console.log('[Multiplayer] Presence Sync:', state);
-        
+        console.log("[Multiplayer] Presence Sync:", state);
+
         const newIds: string[] = [];
         const currentKeys = Object.keys(state);
 
         currentKeys.forEach((key) => {
           if (key === myId) return;
           newIds.push(key);
-          
-          const presences = state[key] as unknown as (PlayerState & { online_at: string })[];
+
+          const presences = state[key] as unknown as (PlayerState & {
+            online_at: string;
+          })[];
           if (presences.length > 0) {
             const p = presences[0];
             // 항상 최신 정보로 갱신 (닉네임 변경 등 대응)
             playersDataRef.current.set(key, {
               id: key,
-              nickname: p.nickname || 'Unknown',
+              nickname: p.nickname || "Unknown",
               x: p.x || 0,
               y: p.y || 0,
               z: p.z || 0,
@@ -86,17 +88,25 @@ export const useMultiplayer = (
             playersDataRef.current.delete(key);
           }
         }
-        
-        setRemotePlayerIds(newIds);
+
+        setRemotePlayerIds((prev) => {
+          if (
+            prev.length === newIds.length &&
+            prev.every((v, i) => v === newIds[i])
+          ) {
+            return prev;
+          }
+          return newIds;
+        });
       })
-      .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
-        console.log('[Multiplayer] Player left:', key, leftPresences);
-        // Map 정리는 sync 이벤트에서 완벽하게 처리되므로, 
+      .on("presence", { event: "leave" }, ({ key, leftPresences }) => {
+        console.log("[Multiplayer] Player left:", key, leftPresences);
+        // Map 정리는 sync 이벤트에서 완벽하게 처리되므로,
         // leave 이벤트에서는 즉각적인 UI 반영을 위해 state만 업데이트
-        setRemotePlayerIds((prev) => prev.filter(id => id !== key));
+        setRemotePlayerIds((prev) => prev.filter((id) => id !== key));
       });
 
-    channel.on('broadcast', { event: 'move' }, ({ payload }) => {
+    channel.on("broadcast", { event: "move" }, ({ payload }) => {
       if (payload.id === myId) return;
 
       playersDataRef.current.set(payload.id, {
@@ -105,7 +115,7 @@ export const useMultiplayer = (
       });
     });
 
-    channel.on('broadcast', { event: 'chat' }, ({ payload }) => {
+    channel.on("broadcast", { event: "chat" }, ({ payload }) => {
       onChatMessageRef.current?.({
         ...payload,
         timestamp: Date.now(),
@@ -113,8 +123,8 @@ export const useMultiplayer = (
     });
 
     channel.subscribe(async (status) => {
-      console.log('[Multiplayer] Channel status:', status);
-      if (status === 'SUBSCRIBED') {
+      console.log("[Multiplayer] Channel status:", status);
+      if (status === "SUBSCRIBED") {
         isChannelReadyRef.current = true;
         await channel.track({
           id: myId,
@@ -130,50 +140,61 @@ export const useMultiplayer = (
     });
 
     return () => {
-      console.log('[Multiplayer] Unsubscribing...');
+      console.log("[Multiplayer] Unsubscribing...");
       isChannelReadyRef.current = false;
       channel.unsubscribe();
       channelRef.current = null;
     };
   }, [nickname, myId]);
 
-  const broadcastMove = useCallback((state: Omit<PlayerState, 'id' | 'nickname' | 'lastUpdated'>) => {
-    if (!channelRef.current || !nickname || !isChannelReadyRef.current) return;
+  const broadcastMove = useCallback(
+    (state: Omit<PlayerState, "id" | "nickname" | "lastUpdated">) => {
+      if (!channelRef.current || !nickname || !isChannelReadyRef.current)
+        return;
 
-    channelRef.current.send({
-      type: 'broadcast',
-      event: 'move',
-      payload: {
+      channelRef.current.send({
+        type: "broadcast",
+        event: "move",
+        payload: {
+          id: myId,
+          nickname,
+          ...state,
+        },
+      });
+    },
+    [nickname, myId],
+  );
+
+  const broadcastChat = useCallback(
+    (message: string) => {
+      if (!channelRef.current || !nickname || !isChannelReadyRef.current)
+        return;
+
+      const payload = {
         id: myId,
         nickname,
-        ...state,
-      },
-    });
-  }, [nickname, myId]);
+        message,
+      };
 
-  const broadcastChat = useCallback((message: string) => {
-    if (!channelRef.current || !nickname || !isChannelReadyRef.current) return;
+      channelRef.current.send({
+        type: "broadcast",
+        event: "chat",
+        payload,
+      });
 
-    const payload = {
-      id: myId,
-      nickname,
-      message,
-    };
+      // 로컬에서도 처리 (본인이 보낸 메시지)
+      onChatMessageRef.current?.({
+        ...payload,
+        timestamp: Date.now(),
+      });
+    },
+    [nickname, myId],
+  );
 
-    channelRef.current.send({
-      type: 'broadcast',
-      event: 'chat',
-      payload,
-    });
-
-    // 로컬에서도 처리 (본인이 보낸 메시지)
-    onChatMessageRef.current?.({
-      ...payload,
-      timestamp: Date.now(),
-    });
-  }, [nickname, myId]);
-
-  const getPlayerData = useCallback((id: string) => playersDataRef.current.get(id), []);
+  const getPlayerData = useCallback(
+    (id: string) => playersDataRef.current.get(id),
+    [],
+  );
 
   return {
     remotePlayerIds,

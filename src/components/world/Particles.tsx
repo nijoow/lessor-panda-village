@@ -43,11 +43,11 @@ interface ParticleInitData {
 const generateInitialPetalData = (): ParticleInitData => {
   const particles: PetalData[] = [];
   const randomOffsets = new Float32Array(PETAL_COUNT);
-  
+
   for (let i = 0; i < PETAL_COUNT; i++) {
-    const isConcentrated = Math.random() < 0.75; 
+    const isConcentrated = Math.random() < 0.75;
     let x, z;
-    
+
     if (isConcentrated) {
       const angle = Math.random() * Math.PI * 2;
       const r = Math.sqrt(Math.random()) * CONCENTRATION_RADIUS;
@@ -59,15 +59,11 @@ const generateInitialPetalData = (): ParticleInitData => {
     }
 
     particles.push({
-      position: new THREE.Vector3(
-        x,
-        Math.random() * 8 + 1,
-        z
-      ),
+      position: new THREE.Vector3(x, Math.random() * 8 + 1, z),
       velocity: new THREE.Vector3(
         getRandomPos(0.03),
         -(Math.random() * 0.012 + 0.006),
-        getRandomPos(0.03)
+        getRandomPos(0.03),
       ),
       phase: Math.random() * Math.PI * 2,
       rotationSpeed: getRandomPos(0.08),
@@ -84,7 +80,8 @@ const generateInitialPetalData = (): ParticleInitData => {
 // ─────────────────────────────────────────────
 const createHeartShape = () => {
   const shape = new THREE.Shape();
-  const x = 0, y = 0;
+  const x = 0,
+    y = 0;
   shape.moveTo(x, y + 0.3);
   shape.bezierCurveTo(x, y + 0.3, x - 0.3, y + 0.5, x - 0.5, y);
   shape.bezierCurveTo(x - 0.5, y - 0.5, x, y - 0.7, x, y - 0.7);
@@ -99,7 +96,7 @@ const createHeartShape = () => {
 export const PetalParticles = () => {
   const meshRef = useRef<THREE.InstancedMesh>(null!);
   const materialRef = useRef<THREE.MeshStandardMaterial>(null!);
-  
+
   const [{ particles }] = useState(() => generateInitialPetalData());
   const heartShape = useMemo(() => createHeartShape(), []);
 
@@ -112,9 +109,9 @@ export const PetalParticles = () => {
 
     const cycleTime = 60;
     const cycleT = (t % cycleTime) / cycleTime;
-    const angle = Math.PI - (cycleT * 2 * Math.PI);
+    const angle = Math.PI - cycleT * 2 * Math.PI;
     const sunAltitude = Math.sin(angle);
-    
+
     const opacity = THREE.MathUtils.clamp((sunAltitude + 0.2) * 2.5, 0, 0.85);
     materialRef.current.opacity = opacity;
 
@@ -126,7 +123,7 @@ export const PetalParticles = () => {
       p.position.x += p.velocity.x + flutter;
       p.position.y += p.velocity.y;
       p.position.z += p.velocity.z + Math.cos(t * 1.5 + p.phase) * 0.015;
-      
+
       // 회전 속도에 펄럭임 반영
       p.rotation += p.rotationSpeed + Math.sin(t * 3) * 0.01;
 
@@ -149,7 +146,7 @@ export const PetalParticles = () => {
       dummy.rotation.set(
         p.rotation + Math.sin(t + p.phase) * 0.5,
         p.rotation * 0.7,
-        p.rotation * 0.5 + Math.cos(t * 0.8) * 0.3
+        p.rotation * 0.5 + Math.cos(t * 0.8) * 0.3,
       );
       dummy.scale.setScalar(0.08 + Math.sin(t * 0.5 + p.phase) * 0.02);
       dummy.updateMatrix();
@@ -215,9 +212,9 @@ export const FireflyParticles = () => {
     // 밤에만 은은하게 나타남
     const cycleTime = 60;
     const cycleT = (t % cycleTime) / cycleTime;
-    const angle = Math.PI - (cycleT * 2 * Math.PI);
+    const angle = Math.PI - cycleT * 2 * Math.PI;
     const sunAltitude = Math.sin(angle);
-    
+
     // 해가 지평선 아래로 내려갈 때(sunAltitude < 0) 불투명도 증가
     const opacity = THREE.MathUtils.clamp(-sunAltitude * 3.0, 0, 1.0);
     materialRef.current.opacity = opacity;

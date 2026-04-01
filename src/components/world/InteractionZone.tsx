@@ -11,7 +11,10 @@ interface InteractionZoneProps {
   onInteract: () => void;
 }
 
-export const InteractionZone = ({ playerRef, onInteract }: InteractionZoneProps) => {
+export const InteractionZone = ({
+  playerRef,
+  onInteract,
+}: InteractionZoneProps) => {
   const [canInteract, setCanInteract] = useState(false);
   const [, getKeys] = useKeyboardControls<Controls>();
   const isCooldown = useRef(false);
@@ -27,7 +30,7 @@ export const InteractionZone = ({ playerRef, onInteract }: InteractionZoneProps)
     const distance = playerPos.distanceTo(INTERACT_POINT);
 
     const isInRange = distance < INTERACT_DISTANCE;
-    
+
     if (isInRange !== canInteract) {
       setCanInteract(isInRange);
     }

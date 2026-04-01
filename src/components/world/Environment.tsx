@@ -8,8 +8,6 @@ import { Pond } from "./Pond";
 
 // ---------- 나무 (집 scale=5 기준으로 3~4배 크게) ----------
 
-
-
 // ---------- 거대 고목 (Ancient Tree - 제공된 GLB 모델) ----------
 const AncientTree = ({ position }: { position: [number, number, number] }) => {
   const { scene } = useGLTF("/models/tree/cherry_blossom_tree.glb");
@@ -125,8 +123,6 @@ const Flower = ({ position, color, scale = 1 }: FlowerProps) => {
     </group>
   );
 };
-
-
 
 // ---------- 구름 ----------
 const CLOUD_OFFSETS = [0.8, 2.1, 3.7, 5.2, 1.4, 4.6];
@@ -275,56 +271,62 @@ const FLOWERS: Array<{ pos: [number, number, number]; color: string }> = [
 // ---------- 메인 환경 컴포넌트 (최적화 버전) ----------
 export const Environment = ({ isNight = false }: { isNight?: boolean }) => {
   // 인스턴스용 공통 지오메트리 & 마테리얼 생성
-  const { treeGeoms, flowerGeoms, fenceGeoms, treeMats, flowerMats, fenceMats } =
-    useMemo(() => {
-      return {
-        treeGeoms: {
-          trunk: new THREE.CylinderGeometry(0.28, 0.42, 2.4, 8),
-          leaf1: new THREE.ConeGeometry(2.0, 2.6, 8),
-          leaf2: new THREE.ConeGeometry(1.5, 2.1, 8),
-          leaf3: new THREE.ConeGeometry(1.0, 1.8, 8),
-        },
-        flowerGeoms: {
-          stem: new THREE.CylinderGeometry(0.04, 0.04, 0.3, 5),
-          head: new THREE.SphereGeometry(0.12, 8, 8),
-        },
-        fenceGeoms: {
-          post: new THREE.BoxGeometry(0.2, 1.8, 0.2),
-          rail: new THREE.BoxGeometry(2.0, 0.15, 0.15),
-        },
-        treeMats: {
-          trunk: new THREE.MeshStandardMaterial({
-            color: "#7a5c3a",
-            roughness: 0.9,
-          }),
-          leaf1: new THREE.MeshStandardMaterial({
-            color: "#4caf63",
-            roughness: 0.8,
-          }),
-          leaf2: new THREE.MeshStandardMaterial({
-            color: "#56cc72",
-            roughness: 0.8,
-          }),
-          leaf3: new THREE.MeshStandardMaterial({
-            color: "#69e086",
-            roughness: 0.7,
-          }),
-        },
-        flowerMats: {
-          stem: new THREE.MeshStandardMaterial({ color: "#4a7a3a" }),
-        },
-        fenceMats: {
-          post: new THREE.MeshStandardMaterial({
-            color: "#c8a96a",
-            roughness: 0.9,
-          }),
-          rail: new THREE.MeshStandardMaterial({
-            color: "#d4b47a",
-            roughness: 0.9,
-          }),
-        },
-      };
-    }, []);
+  const {
+    treeGeoms,
+    flowerGeoms,
+    fenceGeoms,
+    treeMats,
+    flowerMats,
+    fenceMats,
+  } = useMemo(() => {
+    return {
+      treeGeoms: {
+        trunk: new THREE.CylinderGeometry(0.28, 0.42, 2.4, 8),
+        leaf1: new THREE.ConeGeometry(2.0, 2.6, 8),
+        leaf2: new THREE.ConeGeometry(1.5, 2.1, 8),
+        leaf3: new THREE.ConeGeometry(1.0, 1.8, 8),
+      },
+      flowerGeoms: {
+        stem: new THREE.CylinderGeometry(0.04, 0.04, 0.3, 5),
+        head: new THREE.SphereGeometry(0.12, 8, 8),
+      },
+      fenceGeoms: {
+        post: new THREE.BoxGeometry(0.2, 1.8, 0.2),
+        rail: new THREE.BoxGeometry(2.0, 0.15, 0.15),
+      },
+      treeMats: {
+        trunk: new THREE.MeshStandardMaterial({
+          color: "#7a5c3a",
+          roughness: 0.9,
+        }),
+        leaf1: new THREE.MeshStandardMaterial({
+          color: "#4caf63",
+          roughness: 0.8,
+        }),
+        leaf2: new THREE.MeshStandardMaterial({
+          color: "#56cc72",
+          roughness: 0.8,
+        }),
+        leaf3: new THREE.MeshStandardMaterial({
+          color: "#69e086",
+          roughness: 0.7,
+        }),
+      },
+      flowerMats: {
+        stem: new THREE.MeshStandardMaterial({ color: "#4a7a3a" }),
+      },
+      fenceMats: {
+        post: new THREE.MeshStandardMaterial({
+          color: "#c8a96a",
+          roughness: 0.9,
+        }),
+        rail: new THREE.MeshStandardMaterial({
+          color: "#d4b47a",
+          roughness: 0.9,
+        }),
+      },
+    };
+  }, []);
 
   // 나무 데이터
   const treesData: Array<{ pos: [number, number, number]; scale: number }> = [
@@ -347,24 +349,56 @@ export const Environment = ({ isNight = false }: { isNight?: boolean }) => {
 
       {/* 나무 인스턴싱 */}
       <group>
-        <Instances geometry={treeGeoms.trunk} material={treeMats.trunk} castShadow>
+        <Instances
+          geometry={treeGeoms.trunk}
+          material={treeMats.trunk}
+          castShadow
+        >
           {treesData.map((t, i) => (
-            <Instance key={i} position={[t.pos[0], t.pos[1] + 1.2, t.pos[2]]} scale={t.scale} />
+            <Instance
+              key={i}
+              position={[t.pos[0], t.pos[1] + 1.2, t.pos[2]]}
+              scale={t.scale}
+            />
           ))}
         </Instances>
-        <Instances geometry={treeGeoms.leaf1} material={treeMats.leaf1} castShadow>
+        <Instances
+          geometry={treeGeoms.leaf1}
+          material={treeMats.leaf1}
+          castShadow
+        >
           {treesData.map((t, i) => (
-            <Instance key={i} position={[t.pos[0], t.pos[1] + 3.2 * t.scale, t.pos[2]]} scale={t.scale} />
+            <Instance
+              key={i}
+              position={[t.pos[0], t.pos[1] + 3.2 * t.scale, t.pos[2]]}
+              scale={t.scale}
+            />
           ))}
         </Instances>
-        <Instances geometry={treeGeoms.leaf2} material={treeMats.leaf2} castShadow>
+        <Instances
+          geometry={treeGeoms.leaf2}
+          material={treeMats.leaf2}
+          castShadow
+        >
           {treesData.map((t, i) => (
-            <Instance key={i} position={[t.pos[0], t.pos[1] + 4.7 * t.scale, t.pos[2]]} scale={t.scale} />
+            <Instance
+              key={i}
+              position={[t.pos[0], t.pos[1] + 4.7 * t.scale, t.pos[2]]}
+              scale={t.scale}
+            />
           ))}
         </Instances>
-        <Instances geometry={treeGeoms.leaf3} material={treeMats.leaf3} castShadow>
+        <Instances
+          geometry={treeGeoms.leaf3}
+          material={treeMats.leaf3}
+          castShadow
+        >
           {treesData.map((t, i) => (
-            <Instance key={i} position={[t.pos[0], t.pos[1] + 6.0 * t.scale, t.pos[2]]} scale={t.scale} />
+            <Instance
+              key={i}
+              position={[t.pos[0], t.pos[1] + 6.0 * t.scale, t.pos[2]]}
+              scale={t.scale}
+            />
           ))}
         </Instances>
       </group>
@@ -401,7 +435,7 @@ export const Environment = ({ isNight = false }: { isNight?: boolean }) => {
           <Instance key={i} position={[f.pos[0], f.pos[1] + 0.15, f.pos[2]]} />
         ))}
       </Instances>
-      
+
       {/* 꽃 머리 (색상별로 그룹화는 복잡하므로 여기선 기본 렌더링 유지하되 최적화 여지만 남겨둠) */}
       {FLOWERS.map((f, i) => (
         <Flower key={i} position={f.pos} color={f.color} scale={1} />
@@ -423,32 +457,32 @@ export const Environment = ({ isNight = false }: { isNight?: boolean }) => {
             </group>
           ))}
           {/* 북쪽 */}
-          {[-16, -14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10, 12, 14, 16].map(
-            (x) => (
-              <group key={`n-post-${x}`}>
-                <Instance position={[x - 1.0, 0.9, -17]} />
-                <Instance position={[x + 1.0, 0.9, -17]} />
-              </group>
-            ),
-          )}
+          {[
+            -16, -14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10, 12, 14, 16,
+          ].map((x) => (
+            <group key={`n-post-${x}`}>
+              <Instance position={[x - 1.0, 0.9, -17]} />
+              <Instance position={[x + 1.0, 0.9, -17]} />
+            </group>
+          ))}
           {/* 서쪽 */}
-          {[-16, -14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10, 12, 14, 16].map(
-            (z) => (
-              <group key={`w-post-${z}`}>
-                <Instance position={[-17, 0.9, z - 1.0]} />
-                <Instance position={[-17, 0.9, z + 1.0]} />
-              </group>
-            ),
-          )}
+          {[
+            -16, -14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10, 12, 14, 16,
+          ].map((z) => (
+            <group key={`w-post-${z}`}>
+              <Instance position={[-17, 0.9, z - 1.0]} />
+              <Instance position={[-17, 0.9, z + 1.0]} />
+            </group>
+          ))}
           {/* 동쪽 */}
-          {[-16, -14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10, 12, 14, 16].map(
-            (z) => (
-              <group key={`e-post-${z}`}>
-                <Instance position={[17, 0.9, z - 1.0]} />
-                <Instance position={[17, 0.9, z + 1.0]} />
-              </group>
-            ),
-          )}
+          {[
+            -16, -14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10, 12, 14, 16,
+          ].map((z) => (
+            <group key={`e-post-${z}`}>
+              <Instance position={[17, 0.9, z - 1.0]} />
+              <Instance position={[17, 0.9, z + 1.0]} />
+            </group>
+          ))}
           {/* 서쪽 (rotation 적용 필요하므로 여기선 간단히 position만 계산하거나 별도 처리) */}
           {/* ... 서쪽/동쪽은 rotation이 있어 처리가 복잡하므로 여기까지만 인스턴싱 */}
         </Instances>
@@ -465,47 +499,46 @@ export const Environment = ({ isNight = false }: { isNight?: boolean }) => {
             </group>
           ))}
           {/* 북쪽 */}
-          {[-16, -14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10, 12, 14, 16].map(
-            (x) => (
-              <group key={`n-rail-${x}`}>
-                <Instance position={[x, 1.4, -17]} />
-                <Instance position={[x, 0.6, -17]} />
-              </group>
-            ),
-          )}
+          {[
+            -16, -14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10, 12, 14, 16,
+          ].map((x) => (
+            <group key={`n-rail-${x}`}>
+              <Instance position={[x, 1.4, -17]} />
+              <Instance position={[x, 0.6, -17]} />
+            </group>
+          ))}
           {/* 서쪽 */}
-          {[-16, -14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10, 12, 14, 16].map(
-            (z) => (
-              <group key={`w-rail-${z}`}>
-                <Instance
-                  position={[-17, 1.4, z]}
-                  rotation={[0, Math.PI / 2, 0]}
-                />
-                <Instance
-                  position={[-17, 0.6, z]}
-                  rotation={[0, Math.PI / 2, 0]}
-                />
-              </group>
-            ),
-          )}
+          {[
+            -16, -14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10, 12, 14, 16,
+          ].map((z) => (
+            <group key={`w-rail-${z}`}>
+              <Instance
+                position={[-17, 1.4, z]}
+                rotation={[0, Math.PI / 2, 0]}
+              />
+              <Instance
+                position={[-17, 0.6, z]}
+                rotation={[0, Math.PI / 2, 0]}
+              />
+            </group>
+          ))}
           {/* 동쪽 */}
-          {[-16, -14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10, 12, 14, 16].map(
-            (z) => (
-              <group key={`e-rail-${z}`}>
-                <Instance
-                  position={[17, 1.4, z]}
-                  rotation={[0, Math.PI / 2, 0]}
-                />
-                <Instance
-                  position={[17, 0.6, z]}
-                  rotation={[0, Math.PI / 2, 0]}
-                />
-              </group>
-            ),
-          )}
+          {[
+            -16, -14, -12, -10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10, 12, 14, 16,
+          ].map((z) => (
+            <group key={`e-rail-${z}`}>
+              <Instance
+                position={[17, 1.4, z]}
+                rotation={[0, Math.PI / 2, 0]}
+              />
+              <Instance
+                position={[17, 0.6, z]}
+                rotation={[0, Math.PI / 2, 0]}
+              />
+            </group>
+          ))}
         </Instances>
       </group>
-
     </group>
   );
 };

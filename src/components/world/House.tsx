@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { useGLTF } from '@react-three/drei';
-import * as THREE from 'three';
-import { GLTF } from 'three-stdlib';
+import { useGLTF } from "@react-three/drei";
+import * as THREE from "three";
+import { GLTF } from "three-stdlib";
 
 type GLTFResult = GLTF & {
   nodes: {
@@ -17,8 +17,14 @@ interface Props {
   scale?: number;
 }
 
-export const House = ({ position = [0, 0, 0], rotation = [0, 0, 0], scale = 1 }: Props) => {
-  const { nodes } = useGLTF('/models/house/panda_house.glb') as unknown as GLTFResult;
+export const House = ({
+  position = [0, 0, 0],
+  rotation = [0, 0, 0],
+  scale = 1,
+}: Props) => {
+  const { nodes } = useGLTF(
+    "/models/house/panda_house.glb",
+  ) as unknown as GLTFResult;
 
   return (
     <group position={position} rotation={rotation} scale={scale} dispose={null}>
@@ -32,4 +38,4 @@ export const House = ({ position = [0, 0, 0], rotation = [0, 0, 0], scale = 1 }:
   );
 };
 
-useGLTF.preload('/models/house/panda_house.glb');
+useGLTF.preload("/models/house/panda_house.glb");
