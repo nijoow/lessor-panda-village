@@ -23,7 +23,7 @@ const lerpAngle = (start: number, end: number, t: number) => {
 const RemotePlayerInner = ({ id, getPlayerData }: Props) => {
   const groupRef = useRef<THREE.Group>(null!);
   // 닉네임은 useState로 관리 (변경 빈도가 매우 낮으므로 안전)
-  const [nickname, setNickname] = useState<string>('Loading...');
+  const [nickname, setNickname] = useState<string>("Loading...");
 
   // 1. 모델 로딩
   const { scene: baseScene, animations: idleAnims } = useGLTF(
@@ -57,6 +57,7 @@ const RemotePlayerInner = ({ id, getPlayerData }: Props) => {
     // 위치 보간 (Lerp) - 순간이동 방지 및 부드러운 이동
     targetPos.set(data.x, data.y, data.z);
     groupRef.current.position.lerp(targetPos, 0.15);
+    groupRef.current.updateMatrixWorld();
 
     // 회전 보간 - 부드러운 방향 전환 (최단 각도 계산)
     groupRef.current.rotation.y = lerpAngle(
@@ -84,9 +85,6 @@ const RemotePlayerInner = ({ id, getPlayerData }: Props) => {
 
   return (
     <group ref={groupRef} dispose={null}>
-      {/* Chat Bubble - chatStore 직접 구독 */}
-      <ChatBubble playerId={id} />
-
       <group name="Scene">
         <group name="Armature" scale={0.01}>
           <primitive object={nodes.Hips} />
@@ -119,6 +117,7 @@ const RemotePlayerInner = ({ id, getPlayerData }: Props) => {
           >
             {nickname}
           </Text>
+          <ChatBubble playerId={id} />
         </Billboard>
       </group>
     </group>

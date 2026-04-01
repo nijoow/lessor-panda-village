@@ -347,6 +347,7 @@ export const Player = forwardRef<THREE.Group, Props>(
         targetRotation.current,
         0.12,
       );
+      groupRef.current.updateMatrixWorld();
 
       // 9. 네트워크 데이터 전송 최적화 (10fps + 변화 감지)
       lastUpdateRef.current += delta;
@@ -396,9 +397,6 @@ export const Player = forwardRef<THREE.Group, Props>(
 
     return (
       <group ref={groupRef} dispose={null}>
-        {/* Chat Bubble - chatStore 직접 구독 */}
-        <ChatBubble playerId={id} />
-
         <group name="Scene">
           <group name="Armature" scale={0.01}>
             <primitive object={nodes.Hips} />
@@ -423,6 +421,7 @@ export const Player = forwardRef<THREE.Group, Props>(
             >
               {nickname}
             </Text>
+            <ChatBubble playerId={id} />
           </Billboard>
         </group>
       </group>

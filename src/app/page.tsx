@@ -63,17 +63,28 @@ const HomeContent = ({
   const { progress } = useProgress();
   const [nickname, setNickname] = useState<string | null>(null);
   const [isChatFocused, setIsChatFocused] = useState(false);
+  const [isAssetsReady, setIsAssetsReady] = useState(false);
+
+  // 로딩 완료 후 지연 처리 (사용자가 100%를 볼 수 있도록)
+  useEffect(() => {
+    if (progress === 100) {
+      const timer = setTimeout(() => {
+        setIsAssetsReady(true);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [progress]);
 
   // 멀티플레이어 훅 (Zero-Rerender 아키텍처)
   const { remotePlayerIds, getPlayerData, broadcastMove, broadcastChat, myId } =
     useMultiplayer(nickname);
 
-  // 로딩이 완료된 후에만 닉네임 입력창이 보이도록 함
-  const showNicknameOverlay = progress === 100 && nickname === null;
+  // 로딩과 지연 처리가 모두 끝난 후에만 닉네임 입력창이 보이도록 함
+  const showNicknameOverlay = isAssetsReady && nickname === null;
 
   return (
     <main className="w-full h-full relative overflow-hidden bg-[#fdfaf6]">
-      <LoadingScreen />
+      <LoadingScreen visible={!isAssetsReady} />
 
       <AnimatePresence>
         {showNicknameOverlay && (
@@ -127,11 +138,7 @@ const HomeContent = ({
 
         {/* 다른 플레이어들 렌더링 (Zero-Rerender 최적화) */}
         {remotePlayerIds.map((id) => (
-          <RemotePlayer
-            key={id}
-            id={id}
-            getPlayerData={getPlayerData}
-          />
+          <RemotePlayer key={id} id={id} getPlayerData={getPlayerData} />
         ))}
 
         {/* Player - 닉네임이 있을 때만 활성화 */}

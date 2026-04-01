@@ -10,16 +10,14 @@ interface Props {
 }
 
 export const ChatBubble = ({ playerId }: Props) => {
-  // chatStore 변화 감지용 구독 (이 컴포넌트만 리렌더링)
   useSyncExternalStore(
     chatStore.subscribe,
     chatStore.getChatLog,
     chatStore.getChatLog,
   );
 
-  // 이 플레이어의 최신 메시지만 추출
   const lastMsg = chatStore.getLastMessage(playerId);
-  const message = lastMsg?.message || '';
+  const message = lastMsg?.message || "";
   const timestamp = lastMsg?.timestamp || 0;
 
   const [visible, setVisible] = useState(false);
@@ -29,7 +27,7 @@ export const ChatBubble = ({ playerId }: Props) => {
       const showTimer = setTimeout(() => setVisible(true), 10);
       const hideTimer = setTimeout(() => {
         setVisible(false);
-      }, 5000);
+      }, 8000);
       return () => {
         clearTimeout(showTimer);
         clearTimeout(hideTimer);
@@ -37,11 +35,11 @@ export const ChatBubble = ({ playerId }: Props) => {
     }
   }, [message, timestamp]);
 
-  if (!message || !visible) return null;
+  if (!message) return null;
 
   return (
     <Html
-      position={[0, 3.8, 0.6]}
+      position={[0, 0.8, 0.6]}
       center
       distanceFactor={10}
       pointerEvents="none"
@@ -57,7 +55,7 @@ export const ChatBubble = ({ playerId }: Props) => {
           >
             {/* Bubble Container */}
             <div className="relative px-5 py-3 bg-white/95 rounded-[24px] shadow-lg border border-white/60 w-max max-w-[280px] min-w-[80px]">
-              <p className="text-sky-900 text-xl font-bold leading-normal text-center whitespace-pre-wrap break-words">
+              <p className="text-sky-900 text-2xl font-bold leading-normal text-center whitespace-pre-wrap break-words">
                 {message}
               </p>
 

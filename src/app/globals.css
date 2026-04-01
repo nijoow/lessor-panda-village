@@ -13,3 +13,32 @@ body {
   overflow: hidden;
   background-color: #e0f2fe; /* bg-sky-100 */
 }
+
+@utility glass-premium {
+  @apply bg-white/40 backdrop-blur-2xl border border-white/60 shadow-2xl;
+}
+
+@utility glass-card {
+  @apply bg-white/20 backdrop-blur-xl border border-white/30 shadow-lg;
+}
+
+@utility glass-input {
+  @apply bg-white/40 backdrop-blur-md border border-white/40 focus:border-orange-300 focus:ring-4 focus:ring-orange-300/20 transition-all duration-300;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-10px) rotate(2deg); }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
+.animate-float-delayed {
+  animation: float 8s ease-in-out infinite 1s;
+}
+
+.animate-float-slow {
+  animation: float 12s ease-in-out infinite 0.5s;
+}
