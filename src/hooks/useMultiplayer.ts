@@ -31,6 +31,7 @@ export const useMultiplayer = (
   const channelRef = useRef<RealtimeChannel | null>(null);
   const [myId] = useState(() => Math.random().toString(36).substring(7));
   const onChatMessageRef = useRef(onChatMessage);
+  const isChannelReadyRef = useRef(false);
 
   // 콜백 레퍼런스 최신화 (Effect 재실행 방지용)
   useEffect(() => {
@@ -114,6 +115,7 @@ export const useMultiplayer = (
     channel.subscribe(async (status) => {
       console.log('[Multiplayer] Channel status:', status);
       if (status === 'SUBSCRIBED') {
+        isChannelReadyRef.current = true;
         await channel.track({
           id: myId,
           nickname,
@@ -129,13 +131,14 @@ export const useMultiplayer = (
 
     return () => {
       console.log('[Multiplayer] Unsubscribing...');
+      isChannelReadyRef.current = false;
       channel.unsubscribe();
       channelRef.current = null;
     };
   }, [nickname, myId]);
 
   const broadcastMove = useCallback((state: Omit<PlayerState, 'id' | 'nickname' | 'lastUpdated'>) => {
-    if (!channelRef.current || !nickname) return;
+    if (!channelRef.current || !nickname || !isChannelReadyRef.current) return;
 
     channelRef.current.send({
       type: 'broadcast',
@@ -149,7 +152,7 @@ export const useMultiplayer = (
   }, [nickname, myId]);
 
   const broadcastChat = useCallback((message: string) => {
-    if (!channelRef.current || !nickname) return;
+    if (!channelRef.current || !nickname || !isChannelReadyRef.current) return;
 
     const payload = {
       id: myId,
