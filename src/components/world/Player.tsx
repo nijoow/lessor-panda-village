@@ -83,7 +83,7 @@ const checkCollision = (x: number, z: number, y: number) => {
   for (const tree of COLLISION_TREES) {
     const dx = x - tree.x;
     const dz = z - tree.z;
-    if (Math.sqrt(dx * dx + dz * dz) < tree.radius) return true;
+    if (dx * dx + dz * dz < tree.radius * tree.radius) return true;
   }
 
   // 3. 바위 충돌 (낮은 바위는 점프 중 y > 1.0이면 통과 가능)
@@ -91,7 +91,7 @@ const checkCollision = (x: number, z: number, y: number) => {
     for (const rock of COLLISION_ROCKS) {
       const dx = x - rock.x;
       const dz = z - rock.z;
-      if (Math.sqrt(dx * dx + dz * dz) < rock.radius) return true;
+      if (dx * dx + dz * dz < rock.radius * rock.radius) return true;
     }
   }
 
@@ -139,7 +139,11 @@ const checkCollision = (x: number, z: number, y: number) => {
   // 6. 랜드마크 고목 충돌 (항상 충돌, 점프로 못 넘음)
   const dxL = x - COLLISION_LANDMARK.x;
   const dzL = z - COLLISION_LANDMARK.z;
-  if (Math.sqrt(dxL * dxL + dzL * dzL) < COLLISION_LANDMARK.radius) return true;
+  if (
+    dxL * dxL + dzL * dzL <
+    COLLISION_LANDMARK.radius * COLLISION_LANDMARK.radius
+  )
+    return true;
 
   // 7. 벤치 충돌 (낮은 벤치는 점프 중 y > 0.8이면 통과 가능)
   if (y < 0.8) {
@@ -158,13 +162,14 @@ const checkCollision = (x: number, z: number, y: number) => {
   // 8. 평온한 연못 충돌 (항상 충돌, 점프로 못 넘음)
   const dxP = x - COLLISION_POND.x;
   const dzP = z - COLLISION_POND.z;
-  if (Math.sqrt(dxP * dxP + dzP * dzP) < COLLISION_POND.radius) return true;
+  if (dxP * dxP + dzP * dzP < COLLISION_POND.radius * COLLISION_POND.radius)
+    return true;
 
   // 9. 석등 충돌 (항상 충돌)
   for (const lantern of COLLISION_LANTERNS) {
     const dx = x - lantern.x;
     const dz = z - lantern.z;
-    if (Math.sqrt(dx * dx + dz * dz) < lantern.radius) return true;
+    if (dx * dx + dz * dz < lantern.radius * lantern.radius) return true;
   }
 
   return false;

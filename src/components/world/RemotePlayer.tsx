@@ -1,7 +1,7 @@
 "use client";
 
 import { useGraph, useFrame } from "@react-three/fiber";
-import { useGLTF, useAnimations, Billboard, Text } from "@react-three/drei";
+import { useGLTF, useAnimations, Text, Billboard } from "@react-three/drei";
 import { useRef, useMemo, useState } from "react";
 import * as THREE from "three";
 import { SkeletonUtils } from "three-stdlib";
@@ -15,6 +15,11 @@ interface Props {
   getPlayerData: (id: string) => PlayerState | undefined;
   lastChatMessage?: ChatMessage;
 }
+
+const lerpAngle = (start: number, end: number, t: number) => {
+  const diff = ((end - start + Math.PI) % (Math.PI * 2)) - Math.PI;
+  return start + diff * t;
+};
 
 export const RemotePlayer = ({ id, getPlayerData, lastChatMessage }: Props) => {
   const groupRef = useRef<THREE.Group>(null!);
@@ -53,11 +58,11 @@ export const RemotePlayer = ({ id, getPlayerData, lastChatMessage }: Props) => {
     targetPos.set(data.x, data.y, data.z);
     groupRef.current.position.lerp(targetPos, 0.15); // 보간 강도 조절 (0.1 ~ 0.2 권장)
 
-    // 회전 보간 - 부드러운 방향 전환
-    groupRef.current.rotation.y = THREE.MathUtils.lerp(
+    // 회전 보간 - 부드러운 방향 전환 (최단 각도 계산)
+    groupRef.current.rotation.y = lerpAngle(
       groupRef.current.rotation.y,
       data.ry,
-      0.1,
+      0.15,
     );
 
     // 애니메이션 동기화
@@ -97,9 +102,17 @@ export const RemotePlayer = ({ id, getPlayerData, lastChatMessage }: Props) => {
             geometry={(nodes.char1 as THREE.SkinnedMesh).geometry}
             material={materials.Material_1}
             skeleton={(nodes.char1 as THREE.SkinnedMesh).skeleton}
-            castShadow
-            receiveShadow
           />
+          {/* 부하가 적은 가짜 그림자 적용 (최적화) */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
+            <circleGeometry args={[0.35, 32]} />
+            <meshBasicMaterial
+              color="black"
+              transparent
+              opacity={0.2}
+              depthWrite={false}
+            />
+          </mesh>
         </group>
         {/* 닉네임 표시 */}
         <Billboard position={[0, 3, 0.6]}>
