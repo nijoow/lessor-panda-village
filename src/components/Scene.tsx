@@ -40,7 +40,8 @@ const DayNightLights = ({ isNight }: { isNight: boolean }) => {
       const dayIntensity = Math.max(0, Math.sin(angle));
 
       // 낮에는 강한 빛, 밤에는 은은한 푸른빛
-      dirLightRef.current.intensity = dayIntensity * 2.8 + (1 - dayIntensity) * 0.5;
+      dirLightRef.current.intensity =
+        dayIntensity * 2.8 + (1 - dayIntensity) * 0.5;
 
       if (dayIntensity > 0.1) {
         dirLightRef.current.color.setRGB(1, 0.95, 0.86); // 따뜻한 햇살
@@ -133,7 +134,17 @@ interface SceneProps {
 
 export const Scene = ({ children, isNight }: SceneProps) => {
   return (
-    <Canvas shadows={{ type: THREE.PCFShadowMap }} onContextMenu={(e) => e.preventDefault()}>
+    <Canvas
+      shadows={{ type: THREE.PCFShadowMap }}
+      onContextMenu={(e) => e.preventDefault()}
+      dpr={[1, 1.5]} // 성능을 위해 최대 dpr 제한 (High TBT 대응)
+      gl={{
+        powerPreference: "high-performance",
+        antialias: false, // 성능 최적화
+        stencil: false,
+        depth: true,
+      }}
+    >
       <PerspectiveCamera makeDefault position={[18, 18, 18]} fov={35} />
       <OrbitControls
         makeDefault

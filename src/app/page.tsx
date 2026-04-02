@@ -6,20 +6,52 @@ import {
   useProgress,
 } from "@react-three/drei";
 import { motion, AnimatePresence } from "framer-motion";
-import { Scene } from "@/components/Scene";
-import { Ground } from "@/components/world/Ground";
-import { Player, Controls } from "@/components/world/Player";
-import { Environment } from "@/components/world/Environment";
-import { House } from "@/components/world/House";
-import { PetalParticles, FireflyParticles } from "@/components/world/Particles";
-import { LoadingScreen } from "@/components/ui/LoadingScreen";
-import { NicknameOverlay } from "@/components/ui/NicknameOverlay";
-import { ChatHUD } from "@/components/ui/ChatHUD";
-import { RemotePlayer } from "@/components/world/RemotePlayer";
-import { useMultiplayer } from "@/hooks/useMultiplayer";
 import { useRef, useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import Image from "next/image";
 import * as THREE from "three";
+
+import { Controls } from "@/components/world/Player";
+import { useMultiplayer } from "@/hooks/useMultiplayer";
+
+// ─────────────────────────────────────────────
+// 다이나믹 임포트 (Lighthouse TBT & Render Blocking 최적화)
+// ─────────────────────────────────────────────
+const Scene = dynamic(
+  () => import("@/components/Scene").then((mod) => mod.Scene),
+  {
+    ssr: false,
+    loading: () => <div className="w-full h-full bg-[#fdfaf6]" />,
+  },
+);
+
+const World = dynamic(
+  () => import("@/components/world/World").then((mod) => mod.World),
+  {
+    ssr: false,
+  },
+);
+
+const LoadingScreen = dynamic(
+  () =>
+    import("@/components/ui/LoadingScreen").then((mod) => mod.LoadingScreen),
+  { ssr: false },
+);
+
+const NicknameOverlay = dynamic(
+  () =>
+    import("@/components/ui/NicknameOverlay").then(
+      (mod) => mod.NicknameOverlay,
+    ),
+  { ssr: false },
+);
+
+const ChatHUD = dynamic(
+  () => import("@/components/ui/ChatHUD").then((mod) => mod.ChatHUD),
+  {
+    ssr: false,
+  },
+);
 
 const keyboardMap: KeyboardControlsEntry<Controls>[] = [
   { name: Controls.forward, keys: ["ArrowUp", "KeyW"] },
@@ -137,7 +169,13 @@ const HomeContent = ({
             >
               래서판다 빌리지
               <div className="relative size-6 sm:size-10 shadow-sm rounded-full overflow-hidden">
-                <Image src="/images/red_panda_icon.png" alt="Red Panda" fill />
+                <Image
+                  src="/images/red_panda_icon.png"
+                  alt="Red Panda"
+                  fill
+                  priority
+                  sizes="(max-width: 768px) 24px, 40px"
+                />
               </div>
             </motion.h1>
             <motion.div
@@ -174,27 +212,16 @@ const HomeContent = ({
       )}
 
       <Scene isNight={isNight}>
-        <Ground disableClick={isChatFocused} />
-        <Environment isNight={isNight} />
-        <House position={[0, 4.5, -7]} rotation={[0, 0, 0]} scale={5} />
-        <FireflyParticles isNight={isNight} />
-        <PetalParticles isNight={isNight} />
-
-        {/* 다른 플레이어들 렌더링 (Zero-Rerender 최적화) */}
-        {remotePlayerIds.map((id) => (
-          <RemotePlayer key={id} id={id} getPlayerData={getPlayerData} />
-        ))}
-
-        {/* Player - 닉네임이 있을 때만 활성화 */}
-        {nickname && (
-          <Player
-            ref={playerRef}
-            id={myId}
-            nickname={nickname}
-            onMove={broadcastMove}
-            inputDisabled={isChatFocused}
-          />
-        )}
+        <World
+          isNight={isNight}
+          nickname={nickname}
+          isChatFocused={isChatFocused}
+          playerRef={playerRef}
+          remotePlayerIds={remotePlayerIds}
+          getPlayerData={getPlayerData}
+          broadcastMove={broadcastMove}
+          myId={myId}
+        />
       </Scene>
     </main>
   );
