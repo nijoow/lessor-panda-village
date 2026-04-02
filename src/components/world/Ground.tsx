@@ -99,7 +99,7 @@ const StonePath = ({
   );
 };
 
-export const Ground = () => {
+export const Ground = ({ disableClick }: { disableClick?: boolean }) => {
   const grassTexture = useTexture('/textures/ground/grass.png');
   const [clickPos, setClickPos] = useState<THREE.Vector3 | null>(null);
 
@@ -111,20 +111,26 @@ export const Ground = () => {
     return t;
   }, [grassTexture]);
 
-  const handlePointerDown = useCallback((e: ThreeEvent<PointerEvent>) => {
-    // 버블링 방지 (다른 UI 클릭 시 바닥 이동 방지)
-    e.stopPropagation();
+  const handlePointerDown = useCallback(
+    (e: ThreeEvent<PointerEvent>) => {
+      // 채팅 입력 등의 이유로 클릭이 비활성화된 경우 무시
+      if (disableClick) return;
 
-    const point = e.point.clone();
-    setClickPos(point);
+      // 버블링 방지 (다른 UI 클릭 시 바닥 이동 방지)
+      e.stopPropagation();
 
-    // 플레이어에게 알림 (커스텀 이벤트)
-    window.dispatchEvent(
-      new CustomEvent('panda-move-to', {
-        detail: { x: point.x, z: point.z },
-      })
-    );
-  }, []);
+      const point = e.point.clone();
+      setClickPos(point);
+
+      // 플레이어에게 알림 (커스텀 이벤트)
+      window.dispatchEvent(
+        new CustomEvent('panda-move-to', {
+          detail: { x: point.x, z: point.z },
+        }),
+      );
+    },
+    [disableClick],
+  );
 
   return (
     <group>

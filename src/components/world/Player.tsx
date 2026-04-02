@@ -246,6 +246,9 @@ export const Player = forwardRef<THREE.Group, Props>(
 
     useEffect(() => {
       const handleMoveTo = (e: Event) => {
+        // 채팅 입력 등의 이유로 입력이 비활성화된 경우 클릭 이동을 무시합니다.
+        if (inputDisabled) return;
+
         const customEvent = e as CustomEvent<{ x: number; z: number }>;
         clickTarget.current = new THREE.Vector3(
           customEvent.detail.x,
@@ -255,7 +258,7 @@ export const Player = forwardRef<THREE.Group, Props>(
       };
       window.addEventListener('panda-move-to', handleMoveTo);
       return () => window.removeEventListener('panda-move-to', handleMoveTo);
-    }, []);
+    }, [inputDisabled]);
 
     useFrame((state, delta) => {
       if (!groupRef.current) return;

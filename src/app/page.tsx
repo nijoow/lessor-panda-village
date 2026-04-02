@@ -130,7 +130,7 @@ const HomeContent = ({
       )}
 
       <Scene isNight={isNight}>
-        <Ground />
+        <Ground disableClick={isChatFocused} />
         <Environment isNight={isNight} />
         <House position={[0, 4.5, -7]} rotation={[0, 0, 0]} scale={5} />
         <FireflyParticles />
