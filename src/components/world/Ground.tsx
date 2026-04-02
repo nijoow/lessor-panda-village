@@ -116,6 +116,9 @@ export const Ground = ({ disableClick }: { disableClick?: boolean }) => {
       // 채팅 입력 등의 이유로 클릭이 비활성화된 경우 무시
       if (disableClick) return;
 
+      // 마우스 사용자라면 우클릭(2)만 허용, 터치/펜 등은 일반 클릭 허용
+      if (e.pointerType === "mouse" && e.button !== 2) return;
+
       // 버블링 방지 (다른 UI 클릭 시 바닥 이동 방지)
       e.stopPropagation();
 
@@ -124,7 +127,7 @@ export const Ground = ({ disableClick }: { disableClick?: boolean }) => {
 
       // 플레이어에게 알림 (커스텀 이벤트)
       window.dispatchEvent(
-        new CustomEvent('panda-move-to', {
+        new CustomEvent("panda-move-to", {
           detail: { x: point.x, z: point.z },
         }),
       );
@@ -140,6 +143,7 @@ export const Ground = ({ disableClick }: { disableClick?: boolean }) => {
         receiveShadow
         position={[0, -0.01, 0]}
         onPointerDown={handlePointerDown}
+        onContextMenu={(e) => e.nativeEvent.preventDefault()}
       >
         <planeGeometry args={[80, 80]} />
         <meshStandardMaterial

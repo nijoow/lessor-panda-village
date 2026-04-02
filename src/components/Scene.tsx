@@ -133,7 +133,7 @@ interface SceneProps {
 
 export const Scene = ({ children, isNight }: SceneProps) => {
   return (
-    <Canvas shadows={{ type: THREE.PCFShadowMap }}>
+    <Canvas shadows={{ type: THREE.PCFShadowMap }} onContextMenu={(e) => e.preventDefault()}>
       <PerspectiveCamera makeDefault position={[18, 18, 18]} fov={35} />
       <OrbitControls
         makeDefault

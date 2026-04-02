@@ -57,7 +57,6 @@ const lerpAngle = (start: number, end: number, t: number) => {
   return start + diff * t;
 };
 
-
 export const Player = forwardRef<THREE.Group, Props>(
   ({ id, nickname, onMove, inputDisabled }, ref) => {
     const groupRef = useRef<THREE.Group>(null!);
@@ -157,8 +156,8 @@ export const Player = forwardRef<THREE.Group, Props>(
           );
         }
       };
-      window.addEventListener('panda-move-to', handleMoveTo);
-      return () => window.removeEventListener('panda-move-to', handleMoveTo);
+      window.addEventListener("panda-move-to", handleMoveTo);
+      return () => window.removeEventListener("panda-move-to", handleMoveTo);
     }, [inputDisabled]);
 
     useFrame((state, delta) => {
@@ -177,7 +176,7 @@ export const Player = forwardRef<THREE.Group, Props>(
         : keys;
 
       // 키보드 입력이 있으면 클릭 이동 취소
-      if (forward || backward || left || right || jump) {
+      if (forward || backward || left || right) {
         clickTarget.current = null;
         pathRef.current = [];
         pathIndexRef.current = 0;
@@ -219,28 +218,34 @@ export const Player = forwardRef<THREE.Group, Props>(
           .addScaledVector(CAM_RIGHT, keyboardRight)
           .normalize();
         isMoving = true;
-      } 
+      }
       // 클릭 이동 체크 (키보드 이동이 없을 때만)
       else if (clickTarget.current) {
         const dist = new THREE.Vector2(
           clickTarget.current.x - targetPosition.current.x,
-          clickTarget.current.z - targetPosition.current.z
+          clickTarget.current.z - targetPosition.current.z,
         ).length();
 
         // 현재 목적지(경유지)에 도착했는지 확인
         if (dist > 0.15) {
-          moveDir.set(
-            clickTarget.current.x - targetPosition.current.x,
-            0,
-            clickTarget.current.z - targetPosition.current.z
-          ).normalize();
+          moveDir
+            .set(
+              clickTarget.current.x - targetPosition.current.x,
+              0,
+              clickTarget.current.z - targetPosition.current.z,
+            )
+            .normalize();
           isMoving = true;
         } else {
           // 다음 경유지로 이동
           pathIndexRef.current++;
           if (pathIndexRef.current < pathRef.current.length) {
             const nextPoint = pathRef.current[pathIndexRef.current];
-            clickTarget.current = new THREE.Vector3(nextPoint.x, 0, nextPoint.z);
+            clickTarget.current = new THREE.Vector3(
+              nextPoint.x,
+              0,
+              nextPoint.z,
+            );
           } else {
             // 경로 종료
             clickTarget.current = null;
@@ -259,8 +264,16 @@ export const Player = forwardRef<THREE.Group, Props>(
         const nextX = targetPosition.current.x + moveDir.x;
         const nextZ = targetPosition.current.z + moveDir.z;
 
-        const canMoveX = !checkCollision(nextX, targetPosition.current.z, currentY);
-        const canMoveZ = !checkCollision(targetPosition.current.x, nextZ, currentY);
+        const canMoveX = !checkCollision(
+          nextX,
+          targetPosition.current.z,
+          currentY,
+        );
+        const canMoveZ = !checkCollision(
+          targetPosition.current.x,
+          nextZ,
+          currentY,
+        );
 
         if (canMoveX) {
           targetPosition.current.x = nextX;
