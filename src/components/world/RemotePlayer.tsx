@@ -108,11 +108,12 @@ const RemotePlayerInner = ({ id, getPlayerData }: Props) => {
         {/* 닉네임 표시 */}
         <Billboard position={[0, 3, 0.6]}>
           <Text
-            fontSize={0.4}
+            font="/fonts/Jua-Regular.ttf"
+            fontSize={0.5}
             color={getNicknameColor(id)}
             anchorX="center"
             anchorY="middle"
-            outlineWidth={0.03}
+            outlineWidth={0.02}
             outlineColor="#ffffff"
           >
             {nickname}
