@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     title: "Lessor Panda Village | 래서판다 빌리지",
     description:
       "WebGL 기반의 귀여운 래서판다들이 모여 사는 멀티플레이어 온라인 마을",
-    url: "https://lessor-panda-village.vercel.app", // 수정 필요 시 변경
+    url: "https://lessor-panda-village.vercel.app",
     siteName: "Lessor Panda Village",
     images: [
       {

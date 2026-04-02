@@ -20,17 +20,8 @@ import { SkeletonUtils } from "three-stdlib";
 import { PLAYER_ANIM } from "@/constants/playerAnimations";
 import { ChatBubble } from "./ChatBubble";
 import { getNicknameColor } from "@/utils/color";
-import {
-  COLLISION_TREES,
-  COLLISION_ROCKS,
-  COLLISION_HOUSE,
-  WORLD_BOUNDS,
-  COLLISION_LANDMARK,
-  COLLISION_BENCHES,
-  COLLISION_POND,
-  COLLISION_LANTERNS,
-} from "@/constants/collisionMap";
-import { jua } from "@/app/layout";
+import { checkCollision } from "@/utils/collision";
+import { findPath, Point } from "@/utils/pathfinder";
 
 interface Props {
   id: string;
@@ -66,112 +57,6 @@ const lerpAngle = (start: number, end: number, t: number) => {
   return start + diff * t;
 };
 
-// 충돌 체크 함수 (y값을 추가하여 점프 시 통과 여부 결정)
-const checkCollision = (x: number, z: number, y: number) => {
-  // 1. 월드 경계 체크 (가장 바깥쪽 80x80 잔디 영역)
-  if (
-    x < WORLD_BOUNDS.min ||
-    x > WORLD_BOUNDS.max ||
-    z < WORLD_BOUNDS.min ||
-    z > WORLD_BOUNDS.max
-  )
-    return true;
-
-  // 2. 나무 충돌 (항상 충돌, 점프로 못 넘음)
-  for (const tree of COLLISION_TREES) {
-    const dx = x - tree.x;
-    const dz = z - tree.z;
-    if (dx * dx + dz * dz < tree.radius * tree.radius) return true;
-  }
-
-  // 3. 바위 충돌 (낮은 바위는 점프 중 y > 1.0이면 통과 가능)
-  if (y < 1.0) {
-    for (const rock of COLLISION_ROCKS) {
-      const dx = x - rock.x;
-      const dz = z - rock.z;
-      if (dx * dx + dz * dz < rock.radius * rock.radius) return true;
-    }
-  }
-
-  // 4. 집 충돌 (항상 충돌, 점프로 못 넘음)
-  if (
-    x > COLLISION_HOUSE.minX &&
-    x < COLLISION_HOUSE.maxX &&
-    z > COLLISION_HOUSE.minZ &&
-    z < COLLISION_HOUSE.maxZ
-  ) {
-    return true;
-  }
-
-  // 5. 울타리 충돌 (x, z = ±17 라인에서 점프 중 y > 1.3이면 통과 가능)
-  const FENCE_DIST = 17;
-  const FENCE_THICKNESS = 0.4;
-  if (y < 1.3) {
-    const absX = Math.abs(x);
-    const absZ = Math.abs(z);
-
-    // 남/북 울타리 (z축 기준)
-    if (
-      absZ > FENCE_DIST - FENCE_THICKNESS &&
-      absZ < FENCE_DIST + FENCE_THICKNESS
-    ) {
-      if (z < 0) {
-        // 북쪽 (z = -17): 전 구간 (x in [-17.5, 17.5])
-        if (x > -17.5 && x < 17.5) return true;
-      } else {
-        // 남쪽 (z = 17): 설치된 구간만 (x in [-17.5, 9.5])
-        // x=8 위치의 세그먼트가 마지막이므로 x=9.5 정도까지 차단
-        if (x > -17.5 && x < 9.5) return true;
-      }
-    }
-    // 동/서 울타리 (x축 기준)
-    if (
-      absX > FENCE_DIST - FENCE_THICKNESS &&
-      absX < FENCE_DIST + FENCE_THICKNESS
-    ) {
-      // 동/서 울타리는 전 구간 차단
-      if (z > -17.5 && z < 17.5) return true;
-    }
-  }
-
-  // 6. 랜드마크 고목 충돌 (항상 충돌, 점프로 못 넘음)
-  const dxL = x - COLLISION_LANDMARK.x;
-  const dzL = z - COLLISION_LANDMARK.z;
-  if (
-    dxL * dxL + dzL * dzL <
-    COLLISION_LANDMARK.radius * COLLISION_LANDMARK.radius
-  )
-    return true;
-
-  // 7. 벤치 충돌 (낮은 벤치는 점프 중 y > 0.8이면 통과 가능)
-  if (y < 0.8) {
-    for (const bench of COLLISION_BENCHES) {
-      if (
-        x > bench.minX &&
-        x < bench.maxX &&
-        z > bench.minZ &&
-        z < bench.maxZ
-      ) {
-        return true;
-      }
-    }
-  }
-
-  // 8. 평온한 연못 충돌 (항상 충돌, 점프로 못 넘음)
-  const dxP = x - COLLISION_POND.x;
-  const dzP = z - COLLISION_POND.z;
-  if (dxP * dxP + dzP * dzP < COLLISION_POND.radius * COLLISION_POND.radius)
-    return true;
-
-  // 9. 석등 충돌 (항상 충돌)
-  for (const lantern of COLLISION_LANTERNS) {
-    const dx = x - lantern.x;
-    const dz = z - lantern.z;
-    if (dx * dx + dz * dz < lantern.radius * lantern.radius) return true;
-  }
-
-  return false;
-};
 
 export const Player = forwardRef<THREE.Group, Props>(
   ({ id, nickname, onMove, inputDisabled }, ref) => {
@@ -241,20 +126,36 @@ export const Player = forwardRef<THREE.Group, Props>(
       }
     }, [actions]);
 
-    // 클릭 이동 목표 지점
+    // 클릭 이동 목표 및 경로 관리
     const clickTarget = useRef<THREE.Vector3 | null>(null);
+    const pathRef = useRef<Point[]>([]);
+    const pathIndexRef = useRef<number>(0);
 
     useEffect(() => {
       const handleMoveTo = (e: Event) => {
-        // 채팅 입력 등의 이유로 입력이 비활성화된 경우 클릭 이동을 무시합니다.
         if (inputDisabled) return;
 
         const customEvent = e as CustomEvent<{ x: number; z: number }>;
-        clickTarget.current = new THREE.Vector3(
-          customEvent.detail.x,
-          0,
-          customEvent.detail.z,
-        );
+        const start = {
+          x: targetPosition.current.x,
+          z: targetPosition.current.z,
+        };
+        const end = {
+          x: customEvent.detail.x,
+          z: customEvent.detail.z,
+        };
+
+        // 길찾기 수행
+        const computedPath = findPath(start, end);
+        if (computedPath.length > 0) {
+          pathRef.current = computedPath;
+          pathIndexRef.current = 0;
+          clickTarget.current = new THREE.Vector3(
+            computedPath[0].x,
+            0,
+            computedPath[0].z,
+          );
+        }
       };
       window.addEventListener('panda-move-to', handleMoveTo);
       return () => window.removeEventListener('panda-move-to', handleMoveTo);
@@ -278,6 +179,8 @@ export const Player = forwardRef<THREE.Group, Props>(
       // 키보드 입력이 있으면 클릭 이동 취소
       if (forward || backward || left || right || jump) {
         clickTarget.current = null;
+        pathRef.current = [];
+        pathIndexRef.current = 0;
       }
 
       // 6. 점프 및 중력 물리
@@ -324,7 +227,8 @@ export const Player = forwardRef<THREE.Group, Props>(
           clickTarget.current.z - targetPosition.current.z
         ).length();
 
-        if (dist > 0.2) {
+        // 현재 목적지(경유지)에 도착했는지 확인
+        if (dist > 0.15) {
           moveDir.set(
             clickTarget.current.x - targetPosition.current.x,
             0,
@@ -332,7 +236,17 @@ export const Player = forwardRef<THREE.Group, Props>(
           ).normalize();
           isMoving = true;
         } else {
-          clickTarget.current = null;
+          // 다음 경유지로 이동
+          pathIndexRef.current++;
+          if (pathIndexRef.current < pathRef.current.length) {
+            const nextPoint = pathRef.current[pathIndexRef.current];
+            clickTarget.current = new THREE.Vector3(nextPoint.x, 0, nextPoint.z);
+          } else {
+            // 경로 종료
+            clickTarget.current = null;
+            pathRef.current = [];
+            pathIndexRef.current = 0;
+          }
         }
       }
 
@@ -358,6 +272,8 @@ export const Player = forwardRef<THREE.Group, Props>(
         // 클릭 이동 중인데 양쪽 다 막혔다면 목표 취소
         if (clickTarget.current && !canMoveX && !canMoveZ) {
           clickTarget.current = null;
+          pathRef.current = [];
+          pathIndexRef.current = 0;
         }
 
         // 이동 방향으로 캐릭터 회전
