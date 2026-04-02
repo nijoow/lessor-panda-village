@@ -38,7 +38,7 @@ export const LoadingScreen = ({ visible }: Props) => {
             className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-sky-200/40 rounded-full blur-[120px]"
           />
 
-          <div className="relative flex flex-col items-center max-w-md w-full px-12">
+          <div className="relative flex flex-col items-center max-w-md w-full px-6 sm:px-12">
             {/* Red Panda Icon with Pulsing Effect */}
             <motion.div
               animate={{
@@ -50,7 +50,7 @@ export const LoadingScreen = ({ visible }: Props) => {
                 repeat: Infinity,
                 ease: "easeInOut",
               }}
-              className="relative w-40 h-40 mb-12"
+              className="relative w-28 h-28 sm:w-40 sm:h-40 mb-12"
             >
               <div className="absolute inset-0 bg-orange-400/30 rounded-full blur-3xl animate-pulse" />
               <div className="relative z-10 w-full h-full bg-linear-to-br from-white to-orange-50 rounded-full p-4 shadow-2xl border-4 border-white overflow-hidden">
@@ -69,7 +69,7 @@ export const LoadingScreen = ({ visible }: Props) => {
                 <motion.h2
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="text-3xl font-black text-sky-950 tracking-tight"
+                  className="text-2xl sm:text-3xl font-black text-sky-950 tracking-tight"
                 >
                   마을로 여행을 떠나요
                 </motion.h2>
@@ -110,7 +110,7 @@ export const LoadingScreen = ({ visible }: Props) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 1.5 }}
-            className="absolute bottom-16 glass-card px-8 py-4 rounded-3xl"
+            className="absolute bottom-10 sm:bottom-16 glass-card px-8 py-4 rounded-3xl"
           >
             <p className="text-sky-900/60 text-[10px] font-black tracking-widest uppercase flex items-center gap-3">
               <span className="w-2 h-2 rounded-full bg-orange-400 animate-ping" />

@@ -82,11 +82,11 @@ export const ChatHUD = ({ onSendMessage, onFocusChange }: Props) => {
   }, [messages]);
 
   return (
-    <div className="absolute inset-0 pointer-events-none z-50 flex flex-col justify-end p-8">
+    <div className="absolute inset-0 pointer-events-none z-50 flex flex-col justify-end p-4 sm:p-8">
       {/* Chat Log Viewport */}
       <div
         ref={scrollRef}
-        className="mb-6 w-96 max-h-64 overflow-y-auto pointer-events-auto scroll-smooth flex flex-col gap-2 pr-4 scrollbar-hideMask"
+        className="mb-4 sm:mb-6 w-full max-w-[280px] sm:w-96 max-h-48 sm:max-h-64 overflow-y-auto pointer-events-auto scroll-smooth flex flex-col gap-2 pr-4 scrollbar-hideMask"
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
         <AnimatePresence initial={false}>
@@ -125,9 +125,9 @@ export const ChatHUD = ({ onSendMessage, onFocusChange }: Props) => {
               className="relative p-1.5 glass-premium rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.3)] group"
             >
               <div className="flex items-center gap-4 pl-2.5 pr-5">
-                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-orange-400 shadow-lg shadow-orange-500/30 flex-none">
+                <div className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-orange-400 shadow-lg shadow-orange-500/30 flex-none">
                   <svg
-                    className="w-5 h-5 text-white"
+                    className="w-4 h-4 sm:w-5 sm:h-5 text-white"
                     fill="currentColor"
                     viewBox="0 0 20 20"
                   >
@@ -147,7 +147,7 @@ export const ChatHUD = ({ onSendMessage, onFocusChange }: Props) => {
                   maxLength={100}
                   className="bg-transparent border-none outline-none text-white w-full py-3.5 text-lg font-bold placeholder:text-white/20"
                 />
-                <div className="flex flex-col items-end opacity-40 select-none">
+                <div className="hidden sm:flex flex-col items-end opacity-40 select-none">
                   <span className="text-[14px] text-white font-black tracking-widest uppercase">
                     ENTER
                   </span>
@@ -168,8 +168,9 @@ export const ChatHUD = ({ onSendMessage, onFocusChange }: Props) => {
                 setTimeout(() => inputRef.current?.focus(), 10);
               }}
             >
-              <span className="text-white/40 text-[10px] font-black uppercase tracking-[0.2em]">
-                Press [Enter] to talk
+              <span className="text-white/40 text-[9px] sm:text-[10px] font-black uppercase tracking-[0.2em]">
+                <span className="hidden sm:inline">Press [Enter] to talk</span>
+                <span className="inline sm:hidden">Touch to talk</span>
               </span>
               <div className="w-1.5 h-1.5 rounded-full bg-orange-400 shadow-[0_0_8px_#fb923c] animate-pulse" />
             </motion.div>

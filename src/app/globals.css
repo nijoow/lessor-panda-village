@@ -9,7 +9,9 @@ body {
   margin: 0;
   padding: 0;
   width: 100vw;
-  height: 100vh;
+  height: 100vh; /* Fallback for older browsers */
+  height: 100dvh; /* Dynamic Viewport Height for modern browsers */
+  height: calc(var(--vh, 1vh) * 100); /* Precise programmatic fallback */
   overflow: hidden;
   background-color: #e0f2fe; /* bg-sky-100 */
 }

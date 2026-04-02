@@ -40,7 +40,7 @@ export const NicknameOverlay = ({ onJoin }: Props) => {
         initial={{ scale: 0.95, y: 30, opacity: 0 }}
         animate={{ scale: 1, y: 0, opacity: 1 }}
         transition={{ type: "spring", damping: 30, stiffness: 120 }}
-        className="w-full max-w-lg p-12 glass-premium rounded-[3.5rem] flex flex-col items-center relative"
+        className="w-full max-w-lg p-8 sm:p-12 glass-premium rounded-[2.5rem] sm:rounded-[3.5rem] flex flex-col items-center relative"
       >
         {/* Glow behind icon */}
         <div className="absolute top-[-40px] w-48 h-48 bg-orange-400/20 rounded-full blur-[60px] pointer-events-none" />
@@ -49,7 +49,7 @@ export const NicknameOverlay = ({ onJoin }: Props) => {
           <motion.div
             whileHover={{ rotate: [0, -10, 10, -10, 0] }}
             transition={{ duration: 0.5 }}
-            className="w-32 h-32 bg-linear-to-br from-orange-50 to-orange-100/50 rounded-full flex items-center justify-center shadow-xl overflow-hidden border-4 border-white"
+            className="w-24 h-24 sm:w-32 sm:h-32 bg-linear-to-br from-orange-50 to-orange-100/50 rounded-full flex items-center justify-center shadow-xl overflow-hidden border-4 border-white"
           >
             <Image
               src="/images/red_panda_icon.png"
@@ -76,10 +76,10 @@ export const NicknameOverlay = ({ onJoin }: Props) => {
         </div>
 
         <div className="text-center mb-10">
-          <h2 className="text-4xl font-black text-sky-950 mb-3 tracking-tight">
+          <h2 className="text-2xl sm:text-4xl font-black text-sky-950 mb-3 tracking-tight">
             레서판다 마을 입장
           </h2>
-          <p className="text-sky-800/60 font-bold text-lg">
+          <p className="text-sky-800/60 font-bold text-base sm:text-lg">
             마을에서 사용할 닉네임을 입력해주세요.
           </p>
         </div>
@@ -93,7 +93,7 @@ export const NicknameOverlay = ({ onJoin }: Props) => {
               placeholder="닉네임을 입력해주세요"
               maxLength={10}
               autoFocus
-              className="w-full px-10 py-6 glass-input rounded-3xl text-2xl font-bold text-sky-900 placeholder:text-sky-900/20 shadow-inner group-hover:bg-white/60"
+              className="w-full px-6 sm:px-10 py-4 sm:py-6 glass-input rounded-2xl sm:rounded-3xl text-lg sm:text-2xl font-bold text-sky-900 placeholder:text-sky-900/20 shadow-inner group-hover:bg-white/60"
             />
             <div className="absolute right-6 top-1/2 -translate-y-1/2 text-sky-900/30 text-sm font-black bg-white/40 px-3 py-1 rounded-full">
               {nickname.length}/10
@@ -101,11 +101,12 @@ export const NicknameOverlay = ({ onJoin }: Props) => {
           </div>
 
           <motion.button
-            whileHover={{ scale: 1.02, y: -4 }}
-            whileTap={{ scale: 0.98, y: 0 }}
-            disabled={nickname.trim().length === 0 || isSubmitting}
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            type="submit"
+            disabled={nickname.trim().length === 0}
             className={`
-              relative w-full py-6 rounded-3xl text-2xl font-black shadow-2xl transition-all duration-300 overflow-hidden
+              relative w-full py-4 sm:py-6 rounded-2xl sm:rounded-3xl text-lg sm:text-2xl font-black shadow-2xl transition-all duration-300 overflow-hidden
               ${
                 nickname.trim().length > 0
                   ? "bg-linear-to-br from-orange-400 to-orange-500 text-white shadow-orange-200 cursor-pointer"
@@ -149,8 +150,8 @@ export const NicknameOverlay = ({ onJoin }: Props) => {
               <div key={i} className="w-1.5 h-1.5 rounded-full bg-sky-900/10" />
             ))}
           </div>
-          <p className="text-sky-900/30 text-xs font-black uppercase tracking-[0.3em]">
-            Lessor Panda Village • Project 2026
+          <p className="text-sky-900/30 text-xs font-black uppercase tracking-[0.3em] text-center">
+            Lessor&nbsp;Panda&nbsp;Village • &copy;nijoow
           </p>
         </div>
       </motion.div>
