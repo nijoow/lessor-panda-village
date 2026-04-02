@@ -1,8 +1,39 @@
 "use client";
 
-import { useTexture } from "@react-three/drei";
-import * as THREE from "three";
-import { useMemo } from "react";
+import { useTexture } from '@react-three/drei';
+import * as THREE from 'three';
+import { useMemo, useState, useCallback } from 'react';
+import { useFrame, ThreeEvent } from '@react-three/fiber';
+
+// ---------- 클릭 지점 표시 마커 컴포넌트 ----------
+const ClickMarker = ({ position }: { position: THREE.Vector3 }) => {
+  const [opacity, setOpacity] = useState(1);
+  const [scale, setScale] = useState(0.5);
+
+  useFrame((_state, delta) => {
+    if (opacity > 0) {
+      setOpacity((prev) => Math.max(0, prev - delta * 2));
+      setScale((prev) => prev + delta * 2.5);
+    }
+  });
+
+  if (opacity <= 0) return null;
+
+  return (
+    <mesh
+      position={[position.x, 0.05, position.z]}
+      rotation-x={-Math.PI / 2}
+    >
+      <ringGeometry args={[0.4 * scale, 0.5 * scale, 32]} />
+      <meshBasicMaterial
+        color="#ffffff"
+        transparent
+        opacity={opacity}
+        depthWrite={false}
+      />
+    </mesh>
+  );
+};
 
 // ---------- 돌길 컴포넌트 (작은 돌들을 배치하여 입체적인 길 표현) ----------
 const SteppingStone = ({
@@ -69,7 +100,8 @@ const StonePath = ({
 };
 
 export const Ground = () => {
-  const grassTexture = useTexture("/textures/ground/grass.png");
+  const grassTexture = useTexture('/textures/ground/grass.png');
+  const [clickPos, setClickPos] = useState<THREE.Vector3 | null>(null);
 
   const groundTexture = useMemo(() => {
     const t = grassTexture.clone();
@@ -79,10 +111,30 @@ export const Ground = () => {
     return t;
   }, [grassTexture]);
 
+  const handlePointerDown = useCallback((e: ThreeEvent<PointerEvent>) => {
+    // 버블링 방지 (다른 UI 클릭 시 바닥 이동 방지)
+    e.stopPropagation();
+
+    const point = e.point.clone();
+    setClickPos(point);
+
+    // 플레이어에게 알림 (커스텀 이벤트)
+    window.dispatchEvent(
+      new CustomEvent('panda-move-to', {
+        detail: { x: point.x, z: point.z },
+      })
+    );
+  }, []);
+
   return (
     <group>
-      {/* 메인 잔디 바닥 */}
-      <mesh rotation-x={-Math.PI / 2} receiveShadow position={[0, -0.01, 0]}>
+      {/* 메인 잔디 바닥 - 클릭 감지용 */}
+      <mesh
+        rotation-x={-Math.PI / 2}
+        receiveShadow
+        position={[0, -0.01, 0]}
+        onPointerDown={handlePointerDown}
+      >
         <planeGeometry args={[80, 80]} />
         <meshStandardMaterial
           map={groundTexture}
@@ -90,6 +142,14 @@ export const Ground = () => {
           roughness={0.85}
         />
       </mesh>
+
+      {/* 클릭 마커 표시 (위치가 바뀔 때마다 key를 사용하여 리셋) */}
+      {clickPos && (
+        <ClickMarker
+          key={`${clickPos.x}-${clickPos.z}`}
+          position={clickPos}
+        />
+      )}
 
       {/* 안쪽 원형 잔디 */}
       <mesh rotation-x={-Math.PI / 2} receiveShadow position={[0, -0.008, 0]}>

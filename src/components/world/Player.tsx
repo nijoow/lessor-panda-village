@@ -241,6 +241,22 @@ export const Player = forwardRef<THREE.Group, Props>(
       }
     }, [actions]);
 
+    // 클릭 이동 목표 지점
+    const clickTarget = useRef<THREE.Vector3 | null>(null);
+
+    useEffect(() => {
+      const handleMoveTo = (e: Event) => {
+        const customEvent = e as CustomEvent<{ x: number; z: number }>;
+        clickTarget.current = new THREE.Vector3(
+          customEvent.detail.x,
+          0,
+          customEvent.detail.z,
+        );
+      };
+      window.addEventListener('panda-move-to', handleMoveTo);
+      return () => window.removeEventListener('panda-move-to', handleMoveTo);
+    }, []);
+
     useFrame((state, delta) => {
       if (!groupRef.current) return;
 
@@ -256,6 +272,11 @@ export const Player = forwardRef<THREE.Group, Props>(
           }
         : keys;
 
+      // 키보드 입력이 있으면 클릭 이동 취소
+      if (forward || backward || left || right || jump) {
+        clickTarget.current = null;
+      }
+
       // 6. 점프 및 중력 물리
       const GRAVITY = -0.006;
       const JUMP_FORCE = 0.14;
@@ -264,6 +285,8 @@ export const Player = forwardRef<THREE.Group, Props>(
         velocityY.current = JUMP_FORCE;
         isGrounded.current = false;
       }
+
+      const currentY = targetPosition.current.y;
 
       if (!isGrounded.current) {
         velocityY.current += GRAVITY;
@@ -276,30 +299,62 @@ export const Player = forwardRef<THREE.Group, Props>(
         }
       }
 
-      // 7. 카메라 기준 이동 벡터 계산
-      const moveForward = (forward ? 1 : 0) - (backward ? 1 : 0);
-      const moveRight = (right ? 1 : 0) - (left ? 1 : 0);
+      // 7. 이동 벡터 계산
+      const moveDir = new THREE.Vector3(0, 0, 0);
+      let isMoving = false;
 
-      const isMoving = moveForward !== 0 || moveRight !== 0;
+      // 키보드 이동 우선 체크
+      const keyboardForward = (forward ? 1 : 0) - (backward ? 1 : 0);
+      const keyboardRight = (right ? 1 : 0) - (left ? 1 : 0);
+
+      if (keyboardForward !== 0 || keyboardRight !== 0) {
+        moveDir
+          .addScaledVector(CAM_FORWARD, keyboardForward)
+          .addScaledVector(CAM_RIGHT, keyboardRight)
+          .normalize();
+        isMoving = true;
+      } 
+      // 클릭 이동 체크 (키보드 이동이 없을 때만)
+      else if (clickTarget.current) {
+        const dist = new THREE.Vector2(
+          clickTarget.current.x - targetPosition.current.x,
+          clickTarget.current.z - targetPosition.current.z
+        ).length();
+
+        if (dist > 0.2) {
+          moveDir.set(
+            clickTarget.current.x - targetPosition.current.x,
+            0,
+            clickTarget.current.z - targetPosition.current.z
+          ).normalize();
+          isMoving = true;
+        } else {
+          clickTarget.current = null;
+        }
+      }
+
       const speed = run ? 0.12 : 0.08;
 
       if (isMoving) {
-        const moveDir = new THREE.Vector3()
-          .addScaledVector(CAM_FORWARD, moveForward)
-          .addScaledVector(CAM_RIGHT, moveRight)
-          .normalize()
-          .multiplyScalar(speed);
+        moveDir.multiplyScalar(speed);
 
-        // 충돌 체크 후 이동 (현재 Y 좌표 전달)
+        // 충돌 체크 후 이동
         const nextX = targetPosition.current.x + moveDir.x;
         const nextZ = targetPosition.current.z + moveDir.z;
-        const currentY = targetPosition.current.y;
 
-        if (!checkCollision(nextX, targetPosition.current.z, currentY)) {
+        const canMoveX = !checkCollision(nextX, targetPosition.current.z, currentY);
+        const canMoveZ = !checkCollision(targetPosition.current.x, nextZ, currentY);
+
+        if (canMoveX) {
           targetPosition.current.x = nextX;
         }
-        if (!checkCollision(targetPosition.current.x, nextZ, currentY)) {
+        if (canMoveZ) {
           targetPosition.current.z = nextZ;
+        }
+
+        // 클릭 이동 중인데 양쪽 다 막혔다면 목표 취소
+        if (clickTarget.current && !canMoveX && !canMoveZ) {
+          clickTarget.current = null;
         }
 
         // 이동 방향으로 캐릭터 회전
