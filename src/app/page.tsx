@@ -76,6 +76,21 @@ const HomeContent = ({
   const [nickname, setNickname] = useState<string | null>(null);
   const [isChatFocused, setIsChatFocused] = useState(false);
   const [isAssetsReady, setIsAssetsReady] = useState(false);
+  const [showStatus, setShowStatus] = useState(false);
+
+  // 낮/밤 전환 시 상태창 표시 및 5초 후 페이드 아웃
+  useEffect(() => {
+    if (!nickname) return;
+    // 마이크로태스크나 다음 틱으로 미뤄서 동기적 setState 경고 해결
+    const showTimer = setTimeout(() => setShowStatus(true), 0);
+    const hideTimer = setTimeout(() => {
+      setShowStatus(false);
+    }, 5000);
+    return () => {
+      clearTimeout(showTimer);
+      clearTimeout(hideTimer);
+    };
+  }, [isNight, nickname]);
 
   // 로딩 완료 후 지연 처리 (사용자가 100%를 볼 수 있도록)
   useEffect(() => {
@@ -139,15 +154,22 @@ const HomeContent = ({
               </p>
             </motion.div>
           </div>
-          <div
-            className={`px-6 py-2 rounded-full text-sm font-bold shadow-xl transition-all duration-1000 ${
-              isNight
-                ? "bg-indigo-950/80 text-yellow-300 ring-2 ring-yellow-400/30"
-                : "bg-amber-100/80 text-orange-800 ring-2 ring-orange-500/30"
-            }`}
-          >
-            {isNight ? "🌙 고요한 밤이에요" : "☀️ 화창한 낮이에요"}
-          </div>
+          <AnimatePresence>
+            {showStatus && (
+              <motion.div
+                initial={{ opacity: 0, y: -20, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                className={`px-6 py-2 rounded-full text-sm font-bold shadow-xl transition-all duration-1000 ${
+                  isNight
+                    ? "bg-indigo-950/80 text-yellow-300 ring-2 ring-yellow-400/30"
+                    : "bg-amber-100/80 text-orange-800 ring-2 ring-orange-500/30"
+                }`}
+              >
+                {isNight ? "🌙 고요한 밤이에요" : "☀️ 화창한 낮이에요"}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       )}
 
@@ -155,8 +177,8 @@ const HomeContent = ({
         <Ground disableClick={isChatFocused} />
         <Environment isNight={isNight} />
         <House position={[0, 4.5, -7]} rotation={[0, 0, 0]} scale={5} />
-        <FireflyParticles />
-        <PetalParticles />
+        <FireflyParticles isNight={isNight} />
+        <PetalParticles isNight={isNight} />
 
         {/* 다른 플레이어들 렌더링 (Zero-Rerender 최적화) */}
         {remotePlayerIds.map((id) => (

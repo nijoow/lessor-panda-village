@@ -93,7 +93,11 @@ const createHeartShape = () => {
 // ─────────────────────────────────────────────
 // 꽃잎 파티클 (낮)
 // ─────────────────────────────────────────────
-export const PetalParticles = () => {
+interface ParticleProps {
+  isNight: boolean;
+}
+
+export const PetalParticles = ({ isNight }: ParticleProps) => {
   const meshRef = useRef<THREE.InstancedMesh>(null!);
   const materialRef = useRef<THREE.MeshStandardMaterial>(null!);
 
@@ -107,15 +111,15 @@ export const PetalParticles = () => {
     if (!meshRef.current || !materialRef.current) return;
     const t = state.clock.elapsedTime;
 
-    const cycleTime = 60;
-    const cycleT = (t % cycleTime) / cycleTime;
-    const angle = Math.PI - cycleT * 2 * Math.PI;
-    const sunAltitude = Math.sin(angle);
+    // isNight 상태에 따라 불투명도 부드럽게 전환
+    const targetOpacity = isNight ? 0 : 0.85;
+    materialRef.current.opacity = THREE.MathUtils.lerp(
+      materialRef.current.opacity,
+      targetOpacity,
+      0.02,
+    );
 
-    const opacity = THREE.MathUtils.clamp((sunAltitude + 0.2) * 2.5, 0, 0.85);
-    materialRef.current.opacity = opacity;
-
-    if (opacity <= 0) return;
+    if (materialRef.current.opacity < 0.01) return;
 
     particles.forEach((p, i) => {
       // 펄럭이는 움직임 추가 (Fluttering)
@@ -197,7 +201,7 @@ const generateFireflyDataSync = (): FireflyData[] => {
   return temp;
 };
 
-export const FireflyParticles = () => {
+export const FireflyParticles = ({ isNight }: ParticleProps) => {
   const meshRef = useRef<THREE.InstancedMesh>(null!);
   const materialRef = useRef<THREE.MeshStandardMaterial>(null!);
   const [fireflies] = useState(() => generateFireflyDataSync());
@@ -209,18 +213,16 @@ export const FireflyParticles = () => {
     if (!meshRef.current || !materialRef.current) return;
     const t = state.clock.elapsedTime;
 
-    // 밤에만 은은하게 나타남
-    const cycleTime = 60;
-    const cycleT = (t % cycleTime) / cycleTime;
-    const angle = Math.PI - cycleT * 2 * Math.PI;
-    const sunAltitude = Math.sin(angle);
+    // isNight 상태에 따라 밤에만 은은하게 나타남
+    const targetOpacity = isNight ? 0.9 : 0;
+    materialRef.current.opacity = THREE.MathUtils.lerp(
+      materialRef.current.opacity,
+      targetOpacity,
+      0.02,
+    );
+    materialRef.current.emissiveIntensity = materialRef.current.opacity * 6;
 
-    // 해가 지평선 아래로 내려갈 때(sunAltitude < 0) 불투명도 증가
-    const opacity = THREE.MathUtils.clamp(-sunAltitude * 3.0, 0, 1.0);
-    materialRef.current.opacity = opacity;
-    materialRef.current.emissiveIntensity = opacity * 6;
-
-    if (opacity <= 0) return;
+    if (materialRef.current.opacity < 0.01) return;
 
     fireflies.forEach((f, i) => {
       const x = f.position.x + Math.sin(t * f.speed + f.phase) * f.radius;

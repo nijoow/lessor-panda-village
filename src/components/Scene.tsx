@@ -14,19 +14,22 @@ import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import { ReactNode, useRef, Suspense } from "react";
 import * as THREE from "three";
 
-const DayNightLights = () => {
+const DayNightLights = ({ isNight }: { isNight: boolean }) => {
   const dirLightRef = useRef<THREE.DirectionalLight>(null!);
   const ambLightRef = useRef<THREE.AmbientLight>(null!);
+  const sunProgress = useRef(0);
 
-  useFrame((state) => {
-    // 60초 주기로 한 바퀴 순환 (현실감 있게 연속적으로 변화)
-    const cycleTime = 60;
-    const t = (state.clock.elapsedTime % cycleTime) / cycleTime;
+  useFrame(() => {
+    // isNight 상태에 따라 sunProgress (0: 밤, 1: 낮)를 부드럽게 보간
+    const targetProgress = isNight ? 0 : 1;
+    sunProgress.current = THREE.MathUtils.lerp(
+      sunProgress.current,
+      targetProgress,
+      0.015,
+    );
 
-    // t=0.25 (15초): 정오 (angle = PI/2)
-    // t=0.75 (45초): 자정 (angle = -PI/2 또는 3PI/2)
-    // t=0 / t=0.5: 일출/일몰 (angle = 0 / PI)
-    const angle = Math.PI - t * 2 * Math.PI;
+    // angle 계산 (낮=PI/2, 밤=-PI/2)
+    const angle = (sunProgress.current - 0.5) * Math.PI;
 
     const sunY = Math.sin(angle) * 30;
     const sunX = Math.cos(angle) * 30;
@@ -34,13 +37,12 @@ const DayNightLights = () => {
     if (dirLightRef.current) {
       dirLightRef.current.position.set(sunX, sunY, 15);
 
-      const dayIntensity = Math.max(0, Math.sin(angle)); // 해가 떠있을 때 (0 ~ PI)
-      const nightIntensity = Math.max(0, Math.sin(angle + Math.PI)); // 달이 떠있을 때 (PI ~ 2PI)
+      const dayIntensity = Math.max(0, Math.sin(angle));
 
       // 낮에는 강한 빛, 밤에는 은은한 푸른빛
-      dirLightRef.current.intensity = dayIntensity * 2.8 + nightIntensity * 0.5;
+      dirLightRef.current.intensity = dayIntensity * 2.8 + (1 - dayIntensity) * 0.5;
 
-      if (dayIntensity > 0) {
+      if (dayIntensity > 0.1) {
         dirLightRef.current.color.setRGB(1, 0.95, 0.86); // 따뜻한 햇살
       } else {
         dirLightRef.current.color.setRGB(0.6, 0.7, 1.0); // 차가운 달빛
@@ -80,13 +82,19 @@ const DayNightLights = () => {
 // ──────────────────────────────────────────────────
 // 다이나믹 Sky (낮/밤 전환)
 // ──────────────────────────────────────────────────
-const DynamicSky = () => {
+const DynamicSky = ({ isNight }: { isNight: boolean }) => {
   const skyRef = useRef<{ sunPosition: THREE.Vector3 } | null>(null);
+  const sunProgress = useRef(0);
 
-  useFrame((state) => {
-    const cycleTime = 60;
-    const t = (state.clock.elapsedTime % cycleTime) / cycleTime;
-    const angle = Math.PI - t * 2 * Math.PI;
+  useFrame(() => {
+    const targetProgress = isNight ? 0 : 1;
+    sunProgress.current = THREE.MathUtils.lerp(
+      sunProgress.current,
+      targetProgress,
+      0.015,
+    );
+
+    const angle = (sunProgress.current - 0.5) * Math.PI;
 
     const sunY = Math.sin(angle);
     const sunX = Math.cos(angle);
@@ -136,7 +144,7 @@ export const Scene = ({ children, isNight }: SceneProps) => {
         maxPolarAngle={Math.PI / 2.5}
       />
 
-      <DynamicSky />
+      <DynamicSky isNight={isNight} />
       <Stars
         radius={80}
         depth={50}
@@ -145,7 +153,7 @@ export const Scene = ({ children, isNight }: SceneProps) => {
         fade
         speed={0.5}
       />
-      <DayNightLights />
+      <DayNightLights isNight={isNight} />
 
       <Suspense fallback={null}>{children}</Suspense>
 
