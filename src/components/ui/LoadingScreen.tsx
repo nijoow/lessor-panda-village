@@ -58,7 +58,7 @@ export const LoadingScreen = ({ visible }: Props) => {
                   src="/images/red_panda_icon.png"
                   alt="Loading Red Panda"
                   fill
-                  className="object-contain p-4 transition-transform duration-500 hover:scale-110"
+                  className="object-contain transition-transform duration-500 hover:scale-110"
                 />
               </div>
             </motion.div>
