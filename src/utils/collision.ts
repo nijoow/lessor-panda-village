@@ -7,7 +7,7 @@ import {
   COLLISION_BENCHES,
   COLLISION_POND,
   COLLISION_LANTERNS,
-} from "@/constants/collisionMap";
+} from "@/constants/worldLayout";
 
 // 충돌 체크 함수 (y값을 추가하여 점프 시 통과 여부 결정)
 export const checkCollision = (x: number, z: number, y: number = 0) => {
