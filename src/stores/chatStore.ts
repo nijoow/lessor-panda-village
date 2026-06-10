@@ -29,6 +29,11 @@ export const chatStore = {
     return lastMessageMap.get(id);
   },
 
+  /** 퇴장한 플레이어의 말풍선 데이터 정리 (메모리 누수 방지) */
+  removePlayer: (id: string) => {
+    lastMessageMap.delete(id);
+  },
+
   /** HUD용 전체 로그 가져오기 */
   getChatLog: (): ChatMessage[] => {
     return chatLog;

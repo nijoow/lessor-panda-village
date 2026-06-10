@@ -23,19 +23,27 @@ export interface ChatMessage {
   timestamp: number;
 }
 
+export const MAX_CHAT_LENGTH = 100;
+export const MAX_NICKNAME_LENGTH = 10;
+
+// 네트워크로 수신한 값은 신뢰할 수 없으므로 항상 정제 후 사용
+const toFinite = (v: unknown, fallback = 0): number =>
+  typeof v === "number" && Number.isFinite(v) ? v : fallback;
+
+const sanitizeNickname = (v: unknown): string =>
+  typeof v === "string" && v.trim().length > 0
+    ? v.trim().slice(0, MAX_NICKNAME_LENGTH)
+    : "Unknown";
+
 export const useMultiplayer = (nickname: string | null) => {
   const [remotePlayerIds, setRemotePlayerIds] = useState<string[]>([]);
   const playersDataRef = useRef<Map<string, PlayerState>>(new Map());
   const channelRef = useRef<RealtimeChannel | null>(null);
-  const [myId] = useState(() => Math.random().toString(36).substring(7));
+  const [myId] = useState(() => crypto.randomUUID());
   const isChannelReadyRef = useRef(false);
-
-
 
   useEffect(() => {
     if (!nickname) return;
-
-    console.log(`[Multiplayer] Connecting: ${nickname} (${myId})`);
 
     const channel = supabase.channel("village", {
       config: {
@@ -48,7 +56,6 @@ export const useMultiplayer = (nickname: string | null) => {
     channel
       .on("presence", { event: "sync" }, () => {
         const state = channel.presenceState();
-        console.log("[Multiplayer] Presence Sync:", state);
 
         const newIds: string[] = [];
         const currentKeys = Object.keys(state);
@@ -60,17 +67,24 @@ export const useMultiplayer = (nickname: string | null) => {
           const presences = state[key] as unknown as (PlayerState & {
             online_at: string;
           })[];
-          if (presences.length > 0) {
-            const p = presences[0];
-            // 항상 최신 정보로 갱신 (닉네임 변경 등 대응)
+          if (presences.length === 0) return;
+
+          const p = presences[0];
+          const existing = playersDataRef.current.get(key);
+
+          if (existing) {
+            // presence의 위치는 입장 시점(track 호출) 값이라 stale함.
+            // 이미 move 브로드캐스트로 받은 위치를 덮어쓰지 않고 닉네임만 갱신.
+            existing.nickname = sanitizeNickname(p.nickname);
+          } else {
             playersDataRef.current.set(key, {
               id: key,
-              nickname: p.nickname || "Unknown",
-              x: p.x || 0,
-              y: p.y || 0,
-              z: p.z || 0,
-              ry: p.ry || 0,
-              anim: p.anim || PLAYER_ANIM.IDLE,
+              nickname: sanitizeNickname(p.nickname),
+              x: toFinite(p.x),
+              y: toFinite(p.y),
+              z: toFinite(p.z),
+              ry: toFinite(p.ry),
+              anim: typeof p.anim === "string" ? p.anim : PLAYER_ANIM.IDLE,
               lastUpdated: Date.now(),
             });
           }
@@ -80,6 +94,7 @@ export const useMultiplayer = (nickname: string | null) => {
         for (const key of playersDataRef.current.keys()) {
           if (!currentKeys.includes(key)) {
             playersDataRef.current.delete(key);
+            chatStore.removePlayer(key);
           }
         }
 
@@ -93,31 +108,45 @@ export const useMultiplayer = (nickname: string | null) => {
           return newIds;
         });
       })
-      .on("presence", { event: "leave" }, ({ key, leftPresences }) => {
-        console.log("[Multiplayer] Player left:", key, leftPresences);
+      .on("presence", { event: "leave" }, ({ key }) => {
         // Map 정리는 sync 이벤트에서 완벽하게 처리되므로,
         // leave 이벤트에서는 즉각적인 UI 반영을 위해 state만 업데이트
         setRemotePlayerIds((prev) => prev.filter((id) => id !== key));
       });
 
     channel.on("broadcast", { event: "move" }, ({ payload }) => {
-      if (payload.id === myId) return;
+      if (!payload || typeof payload.id !== "string" || payload.id === myId)
+        return;
 
       playersDataRef.current.set(payload.id, {
-        ...payload,
+        id: payload.id,
+        nickname: sanitizeNickname(payload.nickname),
+        x: toFinite(payload.x),
+        y: toFinite(payload.y),
+        z: toFinite(payload.z),
+        ry: toFinite(payload.ry),
+        anim: typeof payload.anim === "string" ? payload.anim : PLAYER_ANIM.IDLE,
         lastUpdated: Date.now(),
       });
     });
 
     channel.on("broadcast", { event: "chat" }, ({ payload }) => {
+      if (
+        !payload ||
+        typeof payload.id !== "string" ||
+        typeof payload.message !== "string"
+      )
+        return;
+
       chatStore.addMessage({
-        ...payload,
+        id: payload.id,
+        nickname: sanitizeNickname(payload.nickname),
+        message: payload.message.slice(0, MAX_CHAT_LENGTH),
         timestamp: Date.now(),
       });
     });
 
     channel.subscribe(async (status) => {
-      console.log("[Multiplayer] Channel status:", status);
       if (status === "SUBSCRIBED") {
         isChannelReadyRef.current = true;
         await channel.track({
@@ -134,7 +163,6 @@ export const useMultiplayer = (nickname: string | null) => {
     });
 
     return () => {
-      console.log("[Multiplayer] Unsubscribing...");
       isChannelReadyRef.current = false;
       channel.unsubscribe();
       channelRef.current = null;
@@ -167,7 +195,7 @@ export const useMultiplayer = (nickname: string | null) => {
       const payload = {
         id: myId,
         nickname,
-        message,
+        message: message.slice(0, MAX_CHAT_LENGTH),
       };
 
       channelRef.current.send({

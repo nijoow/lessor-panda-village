@@ -9,6 +9,8 @@ interface Props {
   playerId: string;
 }
 
+const BUBBLE_DURATION_MS = 8000;
+
 export const ChatBubble = ({ playerId }: Props) => {
   useSyncExternalStore(
     chatStore.subscribe,
@@ -23,16 +25,20 @@ export const ChatBubble = ({ playerId }: Props) => {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    if (message) {
-      const showTimer = setTimeout(() => setVisible(true), 10);
-      const hideTimer = setTimeout(() => {
-        setVisible(false);
-      }, 8000);
-      return () => {
-        clearTimeout(showTimer);
-        clearTimeout(hideTimer);
-      };
-    }
+    if (!message) return;
+
+    // 표시 시간이 이미 지난 메시지는 다시 띄우지 않음 (리마운트/재입장 대응)
+    const remaining = BUBBLE_DURATION_MS - (Date.now() - timestamp);
+    if (remaining <= 0) return;
+
+    const showTimer = setTimeout(() => setVisible(true), 10);
+    const hideTimer = setTimeout(() => {
+      setVisible(false);
+    }, remaining);
+    return () => {
+      clearTimeout(showTimer);
+      clearTimeout(hideTimer);
+    };
   }, [message, timestamp]);
 
   if (!message) return null;
