@@ -11,8 +11,9 @@ import { getNicknameColor } from "@/utils/color";
 const BASE_URL = "/models/player/base.glb";
 const WALK_URL = "/models/player/walking.glb";
 const RUN_URL = "/models/player/running.glb";
-// scripts/generate-sit-clip.mjs로 생성한 네이티브 클립 (본 계층 + 애니메이션만 포함)
+// scripts/generate-*-clip(s).mjs로 생성한 네이티브 클립 (본 계층 + 애니메이션만 포함)
 const SIT_URL = "/models/player/sitting.glb";
+const EMOTE_URL = "/models/player/emotes.glb";
 
 /**
  * 판다 모델 공용 훅 (Player / RemotePlayer 공유)
@@ -23,14 +24,15 @@ export const usePandaModel = (groupRef: RefObject<THREE.Group>) => {
   const { animations: walkAnims } = useGLTF(WALK_URL);
   const { animations: runAnims } = useGLTF(RUN_URL);
   const { animations: sitAnims } = useGLTF(SIT_URL);
+  const { animations: emoteAnims } = useGLTF(EMOTE_URL);
 
   // 여러 캐릭터가 동일 GLB를 공유하므로 스켈레톤 단위로 복제
   const clone = useMemo(() => SkeletonUtils.clone(baseScene), [baseScene]);
   const { nodes, materials } = useGraph(clone);
 
   const allAnimations = useMemo(
-    () => [...idleAnims, ...walkAnims, ...runAnims, ...sitAnims],
-    [idleAnims, walkAnims, runAnims, sitAnims],
+    () => [...idleAnims, ...walkAnims, ...runAnims, ...sitAnims, ...emoteAnims],
+    [idleAnims, walkAnims, runAnims, sitAnims, emoteAnims],
   );
   const { actions } = useAnimations(allAnimations, groupRef);
 
@@ -130,3 +132,4 @@ useGLTF.preload(BASE_URL);
 useGLTF.preload(WALK_URL);
 useGLTF.preload(RUN_URL);
 useGLTF.preload(SIT_URL);
+useGLTF.preload(EMOTE_URL);

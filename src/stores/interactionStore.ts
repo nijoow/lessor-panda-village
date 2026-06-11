@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { EmoteAnim } from "@/constants/playerAnimations";
 
 /**
  * 월드 오브젝트 상호작용 상태.
@@ -13,15 +14,19 @@ interface InteractionState {
   isSitting: boolean;
   /** 앉기/일어서기 토글 요청 카운터 (E 키 외에 모바일 버튼에서 사용) */
   toggleSitRequestId: number;
+  /** 이모트 재생 요청 (EmoteBar 버튼 → Player가 requestId로 소비) */
+  emoteRequest: { anim: EmoteAnim; requestId: number } | null;
   setNearbyBench: (index: number | null) => void;
   setSitting: (sitting: boolean) => void;
   requestToggleSit: () => void;
+  requestEmote: (anim: EmoteAnim) => void;
 }
 
 export const useInteractionStore = create<InteractionState>((set) => ({
   nearbyBenchIndex: null,
   isSitting: false,
   toggleSitRequestId: 0,
+  emoteRequest: null,
   setNearbyBench: (index) =>
     set((state) =>
       state.nearbyBenchIndex === index ? state : { nearbyBenchIndex: index },
@@ -30,4 +35,8 @@ export const useInteractionStore = create<InteractionState>((set) => ({
     set((state) => (state.isSitting === sitting ? state : { isSitting: sitting })),
   requestToggleSit: () =>
     set((state) => ({ toggleSitRequestId: state.toggleSitRequestId + 1 })),
+  requestEmote: (anim) =>
+    set((state) => ({
+      emoteRequest: { anim, requestId: (state.emoteRequest?.requestId ?? 0) + 1 },
+    })),
 }));

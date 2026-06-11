@@ -63,6 +63,11 @@ const InteractionPrompt = dynamic(
   { ssr: false },
 );
 
+const EmoteBar = dynamic(
+  () => import("@/components/ui/EmoteBar").then((mod) => mod.EmoteBar),
+  { ssr: false },
+);
+
 const keyboardMap: KeyboardControlsEntry<Controls>[] = [
   { name: Controls.forward, keys: ["ArrowUp", "KeyW"] },
   { name: Controls.backward, keys: ["ArrowDown", "KeyS"] },
@@ -71,6 +76,8 @@ const keyboardMap: KeyboardControlsEntry<Controls>[] = [
   { name: Controls.run, keys: ["ShiftLeft", "ShiftRight"] },
   { name: Controls.jump, keys: ["Space"] },
   { name: Controls.interact, keys: ["KeyE"] },
+  { name: Controls.emoteWave, keys: ["Digit1"] },
+  { name: Controls.emoteDance, keys: ["Digit2"] },
 ];
 
 // 로딩 100% 도달 후 입장 화면 표시까지의 지연 (사용자가 100%를 볼 수 있도록)
@@ -133,6 +140,7 @@ const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
             onFocusChange={setIsChatFocused}
           />
           <InteractionPrompt />
+          <EmoteBar />
           <VillageHeader isNight={isNight} />
         </>
       )}

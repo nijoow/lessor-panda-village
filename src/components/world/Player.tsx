@@ -41,6 +41,8 @@ export enum Controls {
   run = "run",
   jump = "jump",
   interact = "interact",
+  emoteWave = "emoteWave",
+  emoteDance = "emoteDance",
 }
 
 // 등각 뷰(Isometric)에서 카메라 방향을 기준으로 월드 이동 방향을 계산합니다.
@@ -153,6 +155,11 @@ export const Player = forwardRef<THREE.Group, Props>(
     const prevInteractRef = useRef(false);
     const lastSitRequestIdRef = useRef(0);
 
+    // 이모트 상태 (이동·점프·앉기 등 다른 행동 시 해제)
+    const emoteRef = useRef<string | null>(null);
+    const prevEmoteKeysRef = useRef({ wave: false, dance: false });
+    const lastEmoteRequestIdRef = useRef(0);
+
     const standUp = useCallback(() => {
       const seat = seatRef.current;
       if (!seat) return;
@@ -173,6 +180,7 @@ export const Player = forwardRef<THREE.Group, Props>(
         targetPosition.current.z,
       );
       clearClickPath();
+      emoteRef.current = null;
       velocityY.current = 0;
       isGrounded.current = true;
       useInteractionStore.getState().setSitting(true);
@@ -189,6 +197,7 @@ export const Player = forwardRef<THREE.Group, Props>(
 
       // 앉은 상태에서 우클릭 이동 시 먼저 일어선 지점에서 길찾기 시작
       standUp();
+      emoteRef.current = null;
 
       const start = {
         x: targetPosition.current.x,
@@ -217,18 +226,29 @@ export const Player = forwardRef<THREE.Group, Props>(
       const dt = Math.min(delta, MAX_DELTA);
 
       const keys = getKeys();
-      const { forward, backward, left, right, run, jump, interact } =
-        inputDisabled
-          ? {
-              forward: false,
-              backward: false,
-              left: false,
-              right: false,
-              run: false,
-              jump: false,
-              interact: false,
-            }
-          : keys;
+      const {
+        forward,
+        backward,
+        left,
+        right,
+        run,
+        jump,
+        interact,
+        emoteWave,
+        emoteDance,
+      } = inputDisabled
+        ? {
+            forward: false,
+            backward: false,
+            left: false,
+            right: false,
+            run: false,
+            jump: false,
+            interact: false,
+            emoteWave: false,
+            emoteDance: false,
+          }
+        : keys;
 
       // E 키 엣지 감지 + 모바일 버튼 토글 요청 수집
       const interactPressed = interact && !prevInteractRef.current;
@@ -239,6 +259,25 @@ export const Player = forwardRef<THREE.Group, Props>(
       lastSitRequestIdRef.current = interaction.toggleSitRequestId;
       const toggleRequested =
         !inputDisabled && (interactPressed || storeToggleRequested);
+
+      // 이모트 키(1/2) 엣지 감지 + EmoteBar 버튼 요청 수집
+      const wavePressed = emoteWave && !prevEmoteKeysRef.current.wave;
+      const dancePressed = emoteDance && !prevEmoteKeysRef.current.dance;
+      prevEmoteKeysRef.current.wave = emoteWave;
+      prevEmoteKeysRef.current.dance = emoteDance;
+      let requestedEmote: string | null = wavePressed
+        ? PLAYER_ANIM.WAVE
+        : dancePressed
+          ? PLAYER_ANIM.DANCE
+          : null;
+      const emoteRequest = interaction.emoteRequest;
+      if (
+        emoteRequest &&
+        emoteRequest.requestId !== lastEmoteRequestIdRef.current
+      ) {
+        lastEmoteRequestIdRef.current = emoteRequest.requestId;
+        if (!inputDisabled) requestedEmote = emoteRequest.anim;
+      }
 
       const seat = seatRef.current;
       if (seat) {
@@ -266,6 +305,11 @@ export const Player = forwardRef<THREE.Group, Props>(
         interaction.setNearbyBench(nearby);
         if (toggleRequested && nearby !== null) {
           sitDown(nearby);
+        } else if (requestedEmote && isGrounded.current) {
+          // 같은 이모트를 다시 요청하면 해제, 다른 이모트면 전환
+          emoteRef.current =
+            emoteRef.current === requestedEmote ? null : requestedEmote;
+          clearClickPath();
         }
       }
 
@@ -280,6 +324,7 @@ export const Player = forwardRef<THREE.Group, Props>(
         if (jump && isGrounded.current) {
           velocityY.current = JUMP_FORCE;
           isGrounded.current = false;
+          emoteRef.current = null;
         }
 
         const currentY = targetPosition.current.y;
@@ -374,8 +419,11 @@ export const Player = forwardRef<THREE.Group, Props>(
           // 이동 방향으로 캐릭터 회전
           targetRotation.current = Math.atan2(_moveDir.x, _moveDir.z);
 
-          // 애니메이션 전환
+          // 애니메이션 전환 (이동 시 이모트 해제)
+          emoteRef.current = null;
           playAction(run ? PLAYER_ANIM.RUN : PLAYER_ANIM.WALK);
+        } else if (emoteRef.current) {
+          playAction(emoteRef.current, 0.3);
         } else {
           playAction(PLAYER_ANIM.IDLE);
         }
