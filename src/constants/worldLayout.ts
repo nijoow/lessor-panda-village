@@ -96,10 +96,16 @@ export const LANDMARK_TREE = {
 };
 
 // ---------- 집 ----------
-export const HOUSE = {
-  position: [0, 4.5, -7] as [number, number, number],
+export interface HousePlacement {
+  position: [number, number, number];
+  scale: number;
+  box: CollisionBox;
+}
+
+export const HOUSE: HousePlacement = {
+  position: [0, 4.5, -7],
   scale: 5,
-  box: { minX: -4.5, maxX: 4.5, minZ: -10.5, maxZ: -3.5 } as CollisionBox,
+  box: { minX: -4.5, maxX: 4.5, minZ: -10.5, maxZ: -3.5 },
 };
 
 // ---------- 울타리 (시각용 세그먼트 좌표, 충돌은 collision.ts에서 라인 판정) ----------
