@@ -1,27 +1,16 @@
 "use client";
 
-import { useFrame, useGraph } from "@react-three/fiber";
-import {
-  useKeyboardControls,
-  useGLTF,
-  useAnimations,
-  Billboard,
-  Text,
-} from "@react-three/drei";
-import {
-  useRef,
-  useEffect,
-  useMemo,
-  forwardRef,
-  useImperativeHandle,
-} from "react";
+import { useFrame } from "@react-three/fiber";
+import { useKeyboardControls } from "@react-three/drei";
+import { useRef, useEffect, forwardRef, useImperativeHandle } from "react";
 import * as THREE from "three";
-import { SkeletonUtils } from "three-stdlib";
+import { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { PLAYER_ANIM } from "@/constants/playerAnimations";
-import { ChatBubble } from "./ChatBubble";
-import { getNicknameColor } from "@/utils/color";
 import { checkCollision } from "@/utils/collision";
 import { findPath, Point } from "@/utils/pathfinder";
+import { frameLerp, lerpAngle } from "@/utils/math";
+import { useMoveTargetStore } from "@/stores/moveTargetStore";
+import { usePandaModel, PandaBody, PandaNameTag } from "./PandaModel";
 
 interface Props {
   id: string;
@@ -43,8 +32,6 @@ export enum Controls {
   right = "right",
   run = "run",
   jump = "jump",
-  interact = "interact",
-  nightToggle = "nightToggle",
 }
 
 // 등각 뷰(Isometric)에서 카메라 방향을 기준으로 월드 이동 방향을 계산합니다.
@@ -52,10 +39,16 @@ export enum Controls {
 const CAM_FORWARD = new THREE.Vector3(-1, 0, -1).normalize();
 const CAM_RIGHT = new THREE.Vector3(1, 0, -1).normalize();
 
-const lerpAngle = (start: number, end: number, t: number) => {
-  const diff = ((end - start + Math.PI) % (Math.PI * 2)) - Math.PI;
-  return start + diff * t;
-};
+// 물리 상수 (초당 단위 - 프레임레이트 무관)
+const WALK_SPEED = 4.8; // units/s (기존 0.08/frame @60fps)
+const RUN_SPEED = 7.2; // units/s (기존 0.12/frame @60fps)
+const GRAVITY = -21.6; // units/s²
+const JUMP_FORCE = 8.4; // units/s
+const MAX_DELTA = 0.1; // 탭 전환 등 비정상적으로 큰 delta 클램프
+
+// useFrame 스크래치 객체 (매 프레임 할당으로 인한 GC 압박 방지)
+const _moveDir = new THREE.Vector3();
+const _camDelta = new THREE.Vector3();
 
 export const Player = forwardRef<THREE.Group, Props>(
   ({ id, nickname, onMove, inputDisabled }, ref) => {
@@ -89,79 +82,66 @@ export const Player = forwardRef<THREE.Group, Props>(
       }
     }, [onMove]);
 
-    // 1. 모델 로딩 (Base, Walking, Running)
-    const { scene: baseScene, animations: idleAnims } = useGLTF(
-      "/models/player/base.glb",
-    );
-    const { animations: walkAnims } = useGLTF("/models/player/walking.glb");
-    const { animations: runAnims } = useGLTF("/models/player/running.glb");
+    // 모델 로딩 및 애니메이션 제어 (RemotePlayer와 공유)
+    const { nodes, materials, playAction, getCurrentAction } =
+      usePandaModel(groupRef);
 
-    // 2. 모델 복제 및 그래프 추출
-    const clone = useMemo(() => SkeletonUtils.clone(baseScene), [baseScene]);
-    const { nodes, materials } = useGraph(clone);
-
-    // 3. 모든 애니메이션 통합 관리
-    const allAnimations = useMemo(
-      () => [...idleAnims, ...walkAnims, ...runAnims],
-      [idleAnims, walkAnims, runAnims],
-    );
-
-    const { actions } = useAnimations(allAnimations, groupRef);
-
-    // 4. 현재 액션 및 물리 상태 ref로 관리
-    const currentActionRef = useRef<string>("");
+    // 물리 상태 ref로 관리
     const targetPosition = useRef(new THREE.Vector3(0, 0, 0));
     const targetRotation = useRef(0);
     const velocityY = useRef(0);
     const isGrounded = useRef(true);
 
-    // 5. actions가 로딩되면 Idle 애니메이션 시작
+    // 로딩되면 Idle 애니메이션 시작
     useEffect(() => {
-      const idleClipName = PLAYER_ANIM.IDLE;
-      const action = actions[idleClipName];
-      if (action) {
-        action.reset().play();
-        currentActionRef.current = idleClipName;
-      }
-    }, [actions]);
+      playAction(PLAYER_ANIM.IDLE);
+    }, [playAction]);
 
     // 클릭 이동 목표 및 경로 관리
     const clickTarget = useRef<THREE.Vector3 | null>(null);
     const pathRef = useRef<Point[]>([]);
     const pathIndexRef = useRef<number>(0);
 
+    const clearClickPath = () => {
+      clickTarget.current = null;
+      pathRef.current = [];
+      pathIndexRef.current = 0;
+    };
+
+    const moveRequest = useMoveTargetStore((state) => state.request);
+    const lastHandledRequestId = useRef(0);
+
     useEffect(() => {
-      const handleMoveTo = (e: Event) => {
-        if (inputDisabled) return;
+      if (!moveRequest || inputDisabled) return;
+      // 입력 잠금 해제 시 과거 요청이 재실행되지 않도록 처리한 요청은 스킵
+      if (moveRequest.requestId === lastHandledRequestId.current) return;
+      lastHandledRequestId.current = moveRequest.requestId;
 
-        const customEvent = e as CustomEvent<{ x: number; z: number }>;
-        const start = {
-          x: targetPosition.current.x,
-          z: targetPosition.current.z,
-        };
-        const end = {
-          x: customEvent.detail.x,
-          z: customEvent.detail.z,
-        };
-
-        // 길찾기 수행
-        const computedPath = findPath(start, end);
-        if (computedPath.length > 0) {
-          pathRef.current = computedPath;
-          pathIndexRef.current = 0;
-          clickTarget.current = new THREE.Vector3(
-            computedPath[0].x,
-            0,
-            computedPath[0].z,
-          );
-        }
+      const start = {
+        x: targetPosition.current.x,
+        z: targetPosition.current.z,
       };
-      window.addEventListener("panda-move-to", handleMoveTo);
-      return () => window.removeEventListener("panda-move-to", handleMoveTo);
-    }, [inputDisabled]);
+
+      // 길찾기 수행
+      const computedPath = findPath(start, {
+        x: moveRequest.x,
+        z: moveRequest.z,
+      });
+      if (computedPath.length > 0) {
+        pathRef.current = computedPath;
+        pathIndexRef.current = 0;
+        clickTarget.current = new THREE.Vector3(
+          computedPath[0].x,
+          0,
+          computedPath[0].z,
+        );
+      }
+    }, [moveRequest, inputDisabled]);
 
     useFrame((state, delta) => {
       if (!groupRef.current) return;
+
+      const dt = Math.min(delta, MAX_DELTA);
 
       const keys = getKeys();
       const { forward, backward, left, right, run, jump } = inputDisabled
@@ -177,15 +157,10 @@ export const Player = forwardRef<THREE.Group, Props>(
 
       // 키보드 입력이 있으면 클릭 이동 취소
       if (forward || backward || left || right) {
-        clickTarget.current = null;
-        pathRef.current = [];
-        pathIndexRef.current = 0;
+        clearClickPath();
       }
 
-      // 6. 점프 및 중력 물리
-      const GRAVITY = -0.006;
-      const JUMP_FORCE = 0.14;
-
+      // 점프 및 중력 물리
       if (jump && isGrounded.current) {
         velocityY.current = JUMP_FORCE;
         isGrounded.current = false;
@@ -194,8 +169,8 @@ export const Player = forwardRef<THREE.Group, Props>(
       const currentY = targetPosition.current.y;
 
       if (!isGrounded.current) {
-        velocityY.current += GRAVITY;
-        targetPosition.current.y += velocityY.current;
+        velocityY.current += GRAVITY * dt;
+        targetPosition.current.y += velocityY.current * dt;
 
         if (targetPosition.current.y <= 0) {
           targetPosition.current.y = 0;
@@ -204,16 +179,19 @@ export const Player = forwardRef<THREE.Group, Props>(
         }
       }
 
-      // 7. 이동 벡터 계산
-      const moveDir = new THREE.Vector3(0, 0, 0);
+      // 이동 벡터 계산
+      _moveDir.set(0, 0, 0);
       let isMoving = false;
+
+      const speed = run ? RUN_SPEED : WALK_SPEED;
+      const moveStep = speed * dt;
 
       // 키보드 이동 우선 체크
       const keyboardForward = (forward ? 1 : 0) - (backward ? 1 : 0);
       const keyboardRight = (right ? 1 : 0) - (left ? 1 : 0);
 
       if (keyboardForward !== 0 || keyboardRight !== 0) {
-        moveDir
+        _moveDir
           .addScaledVector(CAM_FORWARD, keyboardForward)
           .addScaledVector(CAM_RIGHT, keyboardRight)
           .normalize();
@@ -221,20 +199,14 @@ export const Player = forwardRef<THREE.Group, Props>(
       }
       // 클릭 이동 체크 (키보드 이동이 없을 때만)
       else if (clickTarget.current) {
-        const dist = new THREE.Vector2(
-          clickTarget.current.x - targetPosition.current.x,
-          clickTarget.current.z - targetPosition.current.z,
-        ).length();
+        const dx = clickTarget.current.x - targetPosition.current.x;
+        const dz = clickTarget.current.z - targetPosition.current.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
 
         // 현재 목적지(경유지)에 도착했는지 확인
-        if (dist > 0.15) {
-          moveDir
-            .set(
-              clickTarget.current.x - targetPosition.current.x,
-              0,
-              clickTarget.current.z - targetPosition.current.z,
-            )
-            .normalize();
+        // 낮은 fps에서 한 프레임 이동량이 커도 경유지를 지나치지 않도록 보정
+        if (dist > Math.max(0.15, moveStep)) {
+          _moveDir.set(dx, 0, dz).normalize();
           isMoving = true;
         } else {
           // 다음 경유지로 이동
@@ -248,21 +220,17 @@ export const Player = forwardRef<THREE.Group, Props>(
             );
           } else {
             // 경로 종료
-            clickTarget.current = null;
-            pathRef.current = [];
-            pathIndexRef.current = 0;
+            clearClickPath();
           }
         }
       }
 
-      const speed = run ? 0.12 : 0.08;
-
       if (isMoving) {
-        moveDir.multiplyScalar(speed);
+        _moveDir.multiplyScalar(moveStep);
 
         // 충돌 체크 후 이동
-        const nextX = targetPosition.current.x + moveDir.x;
-        const nextZ = targetPosition.current.z + moveDir.z;
+        const nextX = targetPosition.current.x + _moveDir.x;
+        const nextZ = targetPosition.current.z + _moveDir.z;
 
         const canMoveX = !checkCollision(
           nextX,
@@ -284,66 +252,46 @@ export const Player = forwardRef<THREE.Group, Props>(
 
         // 클릭 이동 중인데 양쪽 다 막혔다면 목표 취소
         if (clickTarget.current && !canMoveX && !canMoveZ) {
-          clickTarget.current = null;
-          pathRef.current = [];
-          pathIndexRef.current = 0;
+          clearClickPath();
         }
 
         // 이동 방향으로 캐릭터 회전
-        targetRotation.current = Math.atan2(moveDir.x, moveDir.z);
+        targetRotation.current = Math.atan2(_moveDir.x, _moveDir.z);
 
         // 애니메이션 전환
-        const nextClip = run ? PLAYER_ANIM.RUN : PLAYER_ANIM.WALK;
-        if (currentActionRef.current !== nextClip) {
-          const prev = actions[currentActionRef.current];
-          const next = actions[nextClip];
-          if (next) {
-            prev?.fadeOut(0.2);
-            next.reset().fadeIn(0.2).play();
-            currentActionRef.current = nextClip;
-          }
-        }
+        playAction(run ? PLAYER_ANIM.RUN : PLAYER_ANIM.WALK);
       } else {
-        // 정지 시 Idle 전환
-        const idleClip = PLAYER_ANIM.IDLE;
-        if (currentActionRef.current !== idleClip) {
-          const prev = actions[currentActionRef.current];
-          const next = actions[idleClip];
-          if (next) {
-            prev?.fadeOut(0.2);
-            next.reset().fadeIn(0.2).play();
-            currentActionRef.current = idleClip;
-          }
-        }
+        playAction(PLAYER_ANIM.IDLE);
       }
 
-      // 8. 위치 및 회전 부드럽게 보간
+      // 위치 및 회전 부드럽게 보간 (프레임레이트 보정)
+      const posT = frameLerp(0.15, dt);
       groupRef.current.position.x = THREE.MathUtils.lerp(
         groupRef.current.position.x,
         targetPosition.current.x,
-        0.15,
+        posT,
       );
       groupRef.current.position.y = targetPosition.current.y; // Y축은 즉시 반영 (물리)
       groupRef.current.position.z = THREE.MathUtils.lerp(
         groupRef.current.position.z,
         targetPosition.current.z,
-        0.15,
+        posT,
       );
 
       groupRef.current.rotation.y = lerpAngle(
         groupRef.current.rotation.y,
         targetRotation.current,
-        0.12,
+        frameLerp(0.12, dt),
       );
       groupRef.current.updateMatrixWorld();
 
-      // 9. 네트워크 데이터 전송 최적화 (10fps + 변화 감지)
+      // 네트워크 데이터 전송 최적화 (10fps + 변화 감지)
       lastUpdateRef.current += delta;
       if (lastUpdateRef.current > 0.1) {
         // 100ms 마다 체크 (요금 절감)
         const currentPos = groupRef.current.position;
         const currentRot = groupRef.current.rotation.y;
-        const currentAnim = currentActionRef.current;
+        const currentAnim = getCurrentAction();
 
         // 이전 전송값과 비교 (임계값 설정)
         const hasMoved =
@@ -374,53 +322,26 @@ export const Player = forwardRef<THREE.Group, Props>(
         lastUpdateRef.current = 0;
       }
 
-      // 10. 카메라 트래킹 (등각 오프셋 유지)
-      const camOffset = new THREE.Vector3(14, 14, 14);
-      state.camera.position.lerp(
-        groupRef.current.position.clone().add(camOffset),
-        0.1,
-      );
-      state.camera.lookAt(groupRef.current.position);
+      // 카메라 트래킹: OrbitControls의 target을 플레이어 쪽으로 이동시키고
+      // 카메라도 같은 양만큼 이동시켜 사용자가 조작한 회전/줌을 유지
+      const controls = state.controls;
+      if (controls instanceof OrbitControlsImpl) {
+        _camDelta
+          .copy(groupRef.current.position)
+          .sub(controls.target)
+          .multiplyScalar(frameLerp(0.1, dt));
+        controls.target.add(_camDelta);
+        state.camera.position.add(_camDelta);
+      }
     });
 
     return (
       <group ref={groupRef} dispose={null}>
-        <group name="Scene">
-          <group name="Armature" scale={0.01}>
-            <primitive object={nodes.Hips} />
-            <skinnedMesh
-              name="char1"
-              geometry={(nodes.char1 as THREE.SkinnedMesh).geometry}
-              material={materials.Material_1}
-              skeleton={(nodes.char1 as THREE.SkinnedMesh).skeleton}
-              castShadow
-              receiveShadow
-            />
-          </group>
-          {/* 닉네임 표시 */}
-          <Billboard position={[0, 3, 0.6]}>
-            <Text
-              font="/fonts/Jua-Regular.ttf"
-              fontSize={0.5}
-              color={getNicknameColor(id)}
-              anchorX="center"
-              anchorY="middle"
-              outlineWidth={0.02}
-              outlineColor="#ffffff"
-            >
-              {nickname}
-            </Text>
-            <ChatBubble playerId={id} />
-          </Billboard>
-        </group>
+        <PandaBody nodes={nodes} materials={materials} castShadow />
+        <PandaNameTag id={id} nickname={nickname} />
       </group>
     );
   },
 );
 
 Player.displayName = "Player";
-
-// 사전 로딩
-useGLTF.preload("/models/player/base.glb");
-useGLTF.preload("/models/player/walking.glb");
-useGLTF.preload("/models/player/running.glb");
