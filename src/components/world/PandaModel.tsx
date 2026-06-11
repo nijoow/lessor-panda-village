@@ -73,6 +73,24 @@ export const PandaBody = ({
 }: PandaBodyProps) => {
   // GLB 그래프는 런타임에만 형상이 확정되므로 단언 대신 instanceof로 검증
   const char1 = nodes.char1;
+  const srcMaterial = materials.Material_1;
+
+  // Meshy 원본 재질은 베이스컬러 텍스처 전체를 emissive(1,1,1)로도 쓰고
+  // 스페큘러가 2배라 조명을 무시한 자체발광 + 주황 조명 번들거림이 생김.
+  // 표준 재질로 정리해 장면 조명·그림자를 정상적으로 따르게 한다.
+  const material = useMemo(() => {
+    const map =
+      srcMaterial instanceof THREE.MeshStandardMaterial
+        ? srcMaterial.map
+        : null;
+    return new THREE.MeshStandardMaterial({
+      map,
+      roughness: 0.9,
+      metalness: 0,
+      side: THREE.DoubleSide,
+    });
+  }, [srcMaterial]);
+
   if (!(char1 instanceof THREE.SkinnedMesh)) return null;
 
   return (
@@ -82,7 +100,7 @@ export const PandaBody = ({
         <skinnedMesh
           name="char1"
           geometry={char1.geometry}
-          material={materials.Material_1}
+          material={material}
           skeleton={char1.skeleton}
           castShadow={castShadow}
           receiveShadow={castShadow}
