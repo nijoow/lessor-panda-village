@@ -6,7 +6,7 @@ import { House } from "@/components/world/House";
 import { PetalParticles, FireflyParticles } from "@/components/world/Particles";
 import { Player } from "@/components/world/Player";
 import { RemotePlayer } from "@/components/world/RemotePlayer";
-import { PlayerState } from "@/hooks/useMultiplayer";
+import { PlayerState } from "@/types/multiplayer";
 import { HOUSE } from "@/constants/worldLayout";
 import * as THREE from "three";
 
@@ -47,15 +47,15 @@ export const World = ({
       ))}
 
       {/* Player - 닉네임이 있을 때만 활성화 */}
-      {nickname && (
+      {nickname !== null ? (
         <Player
           ref={playerRef}
           id={myId}
-          nickname={nickname as string}
+          nickname={nickname}
           onMove={broadcastMove}
           inputDisabled={isChatFocused}
         />
-      )}
+      ) : null}
     </>
   );
 };

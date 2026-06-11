@@ -2,31 +2,24 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 import { RealtimeChannel } from "@supabase/supabase-js";
 import { PLAYER_ANIM } from "@/constants/playerAnimations";
-import { chatStore } from "@/stores/chatStore";
-
-// 플레이어 상태 정의
-export interface PlayerState {
-  id: string;
-  nickname: string;
-  x: number;
-  y: number;
-  z: number;
-  ry: number;
-  anim: string;
-  lastUpdated: number;
-}
-
-export interface ChatMessage {
-  id: string;
-  nickname: string;
-  message: string;
-  timestamp: number;
-}
+import { PlayerState } from "@/types/multiplayer";
+import { useChatStore } from "@/stores/chatStore";
 
 export const MAX_CHAT_LENGTH = 100;
 export const MAX_NICKNAME_LENGTH = 10;
 
-// 네트워크로 수신한 값은 신뢰할 수 없으므로 항상 정제 후 사용
+// presence로 공유되는 데이터 형상 (수신 값은 신뢰할 수 없으므로 optional)
+interface PresencePayload {
+  nickname?: string;
+  x?: number;
+  y?: number;
+  z?: number;
+  ry?: number;
+  anim?: string;
+  online_at?: string;
+}
+
+// 네트워크로 수신한 값은 항상 정제 후 사용
 const toFinite = (v: unknown, fallback = 0): number =>
   typeof v === "number" && Number.isFinite(v) ? v : fallback;
 
@@ -34,6 +27,9 @@ const sanitizeNickname = (v: unknown): string =>
   typeof v === "string" && v.trim().length > 0
     ? v.trim().slice(0, MAX_NICKNAME_LENGTH)
     : "Unknown";
+
+const sanitizeAnim = (v: unknown): string =>
+  typeof v === "string" ? v : PLAYER_ANIM.IDLE;
 
 export const useMultiplayer = (nickname: string | null) => {
   const [remotePlayerIds, setRemotePlayerIds] = useState<string[]>([]);
@@ -55,7 +51,7 @@ export const useMultiplayer = (nickname: string | null) => {
 
     channel
       .on("presence", { event: "sync" }, () => {
-        const state = channel.presenceState();
+        const state = channel.presenceState<PresencePayload>();
 
         const newIds: string[] = [];
         const currentKeys = Object.keys(state);
@@ -64,27 +60,24 @@ export const useMultiplayer = (nickname: string | null) => {
           if (key === myId) return;
           newIds.push(key);
 
-          const presences = state[key] as unknown as (PlayerState & {
-            online_at: string;
-          })[];
-          if (presences.length === 0) return;
+          const presence = state[key]?.[0];
+          if (!presence) return;
 
-          const p = presences[0];
           const existing = playersDataRef.current.get(key);
 
           if (existing) {
             // presence의 위치는 입장 시점(track 호출) 값이라 stale함.
             // 이미 move 브로드캐스트로 받은 위치를 덮어쓰지 않고 닉네임만 갱신.
-            existing.nickname = sanitizeNickname(p.nickname);
+            existing.nickname = sanitizeNickname(presence.nickname);
           } else {
             playersDataRef.current.set(key, {
               id: key,
-              nickname: sanitizeNickname(p.nickname),
-              x: toFinite(p.x),
-              y: toFinite(p.y),
-              z: toFinite(p.z),
-              ry: toFinite(p.ry),
-              anim: typeof p.anim === "string" ? p.anim : PLAYER_ANIM.IDLE,
+              nickname: sanitizeNickname(presence.nickname),
+              x: toFinite(presence.x),
+              y: toFinite(presence.y),
+              z: toFinite(presence.z),
+              ry: toFinite(presence.ry),
+              anim: sanitizeAnim(presence.anim),
               lastUpdated: Date.now(),
             });
           }
@@ -94,7 +87,7 @@ export const useMultiplayer = (nickname: string | null) => {
         for (const key of playersDataRef.current.keys()) {
           if (!currentKeys.includes(key)) {
             playersDataRef.current.delete(key);
-            chatStore.removePlayer(key);
+            useChatStore.getState().removePlayer(key);
           }
         }
 
@@ -125,7 +118,7 @@ export const useMultiplayer = (nickname: string | null) => {
         y: toFinite(payload.y),
         z: toFinite(payload.z),
         ry: toFinite(payload.ry),
-        anim: typeof payload.anim === "string" ? payload.anim : PLAYER_ANIM.IDLE,
+        anim: sanitizeAnim(payload.anim),
         lastUpdated: Date.now(),
       });
     });
@@ -138,7 +131,7 @@ export const useMultiplayer = (nickname: string | null) => {
       )
         return;
 
-      chatStore.addMessage({
+      useChatStore.getState().addMessage({
         id: payload.id,
         nickname: sanitizeNickname(payload.nickname),
         message: payload.message.slice(0, MAX_CHAT_LENGTH),
@@ -205,7 +198,7 @@ export const useMultiplayer = (nickname: string | null) => {
       });
 
       // 로컬에서도 처리 (본인이 보낸 메시지)
-      chatStore.addMessage({
+      useChatStore.getState().addMessage({
         ...payload,
         timestamp: Date.now(),
       });

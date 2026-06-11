@@ -1,15 +1,9 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getNicknameColor } from "@/utils/color";
-import { chatStore } from "@/stores/chatStore";
+import { useChatStore } from "@/stores/chatStore";
 
 interface Props {
   onSendMessage: (message: string) => void;
@@ -17,11 +11,7 @@ interface Props {
 }
 
 export const ChatHUD = ({ onSendMessage, onFocusChange }: Props) => {
-  const messages = useSyncExternalStore(
-    chatStore.subscribe,
-    chatStore.getChatLog,
-    chatStore.getChatLog,
-  );
+  const messages = useChatStore((state) => state.chatLog);
   const [isTyping, setIsTyping] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -57,7 +47,8 @@ export const ChatHUD = ({ onSendMessage, onFocusChange }: Props) => {
       if (
         isTyping &&
         inputRef.current &&
-        !inputRef.current.contains(e.target as Node)
+        e.target instanceof Node &&
+        !inputRef.current.contains(e.target)
       ) {
         setIsTyping(false);
         onFocusChange?.(false);
@@ -90,9 +81,9 @@ export const ChatHUD = ({ onSendMessage, onFocusChange }: Props) => {
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
         <AnimatePresence initial={false}>
-          {messages.map((msg, idx) => (
+          {messages.map((msg) => (
             <motion.div
-              key={`${msg.id}-${msg.timestamp}-${idx}`}
+              key={msg.messageId}
               initial={{ opacity: 0, x: -30, scale: 0.95 }}
               animate={{ opacity: 1, x: 0, scale: 1 }}
               transition={{ type: "spring", damping: 20, stiffness: 150 }}
