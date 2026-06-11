@@ -89,12 +89,16 @@ export const loadRig = (glbPath) => {
 /**
  * 월드 프레임 델타 정의로부터 키프레임별 로컬 쿼터니언 트랙을 계산합니다.
  *
+ * 델타를 지정하지 않은 본은 휴식 로컬 회전을 유지해 부모를 그대로 따라갑니다.
+ * (월드 방향을 고수하면 head_end·headfront·손 같은 리프 본이 부모와 반대로
+ * 회전해 메시가 찌그러지므로, 미지정 본의 기본은 반드시 "부모 따라가기")
+ *
  * @param rig loadRig 결과
  * @param spec {
  *   name: 클립 이름,
  *   duration: 루프 길이(초),
  *   keyCount: 키프레임 수 (첫/끝 phase 0/1 — 루프면 델타가 동일해야 함),
- *   delta: (boneName, phase) => 월드 프레임 델타 쿼터니언 | null(휴식 유지),
+ *   delta: (boneName, phase) => 월드 프레임 델타 쿼터니언 | null(부모 따라가기),
  *   hipsTranslation?: (phase, restT) => [x, y, z] (cm, 생략 시 휴식 위치)
  * }
  * @returns { name, times, rotationTracks: Map<본, number[]>, hipsTranslations: number[] }
@@ -114,12 +118,20 @@ export const solveClip = (rig, spec) => {
     const desiredWorld = new Map();
 
     for (const b of bones) {
-      const delta = spec.delta(b.name, phase) ?? IDENTITY;
-      const world = qnorm(qmul(delta, rig.restWorld.get(b.name)));
-      desiredWorld.set(b.name, world);
-
+      const delta = spec.delta(b.name, phase);
       const parentWorld = b.parent ? desiredWorld.get(b.parent) : IDENTITY;
-      rotationTracks.get(b.name).push(...qnorm(qmul(qconj(parentWorld), world)));
+
+      let local;
+      if (delta) {
+        // 지정된 본: 휴식 월드 방향 기준 델타를 적용하고 로컬로 역산
+        const world = qnorm(qmul(delta, rig.restWorld.get(b.name)));
+        local = qnorm(qmul(qconj(parentWorld), world));
+      } else {
+        // 미지정 본: 휴식 로컬 회전 유지 (부모 따라가기)
+        local = b.r;
+      }
+      desiredWorld.set(b.name, qnorm(qmul(parentWorld, local)));
+      rotationTracks.get(b.name).push(...local);
     }
 
     hipsTranslations.push(

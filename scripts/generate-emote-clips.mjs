@@ -34,11 +34,10 @@ const waveClip = solveClip(rig, {
       case "RightShoulder":
         return axisAngle(Z, -12);
       case "RightArm":
-        return axisAngle(Z, -115); // 팔을 위로 들기
+        // 판다는 머리 폭이 넓어 수직으로 들면 머리를 관통함 — 45° 대각선 위로
+        return axisAngle(Z, -95);
       case "RightForeArm":
-        return axisAngle(Z, -160 + swing * 18); // 손목 위로 + 좌우 스윙
-      case "RightHand":
-        return axisAngle(Z, swing * 10);
+        return axisAngle(Z, -135 + swing * 15); // 바깥쪽 위로 + 좌우 스윙
       case "Spine02":
         return axisAngle(Z, swing * 2);
       case "Head":
