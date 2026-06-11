@@ -2,14 +2,22 @@
 
 import { useFrame } from "@react-three/fiber";
 import { useKeyboardControls } from "@react-three/drei";
-import { useRef, useEffect, forwardRef, useImperativeHandle } from "react";
+import {
+  useRef,
+  useEffect,
+  useCallback,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
 import * as THREE from "three";
 import { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { PLAYER_ANIM } from "@/constants/playerAnimations";
+import { BENCHES } from "@/constants/worldLayout";
 import { checkCollision } from "@/utils/collision";
 import { findPath, Point } from "@/utils/pathfinder";
 import { frameLerp, lerpAngle } from "@/utils/math";
 import { useMoveTargetStore } from "@/stores/moveTargetStore";
+import { useInteractionStore } from "@/stores/interactionStore";
 import { usePandaModel, PandaBody, PandaNameTag } from "./PandaModel";
 
 interface Props {
@@ -32,6 +40,7 @@ export enum Controls {
   right = "right",
   run = "run",
   jump = "jump",
+  interact = "interact",
 }
 
 // 등각 뷰(Isometric)에서 카메라 방향을 기준으로 월드 이동 방향을 계산합니다.
@@ -45,6 +54,37 @@ const RUN_SPEED = 7.2; // units/s (기존 0.12/frame @60fps)
 const GRAVITY = -21.6; // units/s²
 const JUMP_FORCE = 8.4; // units/s
 const MAX_DELTA = 0.1; // 탭 전환 등 비정상적으로 큰 delta 클램프
+
+// 벤치 앉기 상수
+const SIT_RANGE = 2.2; // 벤치 중심 기준 상호작용 가능 거리
+const SEAT_SLOT_OFFSET = 0.55; // 좌석 2칸의 벤치 긴 축 방향 오프셋
+const SIT_GROUP_Y = 0.04; // 앉기 클립의 엉덩이 높이에 맞춘 그룹 y 보정
+const STAND_OFFSET = 0.9; // 일어설 때 벤치 앞으로 내려서는 거리 (충돌 박스 밖)
+
+interface Seat {
+  x: number;
+  z: number;
+  ry: number; // 앉은 방향 (벤치 정면)
+}
+
+// 벤치 긴 축(local +X)을 따라 두 좌석 중 플레이어와 가까운 쪽을 선택
+const pickSeat = (benchIndex: number, px: number, pz: number): Seat => {
+  const bench = BENCHES[benchIndex];
+  const cos = Math.cos(bench.rotation);
+  const sin = Math.sin(bench.rotation);
+  let best: Seat = { x: bench.x, z: bench.z, ry: bench.rotation };
+  let bestDist = Infinity;
+  for (const slot of [-SEAT_SLOT_OFFSET, SEAT_SLOT_OFFSET]) {
+    const x = bench.x + slot * cos;
+    const z = bench.z - slot * sin;
+    const d = (x - px) ** 2 + (z - pz) ** 2;
+    if (d < bestDist) {
+      bestDist = d;
+      best = { x, z, ry: bench.rotation };
+    }
+  }
+  return best;
+};
 
 // useFrame 스크래치 객체 (매 프레임 할당으로 인한 GC 압박 방지)
 const _moveDir = new THREE.Vector3();
@@ -108,6 +148,36 @@ export const Player = forwardRef<THREE.Group, Props>(
       pathIndexRef.current = 0;
     };
 
+    // 벤치 앉기 상태
+    const seatRef = useRef<Seat | null>(null);
+    const prevInteractRef = useRef(false);
+    const lastSitRequestIdRef = useRef(0);
+
+    const standUp = useCallback(() => {
+      const seat = seatRef.current;
+      if (!seat) return;
+      // 벤치 정면 방향으로 내려서기 (벤치 충돌 박스 바깥 지점)
+      targetPosition.current.set(
+        seat.x + Math.sin(seat.ry) * STAND_OFFSET,
+        0,
+        seat.z + Math.cos(seat.ry) * STAND_OFFSET,
+      );
+      seatRef.current = null;
+      useInteractionStore.getState().setSitting(false);
+    }, []);
+
+    const sitDown = (benchIndex: number) => {
+      seatRef.current = pickSeat(
+        benchIndex,
+        targetPosition.current.x,
+        targetPosition.current.z,
+      );
+      clearClickPath();
+      velocityY.current = 0;
+      isGrounded.current = true;
+      useInteractionStore.getState().setSitting(true);
+    };
+
     const moveRequest = useMoveTargetStore((state) => state.request);
     const lastHandledRequestId = useRef(0);
 
@@ -116,6 +186,9 @@ export const Player = forwardRef<THREE.Group, Props>(
       // 입력 잠금 해제 시 과거 요청이 재실행되지 않도록 처리한 요청은 스킵
       if (moveRequest.requestId === lastHandledRequestId.current) return;
       lastHandledRequestId.current = moveRequest.requestId;
+
+      // 앉은 상태에서 우클릭 이동 시 먼저 일어선 지점에서 길찾기 시작
+      standUp();
 
       const start = {
         x: targetPosition.current.x,
@@ -136,7 +209,7 @@ export const Player = forwardRef<THREE.Group, Props>(
           computedPath[0].z,
         );
       }
-    }, [moveRequest, inputDisabled]);
+    }, [moveRequest, inputDisabled, standUp]);
 
     useFrame((state, delta) => {
       if (!groupRef.current) return;
@@ -144,124 +217,168 @@ export const Player = forwardRef<THREE.Group, Props>(
       const dt = Math.min(delta, MAX_DELTA);
 
       const keys = getKeys();
-      const { forward, backward, left, right, run, jump } = inputDisabled
-        ? {
-            forward: false,
-            backward: false,
-            left: false,
-            right: false,
-            run: false,
-            jump: false,
-          }
-        : keys;
+      const { forward, backward, left, right, run, jump, interact } =
+        inputDisabled
+          ? {
+              forward: false,
+              backward: false,
+              left: false,
+              right: false,
+              run: false,
+              jump: false,
+              interact: false,
+            }
+          : keys;
 
-      // 키보드 입력이 있으면 클릭 이동 취소
-      if (forward || backward || left || right) {
-        clearClickPath();
-      }
+      // E 키 엣지 감지 + 모바일 버튼 토글 요청 수집
+      const interactPressed = interact && !prevInteractRef.current;
+      prevInteractRef.current = interact;
+      const interaction = useInteractionStore.getState();
+      const storeToggleRequested =
+        interaction.toggleSitRequestId !== lastSitRequestIdRef.current;
+      lastSitRequestIdRef.current = interaction.toggleSitRequestId;
+      const toggleRequested =
+        !inputDisabled && (interactPressed || storeToggleRequested);
 
-      // 점프 및 중력 물리
-      if (jump && isGrounded.current) {
-        velocityY.current = JUMP_FORCE;
-        isGrounded.current = false;
-      }
-
-      const currentY = targetPosition.current.y;
-
-      if (!isGrounded.current) {
-        velocityY.current += GRAVITY * dt;
-        targetPosition.current.y += velocityY.current * dt;
-
-        if (targetPosition.current.y <= 0) {
-          targetPosition.current.y = 0;
-          velocityY.current = 0;
-          isGrounded.current = true;
-        }
-      }
-
-      // 이동 벡터 계산
-      _moveDir.set(0, 0, 0);
-      let isMoving = false;
-
-      const speed = run ? RUN_SPEED : WALK_SPEED;
-      const moveStep = speed * dt;
-
-      // 키보드 이동 우선 체크
-      const keyboardForward = (forward ? 1 : 0) - (backward ? 1 : 0);
-      const keyboardRight = (right ? 1 : 0) - (left ? 1 : 0);
-
-      if (keyboardForward !== 0 || keyboardRight !== 0) {
-        _moveDir
-          .addScaledVector(CAM_FORWARD, keyboardForward)
-          .addScaledVector(CAM_RIGHT, keyboardRight)
-          .normalize();
-        isMoving = true;
-      }
-      // 클릭 이동 체크 (키보드 이동이 없을 때만)
-      else if (clickTarget.current) {
-        const dx = clickTarget.current.x - targetPosition.current.x;
-        const dz = clickTarget.current.z - targetPosition.current.z;
-        const dist = Math.sqrt(dx * dx + dz * dz);
-
-        // 현재 목적지(경유지)에 도착했는지 확인
-        // 낮은 fps에서 한 프레임 이동량이 커도 경유지를 지나치지 않도록 보정
-        if (dist > Math.max(0.15, moveStep)) {
-          _moveDir.set(dx, 0, dz).normalize();
-          isMoving = true;
+      const seat = seatRef.current;
+      if (seat) {
+        // 토글·이동·점프 입력 시 일어서기, 아니면 좌석에 고정
+        if (toggleRequested || forward || backward || left || right || jump) {
+          standUp();
         } else {
-          // 다음 경유지로 이동
-          pathIndexRef.current++;
-          if (pathIndexRef.current < pathRef.current.length) {
-            const nextPoint = pathRef.current[pathIndexRef.current];
-            clickTarget.current = new THREE.Vector3(
-              nextPoint.x,
-              0,
-              nextPoint.z,
-            );
-          } else {
-            // 경로 종료
-            clearClickPath();
+          targetPosition.current.set(seat.x, SIT_GROUP_Y, seat.z);
+          targetRotation.current = seat.ry;
+          playAction(PLAYER_ANIM.SIT, 0.35);
+        }
+      } else {
+        // 벤치 근접 감지 (벤치 수가 적어 매 프레임 부담 없음)
+        let nearby: number | null = null;
+        let bestDistSq = SIT_RANGE * SIT_RANGE;
+        for (let i = 0; i < BENCHES.length; i++) {
+          const distSq =
+            (BENCHES[i].x - targetPosition.current.x) ** 2 +
+            (BENCHES[i].z - targetPosition.current.z) ** 2;
+          if (distSq < bestDistSq) {
+            bestDistSq = distSq;
+            nearby = i;
           }
+        }
+        interaction.setNearbyBench(nearby);
+        if (toggleRequested && nearby !== null) {
+          sitDown(nearby);
         }
       }
 
-      if (isMoving) {
-        _moveDir.multiplyScalar(moveStep);
-
-        // 충돌 체크 후 이동
-        const nextX = targetPosition.current.x + _moveDir.x;
-        const nextZ = targetPosition.current.z + _moveDir.z;
-
-        const canMoveX = !checkCollision(
-          nextX,
-          targetPosition.current.z,
-          currentY,
-        );
-        const canMoveZ = !checkCollision(
-          targetPosition.current.x,
-          nextZ,
-          currentY,
-        );
-
-        if (canMoveX) {
-          targetPosition.current.x = nextX;
-        }
-        if (canMoveZ) {
-          targetPosition.current.z = nextZ;
-        }
-
-        // 클릭 이동 중인데 양쪽 다 막혔다면 목표 취소
-        if (clickTarget.current && !canMoveX && !canMoveZ) {
+      // 앉아 있는 동안에는 물리·이동을 건너뛰고 보간/전송만 수행
+      if (!seatRef.current) {
+        // 키보드 입력이 있으면 클릭 이동 취소
+        if (forward || backward || left || right) {
           clearClickPath();
         }
 
-        // 이동 방향으로 캐릭터 회전
-        targetRotation.current = Math.atan2(_moveDir.x, _moveDir.z);
+        // 점프 및 중력 물리
+        if (jump && isGrounded.current) {
+          velocityY.current = JUMP_FORCE;
+          isGrounded.current = false;
+        }
 
-        // 애니메이션 전환
-        playAction(run ? PLAYER_ANIM.RUN : PLAYER_ANIM.WALK);
-      } else {
-        playAction(PLAYER_ANIM.IDLE);
+        const currentY = targetPosition.current.y;
+
+        if (!isGrounded.current) {
+          velocityY.current += GRAVITY * dt;
+          targetPosition.current.y += velocityY.current * dt;
+
+          if (targetPosition.current.y <= 0) {
+            targetPosition.current.y = 0;
+            velocityY.current = 0;
+            isGrounded.current = true;
+          }
+        }
+
+        // 이동 벡터 계산
+        _moveDir.set(0, 0, 0);
+        let isMoving = false;
+
+        const speed = run ? RUN_SPEED : WALK_SPEED;
+        const moveStep = speed * dt;
+
+        // 키보드 이동 우선 체크
+        const keyboardForward = (forward ? 1 : 0) - (backward ? 1 : 0);
+        const keyboardRight = (right ? 1 : 0) - (left ? 1 : 0);
+
+        if (keyboardForward !== 0 || keyboardRight !== 0) {
+          _moveDir
+            .addScaledVector(CAM_FORWARD, keyboardForward)
+            .addScaledVector(CAM_RIGHT, keyboardRight)
+            .normalize();
+          isMoving = true;
+        }
+        // 클릭 이동 체크 (키보드 이동이 없을 때만)
+        else if (clickTarget.current) {
+          const dx = clickTarget.current.x - targetPosition.current.x;
+          const dz = clickTarget.current.z - targetPosition.current.z;
+          const dist = Math.sqrt(dx * dx + dz * dz);
+
+          // 현재 목적지(경유지)에 도착했는지 확인
+          // 낮은 fps에서 한 프레임 이동량이 커도 경유지를 지나치지 않도록 보정
+          if (dist > Math.max(0.15, moveStep)) {
+            _moveDir.set(dx, 0, dz).normalize();
+            isMoving = true;
+          } else {
+            // 다음 경유지로 이동
+            pathIndexRef.current++;
+            if (pathIndexRef.current < pathRef.current.length) {
+              const nextPoint = pathRef.current[pathIndexRef.current];
+              clickTarget.current = new THREE.Vector3(
+                nextPoint.x,
+                0,
+                nextPoint.z,
+              );
+            } else {
+              // 경로 종료
+              clearClickPath();
+            }
+          }
+        }
+
+        if (isMoving) {
+          _moveDir.multiplyScalar(moveStep);
+
+          // 충돌 체크 후 이동
+          const nextX = targetPosition.current.x + _moveDir.x;
+          const nextZ = targetPosition.current.z + _moveDir.z;
+
+          const canMoveX = !checkCollision(
+            nextX,
+            targetPosition.current.z,
+            currentY,
+          );
+          const canMoveZ = !checkCollision(
+            targetPosition.current.x,
+            nextZ,
+            currentY,
+          );
+
+          if (canMoveX) {
+            targetPosition.current.x = nextX;
+          }
+          if (canMoveZ) {
+            targetPosition.current.z = nextZ;
+          }
+
+          // 클릭 이동 중인데 양쪽 다 막혔다면 목표 취소
+          if (clickTarget.current && !canMoveX && !canMoveZ) {
+            clearClickPath();
+          }
+
+          // 이동 방향으로 캐릭터 회전
+          targetRotation.current = Math.atan2(_moveDir.x, _moveDir.z);
+
+          // 애니메이션 전환
+          playAction(run ? PLAYER_ANIM.RUN : PLAYER_ANIM.WALK);
+        } else {
+          playAction(PLAYER_ANIM.IDLE);
+        }
       }
 
       // 위치 및 회전 부드럽게 보간 (프레임레이트 보정)

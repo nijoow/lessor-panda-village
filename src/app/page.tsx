@@ -55,6 +55,14 @@ const ChatHUD = dynamic(
   },
 );
 
+const InteractionPrompt = dynamic(
+  () =>
+    import("@/components/ui/InteractionPrompt").then(
+      (mod) => mod.InteractionPrompt,
+    ),
+  { ssr: false },
+);
+
 const keyboardMap: KeyboardControlsEntry<Controls>[] = [
   { name: Controls.forward, keys: ["ArrowUp", "KeyW"] },
   { name: Controls.backward, keys: ["ArrowDown", "KeyS"] },
@@ -62,6 +70,7 @@ const keyboardMap: KeyboardControlsEntry<Controls>[] = [
   { name: Controls.right, keys: ["ArrowRight", "KeyD"] },
   { name: Controls.run, keys: ["ShiftLeft", "ShiftRight"] },
   { name: Controls.jump, keys: ["Space"] },
+  { name: Controls.interact, keys: ["KeyE"] },
 ];
 
 // 로딩 100% 도달 후 입장 화면 표시까지의 지연 (사용자가 100%를 볼 수 있도록)
@@ -123,6 +132,7 @@ const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
             onSendMessage={broadcastChat}
             onFocusChange={setIsChatFocused}
           />
+          <InteractionPrompt />
           <VillageHeader isNight={isNight} />
         </>
       )}

@@ -53,7 +53,7 @@ export const VillageHeader = ({ isNight }: Props) => {
           className="flex flex-col items-center gap-1 sm:gap-2"
         >
           <p className="hidden sm:block text-sky-900/60 text-xs sm:text-sm font-bold tracking-widest">
-            화살표/WASD: 이동 | SHIFT: 달리기 | SPACE: 점프
+            화살표/WASD: 이동 | SHIFT: 달리기 | SPACE: 점프 | E: 상호작용
           </p>
           <p className="block sm:hidden text-sky-900/60 text-sm font-bold tracking-widest">
             터치 또는 클릭으로 이동할 수 있어요!

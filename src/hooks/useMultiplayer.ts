@@ -28,8 +28,10 @@ const sanitizeNickname = (v: unknown): string =>
     ? v.trim().slice(0, MAX_NICKNAME_LENGTH)
     : "Unknown";
 
+const VALID_ANIMS = new Set<string>(Object.values(PLAYER_ANIM));
+
 const sanitizeAnim = (v: unknown): string =>
-  typeof v === "string" ? v : PLAYER_ANIM.IDLE;
+  typeof v === "string" && VALID_ANIMS.has(v) ? v : PLAYER_ANIM.IDLE;
 
 export const useMultiplayer = (nickname: string | null) => {
   const [remotePlayerIds, setRemotePlayerIds] = useState<string[]>([]);
