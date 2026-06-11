@@ -1,6 +1,7 @@
-import { useRef, useMemo, useState } from "react";
+import { useRef, useMemo, useState, useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
+import { frameLerp } from "@/utils/math";
 
 // ─────────────────────────────────────────────
 // 유틸리티 및 상수
@@ -105,21 +106,35 @@ export const PetalParticles = ({ isNight }: ParticleProps) => {
   const heartShape = useMemo(() => createHeartShape(), []);
 
   const dummy = useMemo(() => new THREE.Object3D(), []);
-  const color = useMemo(() => new THREE.Color(), []);
 
-  useFrame((state) => {
+  // 꽃잎 색상은 변하지 않으므로 mount 시 1회만 설정
+  useEffect(() => {
+    if (!meshRef.current) return;
+    particles.forEach((p, i) => {
+      meshRef.current.setColorAt(i, PETAL_COLORS[p.colorIndex]);
+    });
+    if (meshRef.current.instanceColor)
+      meshRef.current.instanceColor.needsUpdate = true;
+  }, [particles]);
+
+  useFrame((state, delta) => {
     if (!meshRef.current || !materialRef.current) return;
     const t = state.clock.elapsedTime;
 
-    // isNight 상태에 따라 불투명도 부드럽게 전환
+    // isNight 상태에 따라 불투명도 부드럽게 전환 (프레임레이트 보정)
     const targetOpacity = isNight ? 0 : 0.85;
     materialRef.current.opacity = THREE.MathUtils.lerp(
       materialRef.current.opacity,
       targetOpacity,
-      0.02,
+      frameLerp(0.02, Math.min(delta, 0.1)),
     );
 
-    if (materialRef.current.opacity < 0.01) return;
+    // 완전히 투명해지면 그리기/업데이트 모두 중단
+    if (materialRef.current.opacity < 0.01) {
+      meshRef.current.visible = false;
+      return;
+    }
+    meshRef.current.visible = true;
 
     particles.forEach((p, i) => {
       // 펄럭이는 움직임 추가 (Fluttering)
@@ -155,14 +170,9 @@ export const PetalParticles = ({ isNight }: ParticleProps) => {
       dummy.scale.setScalar(0.08 + Math.sin(t * 0.5 + p.phase) * 0.02);
       dummy.updateMatrix();
       meshRef.current.setMatrixAt(i, dummy.matrix);
-
-      color.copy(PETAL_COLORS[p.colorIndex]);
-      meshRef.current.setColorAt(i, color);
     });
 
     meshRef.current.instanceMatrix.needsUpdate = true;
-    if (meshRef.current.instanceColor)
-      meshRef.current.instanceColor.needsUpdate = true;
   });
 
   return (
@@ -209,20 +219,25 @@ export const FireflyParticles = ({ isNight }: ParticleProps) => {
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const color = useMemo(() => new THREE.Color(), []);
 
-  useFrame((state) => {
+  useFrame((state, delta) => {
     if (!meshRef.current || !materialRef.current) return;
     const t = state.clock.elapsedTime;
 
-    // isNight 상태에 따라 밤에만 은은하게 나타남
+    // isNight 상태에 따라 밤에만 은은하게 나타남 (프레임레이트 보정)
     const targetOpacity = isNight ? 0.9 : 0;
     materialRef.current.opacity = THREE.MathUtils.lerp(
       materialRef.current.opacity,
       targetOpacity,
-      0.02,
+      frameLerp(0.02, Math.min(delta, 0.1)),
     );
     materialRef.current.emissiveIntensity = materialRef.current.opacity * 6;
 
-    if (materialRef.current.opacity < 0.01) return;
+    // 완전히 투명해지면 그리기/업데이트 모두 중단
+    if (materialRef.current.opacity < 0.01) {
+      meshRef.current.visible = false;
+      return;
+    }
+    meshRef.current.visible = true;
 
     fireflies.forEach((f, i) => {
       const x = f.position.x + Math.sin(t * f.speed + f.phase) * f.radius;

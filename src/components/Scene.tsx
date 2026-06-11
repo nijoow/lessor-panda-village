@@ -13,31 +13,38 @@ import {
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import { ReactNode, useRef, Suspense } from "react";
 import * as THREE from "three";
+import { frameLerp } from "@/utils/math";
 
-const DayNightLights = ({ isNight }: { isNight: boolean }) => {
+// ──────────────────────────────────────────────────
+// 낮/밤 사이클 (태양 진행도 하나로 조명 + 하늘을 함께 갱신)
+// ──────────────────────────────────────────────────
+interface SkyImpl {
+  material: { uniforms: { sunPosition: { value: THREE.Vector3 } } };
+}
+
+const DayNightCycle = ({ isNight }: { isNight: boolean }) => {
   const dirLightRef = useRef<THREE.DirectionalLight>(null!);
   const ambLightRef = useRef<THREE.AmbientLight>(null!);
+  const skyRef = useRef<SkyImpl | null>(null);
   const sunProgress = useRef(0);
 
-  useFrame(() => {
+  useFrame((_state, delta) => {
     // isNight 상태에 따라 sunProgress (0: 밤, 1: 낮)를 부드럽게 보간
     const targetProgress = isNight ? 0 : 1;
     sunProgress.current = THREE.MathUtils.lerp(
       sunProgress.current,
       targetProgress,
-      0.015,
+      frameLerp(0.015, Math.min(delta, 0.1)),
     );
 
     // angle 계산 (낮=PI/2, 밤=-PI/2)
     const angle = (sunProgress.current - 0.5) * Math.PI;
-
-    const sunY = Math.sin(angle) * 30;
-    const sunX = Math.cos(angle) * 30;
+    const sunY = Math.sin(angle);
+    const sunX = Math.cos(angle);
+    const dayIntensity = Math.max(0, sunY);
 
     if (dirLightRef.current) {
-      dirLightRef.current.position.set(sunX, sunY, 15);
-
-      const dayIntensity = Math.max(0, Math.sin(angle));
+      dirLightRef.current.position.set(sunX * 30, sunY * 30, 15);
 
       // 낮에는 강한 빛, 밤에는 은은한 푸른빛
       dirLightRef.current.intensity =
@@ -51,7 +58,6 @@ const DayNightLights = ({ isNight }: { isNight: boolean }) => {
     }
 
     if (ambLightRef.current) {
-      const dayIntensity = Math.max(0, Math.sin(angle));
       ambLightRef.current.intensity =
         dayIntensity * 0.9 + (1 - dayIntensity) * 0.35;
       ambLightRef.current.color.setRGB(
@@ -60,6 +66,12 @@ const DayNightLights = ({ isNight }: { isNight: boolean }) => {
         1.0,
       );
     }
+
+    skyRef.current?.material.uniforms.sunPosition.value.set(
+      sunX * 20,
+      sunY * 20,
+      15,
+    );
   });
 
   return (
@@ -76,51 +88,17 @@ const DayNightLights = ({ isNight }: { isNight: boolean }) => {
         shadow-camera-top={30}
         shadow-camera-bottom={-30}
       />
+      <Sky
+        // @ts-expect-error drei Sky가 ref 타입을 노출하지 않음
+        ref={skyRef}
+        distance={450}
+        sunPosition={[10, 5, 8]}
+        inclination={0.52}
+        azimuth={0.25}
+        turbidity={6}
+        rayleigh={0.5}
+      />
     </>
-  );
-};
-
-// ──────────────────────────────────────────────────
-// 다이나믹 Sky (낮/밤 전환)
-// ──────────────────────────────────────────────────
-const DynamicSky = ({ isNight }: { isNight: boolean }) => {
-  const skyRef = useRef<{ sunPosition: THREE.Vector3 } | null>(null);
-  const sunProgress = useRef(0);
-
-  useFrame(() => {
-    const targetProgress = isNight ? 0 : 1;
-    sunProgress.current = THREE.MathUtils.lerp(
-      sunProgress.current,
-      targetProgress,
-      0.015,
-    );
-
-    const angle = (sunProgress.current - 0.5) * Math.PI;
-
-    const sunY = Math.sin(angle);
-    const sunX = Math.cos(angle);
-
-    if (skyRef.current) {
-      // @ts-expect-error drei Sky uniform
-      skyRef.current.material.uniforms.sunPosition.value.set(
-        sunX * 20,
-        sunY * 20,
-        15,
-      );
-    }
-  });
-
-  return (
-    <Sky
-      // @ts-expect-error ref type
-      ref={skyRef}
-      distance={450}
-      sunPosition={[10, 5, 8]}
-      inclination={0.52}
-      azimuth={0.25}
-      turbidity={6}
-      rayleigh={0.5}
-    />
   );
 };
 
@@ -155,16 +133,11 @@ export const Scene = ({ children, isNight }: SceneProps) => {
         maxPolarAngle={Math.PI / 2.5}
       />
 
-      <DynamicSky isNight={isNight} />
-      <Stars
-        radius={80}
-        depth={50}
-        count={isNight ? 4000 : 0}
-        factor={3}
-        fade
-        speed={0.5}
-      />
-      <DayNightLights isNight={isNight} />
+      <DayNightCycle isNight={isNight} />
+      {/* count를 바꾸면 geometry가 재생성되므로 visible 토글로 처리 */}
+      <group visible={isNight}>
+        <Stars radius={80} depth={50} count={4000} factor={3} fade speed={0.5} />
+      </group>
 
       <Suspense fallback={null}>{children}</Suspense>
 

@@ -25,7 +25,7 @@ const AncientTree = () => {
   const treeModel = useMemo(() => {
     const clone = scene.clone();
     clone.traverse((node) => {
-      if ((node as THREE.Mesh).isMesh) {
+      if (node instanceof THREE.Mesh) {
         node.castShadow = true;
         node.receiveShadow = true;
       }
