@@ -14,6 +14,7 @@ const fenceRange = (min: number, max: number) => {
 export const VILLAGE: ZoneLayout = {
   id: "village",
   name: "판다 마을",
+  bounds: { minX: -17.5, maxX: 17.5, minZ: -17.5, maxZ: 17.5 },
 
   trees: [
     { x: -10, z: -10, scale: 1.3, radius: 0.8 },

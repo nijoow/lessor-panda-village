@@ -116,7 +116,7 @@ export const Ground = ({ disableClick }: { disableClick?: boolean }) => {
   const groundTexture = useMemo(() => {
     const t = grassTexture.clone();
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
-    t.repeat.set(20, 20);
+    t.repeat.set(42, 42);
     t.anisotropy = 16;
     return t;
   }, [grassTexture]);
@@ -153,7 +153,7 @@ export const Ground = ({ disableClick }: { disableClick?: boolean }) => {
         onPointerDown={handlePointerDown}
         onContextMenu={(e) => e.nativeEvent.preventDefault()}
       >
-        <planeGeometry args={[80, 80]} />
+        <planeGeometry args={[170, 170]} />
         <meshStandardMaterial
           map={groundTexture}
           color="#a8d876"

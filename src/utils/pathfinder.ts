@@ -15,7 +15,8 @@ interface Node {
 }
 
 const GRID_SIZE = 0.5;
-const MAX_ITERATIONS = 2000;
+// 확장된 월드(±80)에서 장거리 우회 경로도 찾을 수 있는 상한
+const MAX_ITERATIONS = 6000;
 
 const nodeKey = (x: number, z: number) => `${x},${z}`;
 

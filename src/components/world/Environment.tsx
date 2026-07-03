@@ -15,6 +15,9 @@ import {
   LANDMARK_TREES,
   FENCES,
   SIGNS,
+  BAMBOO,
+  BRIDGES,
+  BridgePlacement,
   LandmarkTreePlacement,
   SignPlacement,
 } from "@/constants/world";
@@ -171,6 +174,65 @@ const Signpost = ({ sign }: { sign: SignPlacement }) => (
   </group>
 );
 
+// ---------- 나무다리 (개울 도하 지점) ----------
+const Bridge = ({ bridge }: { bridge: BridgePlacement }) => {
+  const plankCount = Math.floor(bridge.length / 0.62);
+  return (
+    <group
+      position={[bridge.x, 0, bridge.z]}
+      rotation={[0, bridge.rotation, 0]}
+    >
+      {/* 상판 널빤지 (길이 방향 = x축) */}
+      {Array.from({ length: plankCount }, (_, i) => {
+        const px = -bridge.length / 2 + (i + 0.5) * (bridge.length / plankCount);
+        return (
+          <mesh key={i} castShadow receiveShadow position={[px, 0.18, 0]}>
+            <boxGeometry args={[0.52, 0.1, bridge.width]} />
+            <meshStandardMaterial
+              color={i % 2 ? "#9a6f4b" : "#8d6543"}
+              roughness={0.9}
+            />
+          </mesh>
+        );
+      })}
+      {/* 아치 보 (양측) */}
+      {([-1, 1] as const).map((side) => (
+        <mesh
+          key={side}
+          castShadow
+          position={[0, 0.08, (side * bridge.width) / 2]}
+        >
+          <boxGeometry args={[bridge.length, 0.14, 0.16]} />
+          <meshStandardMaterial color="#7a5638" roughness={0.9} />
+        </mesh>
+      ))}
+      {/* 난간 기둥 + 가로대 */}
+      {([-1, 1] as const).map((side) =>
+        [-0.42, 0, 0.42].map((t) => (
+          <mesh
+            key={`${side}-${t}`}
+            castShadow
+            position={[t * bridge.length, 0.55, (side * bridge.width) / 2]}
+          >
+            <boxGeometry args={[0.12, 0.75, 0.12]} />
+            <meshStandardMaterial color="#7a5638" roughness={0.9} />
+          </mesh>
+        )),
+      )}
+      {([-1, 1] as const).map((side) => (
+        <mesh
+          key={`rail-${side}`}
+          castShadow
+          position={[0, 0.85, (side * bridge.width) / 2]}
+        >
+          <boxGeometry args={[bridge.length * 0.92, 0.09, 0.09]} />
+          <meshStandardMaterial color="#8d6543" roughness={0.85} />
+        </mesh>
+      ))}
+    </group>
+  );
+};
+
 // ---------- 석등 (Lantern/Toro - 밤에 빛남) ----------
 export const Lantern = ({
   position,
@@ -218,8 +280,16 @@ export const Lantern = ({
 // ---------- 정적 배경 (낮/밤과 무관하므로 memo로 리렌더 차단) ----------
 const StaticScenery = memo(function StaticScenery() {
   // 인스턴스용 공통 지오메트리 & 마테리얼 생성
-  const { treeGeoms, flowerGeoms, fenceGeoms, treeMats, flowerMats, fenceMats } =
-    useMemo(() => {
+  const {
+    treeGeoms,
+    flowerGeoms,
+    fenceGeoms,
+    bambooGeoms,
+    treeMats,
+    flowerMats,
+    fenceMats,
+    bambooMats,
+  } = useMemo(() => {
       return {
         treeGeoms: {
           trunk: new THREE.CylinderGeometry(0.28, 0.42, 2.4, 8),
@@ -234,6 +304,11 @@ const StaticScenery = memo(function StaticScenery() {
         fenceGeoms: {
           post: new THREE.BoxGeometry(0.2, 1.8, 0.2),
           rail: new THREE.BoxGeometry(2.0, 0.15, 0.15),
+        },
+        bambooGeoms: {
+          // 단위 높이 줄기 — 인스턴스 y 스케일로 키를 조절
+          stalk: new THREE.CylinderGeometry(0.07, 0.1, 1, 6),
+          leaf: new THREE.ConeGeometry(0.42, 0.85, 5),
         },
         treeMats: {
           trunk: new THREE.MeshStandardMaterial({
@@ -271,6 +346,16 @@ const StaticScenery = memo(function StaticScenery() {
             roughness: 0.9,
           }),
         },
+        bambooMats: {
+          stalk: new THREE.MeshStandardMaterial({
+            color: "#5fae4d",
+            roughness: 0.75,
+          }),
+          leaf: new THREE.MeshStandardMaterial({
+            color: "#6ecb5a",
+            roughness: 0.8,
+          }),
+        },
       };
     }, []);
 
@@ -305,6 +390,11 @@ const StaticScenery = memo(function StaticScenery() {
       <Cloud position={[22, 10, 8]} speed={0.001} seed={3.7} />
       <Cloud position={[-8, 13, 18]} speed={0.0007} seed={5.2} />
       <Cloud position={[5, 11, -18]} speed={0.0009} seed={1.4} />
+      {/* 확장 구역 상공 */}
+      <Cloud position={[34, 13, 30]} speed={0.0007} seed={7.3} />
+      <Cloud position={[-34, 12, 32]} speed={0.0009} seed={8.6} />
+      <Cloud position={[0, 14, 52]} speed={0.0006} seed={9.9} />
+      <Cloud position={[-50, 15, -8]} speed={0.0008} seed={11.2} />
 
       {LANDMARK_TREES.map((t, i) => (
         <AncientTree key={i} placement={t} />
@@ -313,6 +403,43 @@ const StaticScenery = memo(function StaticScenery() {
       {PONDS.map((p, i) => (
         <Pond key={i} position={[p.x, 0, p.z]} scale={p.scale} />
       ))}
+
+      {BRIDGES.map((b, i) => (
+        <Bridge key={i} bridge={b} />
+      ))}
+
+      {/* 대나무 인스턴싱 (줄기 + 잎 2단) */}
+      <group>
+        <Instances
+          geometry={bambooGeoms.stalk}
+          material={bambooMats.stalk}
+          castShadow
+        >
+          {BAMBOO.map((b, i) => (
+            <Instance
+              key={i}
+              position={[b.x, b.height / 2, b.z]}
+              scale={[1, b.height, 1]}
+            />
+          ))}
+        </Instances>
+        <Instances geometry={bambooGeoms.leaf} material={bambooMats.leaf}>
+          {BAMBOO.map((b, i) => (
+            <Instance
+              key={`t-${i}`}
+              position={[b.x + 0.12, b.height - 0.25, b.z]}
+              rotation={[0.35, i * 1.7, 0]}
+            />
+          ))}
+          {BAMBOO.map((b, i) => (
+            <Instance
+              key={`m-${i}`}
+              position={[b.x - 0.14, b.height - 1.0, b.z + 0.08]}
+              rotation={[-0.3, i * 2.3, 0.2]}
+            />
+          ))}
+        </Instances>
+      </group>
 
       {BENCHES.map((b, i) => (
         <Bench key={i} position={[b.x, 0, b.z]} rotation={b.rotation} />

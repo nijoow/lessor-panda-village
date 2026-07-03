@@ -47,6 +47,21 @@ export interface SignPlacement extends CollisionCircle {
   label: string;
 }
 
+/** 대나무 줄기 (인스턴싱 렌더, 기둥 충돌) */
+export interface BambooPlacement extends CollisionCircle {
+  height: number;
+}
+
+/** 나무다리 (비주얼 전용 — 다리 아래 물 충돌이 없는 구간에 배치) */
+export interface BridgePlacement {
+  x: number;
+  z: number;
+  /** 0이면 길이 방향이 x축 */
+  rotation: number;
+  length: number;
+  width: number;
+}
+
 // ---------- 바닥 스타일 ----------
 /** 존 바닥에 겹쳐 그리는 잔디 색 패치 (사각) */
 export interface GrassPatch {
@@ -111,6 +126,8 @@ export interface FenceLayout {
 export interface ZoneLayout {
   id: string;
   name: string;
+  /** 존 진입 배너·미니맵용 영역. 경관 전용 존은 생략 */
+  bounds?: CollisionBox;
   trees?: TreePlacement[];
   rocks?: RockPlacement[];
   lanterns?: CollisionCircle[];
@@ -121,6 +138,8 @@ export interface ZoneLayout {
   houses?: HousePlacement[];
   fences?: FenceLayout[];
   signs?: SignPlacement[];
+  bamboo?: BambooPlacement[];
+  bridges?: BridgePlacement[];
   grassPatches?: GrassPatch[];
   dirtPatches?: DirtPatch[];
   stonePaths?: StonePathSpec[];

@@ -12,12 +12,13 @@ import {
 import * as THREE from "three";
 import { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { PLAYER_ANIM } from "@/constants/playerAnimations";
-import { BENCHES } from "@/constants/world";
+import { BENCHES, zoneAt } from "@/constants/world";
 import { checkCollision } from "@/utils/collision";
 import { findPath, Point } from "@/utils/pathfinder";
 import { frameLerp, lerpAngle } from "@/utils/math";
 import { useMoveTargetStore } from "@/stores/moveTargetStore";
 import { useInteractionStore } from "@/stores/interactionStore";
+import { useZoneStore } from "@/stores/zoneStore";
 import { usePandaModel, PandaBody, PandaNameTag } from "./PandaModel";
 
 interface Props {
@@ -456,6 +457,12 @@ export const Player = forwardRef<THREE.Group, Props>(
         frameLerp(0.12, dt),
       );
       groupRef.current.updateMatrixWorld();
+
+      // 현재 존 판정 (변화 없으면 store가 no-op)
+      const zone = zoneAt(targetPosition.current.x, targetPosition.current.z);
+      useZoneStore
+        .getState()
+        .setZone(zone?.id ?? null, zone?.name ?? null);
 
       // 네트워크 데이터 전송 최적화 (10fps + 변화 감지)
       lastUpdateRef.current += delta;

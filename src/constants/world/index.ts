@@ -13,16 +13,35 @@ import {
 } from "./types";
 import { VILLAGE } from "./village";
 import { SOUTH_FIELD } from "./southField";
+import { BAMBOO_GROVE } from "./bambooGrove";
+import { RIVERSIDE } from "./riverside";
+import { WILDS } from "./wilds";
 
 export * from "./types";
-export { VILLAGE, SOUTH_FIELD };
+export { VILLAGE, SOUTH_FIELD, BAMBOO_GROVE, RIVERSIDE, WILDS };
 
-export const ZONES: ZoneLayout[] = [VILLAGE, SOUTH_FIELD];
+export const ZONES: ZoneLayout[] = [
+  VILLAGE,
+  SOUTH_FIELD,
+  BAMBOO_GROVE,
+  RIVERSIDE,
+  WILDS,
+];
 
 // ---------- 월드 경계 ----------
 export const WORLD_BOUNDS = {
-  min: -39,
-  max: 39,
+  min: -80,
+  max: 80,
+};
+
+/** 현재 좌표가 속한 존 (bounds 있는 존만 대상, 없으면 null) */
+export const zoneAt = (x: number, z: number): ZoneLayout | null => {
+  for (const zone of ZONES) {
+    const b = zone.bounds;
+    if (!b) continue;
+    if (x >= b.minX && x <= b.maxX && z >= b.minZ && z <= b.maxZ) return zone;
+  }
+  return null;
 };
 
 // ---------- 비주얼 배치 집계 (Environment/World/Ground/Player에서 사용) ----------
@@ -36,6 +55,8 @@ export const LANDMARK_TREES = ZONES.flatMap((z) => z.landmarkTrees ?? []);
 export const HOUSES = ZONES.flatMap((z) => z.houses ?? []);
 export const FENCES = ZONES.flatMap((z) => z.fences ?? []);
 export const SIGNS = ZONES.flatMap((z) => z.signs ?? []);
+export const BAMBOO = ZONES.flatMap((z) => z.bamboo ?? []);
+export const BRIDGES = ZONES.flatMap((z) => z.bridges ?? []);
 export const GRASS_PATCHES = ZONES.flatMap((z) => z.grassPatches ?? []);
 export const DIRT_PATCHES = ZONES.flatMap((z) => z.dirtPatches ?? []);
 export const STONE_PATHS = ZONES.flatMap((z) => z.stonePaths ?? []);
@@ -83,8 +104,12 @@ export const COLLISION_TREES: CollisionCircle[] = [
   ...LANDMARK_TREES,
 ];
 export const COLLISION_ROCKS: CollisionCircle[] = ROCKS;
-// 석등·표지판은 동일한 "항상 충돌" 기둥이므로 하나로 합쳐 판정
-export const COLLISION_LANTERNS: CollisionCircle[] = [...LANTERNS, ...SIGNS];
+// 석등·표지판·대나무는 동일한 "항상 충돌" 기둥이므로 하나로 합쳐 판정
+export const COLLISION_LANTERNS: CollisionCircle[] = [
+  ...LANTERNS,
+  ...SIGNS,
+  ...BAMBOO,
+];
 export const COLLISION_BENCHES: CollisionBox[] = BENCHES.map(benchBox);
 export const COLLISION_PONDS: CollisionCircle[] = PONDS;
 export const COLLISION_HOUSES: CollisionBox[] = HOUSES.map((h) => h.box);

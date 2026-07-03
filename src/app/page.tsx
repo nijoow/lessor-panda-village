@@ -68,6 +68,11 @@ const EmoteBar = dynamic(
   { ssr: false },
 );
 
+const ZoneBanner = dynamic(
+  () => import("@/components/ui/ZoneBanner").then((mod) => mod.ZoneBanner),
+  { ssr: false },
+);
+
 const keyboardMap: KeyboardControlsEntry<Controls>[] = [
   { name: Controls.forward, keys: ["ArrowUp", "KeyW"] },
   { name: Controls.backward, keys: ["ArrowDown", "KeyS"] },
@@ -141,6 +146,7 @@ const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
           />
           <InteractionPrompt />
           <EmoteBar />
+          <ZoneBanner />
           <VillageHeader isNight={isNight} />
         </>
       )}

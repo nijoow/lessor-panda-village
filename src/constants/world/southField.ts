@@ -2,14 +2,15 @@ import { ZoneLayout } from "./types";
 
 /**
  * 남쪽 들판 존 — 마을 남쪽 출입구(게이트 x 9.5~16.5, z 17) 밖으로
- * 이어지는 흙길과 넓은 초원. z 17~38, x -15~17 영역을 사용하며
- * WORLD_BOUNDS(±39)와 기존 80×80 지면 안에 들어간다.
+ * 이어지는 흙길과 넓은 초원. 월드의 교차로 역할: 동쪽 대나무 숲,
+ * 서쪽 강가 산책로로 길이 갈라진다.
  *
- * 길 동선: 게이트(13, 18) → (8, 26) → (-4, 32)
+ * 길 동선: 게이트(13, 18) → (8, 26)[동 분기] → (-4, 32)[서 분기]
  */
 export const SOUTH_FIELD: ZoneLayout = {
   id: "south-field",
   name: "남쪽 들판",
+  bounds: { minX: -14, maxX: 18, minZ: 17.5, maxZ: 39 },
 
   trees: [
     // 서쪽 가장자리
@@ -81,10 +82,16 @@ export const SOUTH_FIELD: ZoneLayout = {
     { x: 8, z: 26, radius: 2.6 },
     { x: 2, z: 29, radius: 2.8 },
     { x: -4, z: 32, radius: 2.4 },
+    // 동·서 분기 연결부 (대나무 숲 / 강가 방면)
+    { x: 11.5, z: 26.5, radius: 1.8 },
+    { x: -9, z: 31.8, radius: 1.8 },
   ],
 
   stonePaths: [
     { start: [13, 17.5], end: [8, 26], width: 2, density: 1.6 },
     { start: [8, 26], end: [-4, 32], width: 2, density: 1.6 },
+    // 교차로 → 대나무 숲(동) / 강가(서) 연결
+    { start: [8, 26], end: [14, 27], width: 2, density: 1.5 },
+    { start: [-4, 32], end: [-10, 31.5], width: 2, density: 1.5 },
   ],
 };
