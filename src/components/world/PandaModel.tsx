@@ -7,11 +7,16 @@ import * as THREE from "three";
 import { SkeletonUtils } from "three-stdlib";
 import { ChatBubble } from "./ChatBubble";
 import { getNicknameColor } from "@/utils/color";
+import {
+  PLAYER_ANIM_TIMESCALE,
+  PlayerAnimType,
+} from "@/constants/playerAnimations";
 
 const BASE_URL = "/models/player/base.glb";
 const WALK_URL = "/models/player/walking.glb";
 const RUN_URL = "/models/player/running.glb";
 // scripts/generate-*-clip(s).mjs로 생성한 네이티브 클립 (본 계층 + 애니메이션만 포함)
+const IDLE_URL = "/models/player/idle.glb";
 const SIT_URL = "/models/player/sitting.glb";
 const EMOTE_URL = "/models/player/emotes.glb";
 
@@ -20,7 +25,8 @@ const EMOTE_URL = "/models/player/emotes.glb";
  * base/walking/running GLB를 로드해 복제된 노드와 애니메이션 제어를 제공합니다.
  */
 export const usePandaModel = (groupRef: RefObject<THREE.Group>) => {
-  const { scene: baseScene, animations: idleAnims } = useGLTF(BASE_URL);
+  const { scene: baseScene } = useGLTF(BASE_URL);
+  const { animations: idleAnims } = useGLTF(IDLE_URL);
   const { animations: walkAnims } = useGLTF(WALK_URL);
   const { animations: runAnims } = useGLTF(RUN_URL);
   const { animations: sitAnims } = useGLTF(SIT_URL);
@@ -45,6 +51,10 @@ export const usePandaModel = (groupRef: RefObject<THREE.Group>) => {
       const next = actions[name];
       if (!next) return;
       actions[currentActionRef.current]?.fadeOut(fade);
+      // 걷기/달리기는 발 미끄러짐 보정을 위해 가속 재생
+      next.setEffectiveTimeScale(
+        PLAYER_ANIM_TIMESCALE[name as PlayerAnimType] ?? 1,
+      );
       next.reset().fadeIn(fade).play();
       currentActionRef.current = name;
     },
@@ -147,6 +157,7 @@ export const PandaNameTag = ({
 
 // 사전 로딩
 useGLTF.preload(BASE_URL);
+useGLTF.preload(IDLE_URL);
 useGLTF.preload(WALK_URL);
 useGLTF.preload(RUN_URL);
 useGLTF.preload(SIT_URL);

@@ -421,11 +421,18 @@ export const Player = forwardRef<THREE.Group, Props>(
 
           // 애니메이션 전환 (이동 시 이모트 해제)
           emoteRef.current = null;
-          playAction(run ? PLAYER_ANIM.RUN : PLAYER_ANIM.WALK);
+          // 걷기↔달리기 사이 전환은 발 위상이 유지되도록 짧게 페이드
+          const current = getCurrentAction();
+          const locoFade =
+            current === PLAYER_ANIM.WALK || current === PLAYER_ANIM.RUN
+              ? 0.15
+              : 0.2;
+          playAction(run ? PLAYER_ANIM.RUN : PLAYER_ANIM.WALK, locoFade);
         } else if (emoteRef.current) {
           playAction(emoteRef.current, 0.3);
         } else {
-          playAction(PLAYER_ANIM.IDLE);
+          // 정지 → idle은 여유 있게 페이드해 급정거 느낌을 줄임
+          playAction(PLAYER_ANIM.IDLE, 0.25);
         }
       }
 
