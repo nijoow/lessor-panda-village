@@ -458,11 +458,13 @@ export const Player = forwardRef<THREE.Group, Props>(
       );
       groupRef.current.updateMatrixWorld();
 
-      // 현재 존 판정 (변화 없으면 store가 no-op)
+      // 현재 존 판정 (변화 없으면 store가 no-op) + 미니맵용 위치 공유
+      const zoneState = useZoneStore.getState();
       const zone = zoneAt(targetPosition.current.x, targetPosition.current.z);
-      useZoneStore
-        .getState()
-        .setZone(zone?.id ?? null, zone?.name ?? null);
+      zoneState.setZone(zone?.id ?? null, zone?.name ?? null);
+      zoneState.playerPos.x = groupRef.current.position.x;
+      zoneState.playerPos.z = groupRef.current.position.z;
+      zoneState.playerPos.ry = groupRef.current.rotation.y;
 
       // 네트워크 데이터 전송 최적화 (10fps + 변화 감지)
       lastUpdateRef.current += delta;

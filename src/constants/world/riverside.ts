@@ -1,9 +1,9 @@
 import { ZoneLayout } from "./types";
 
 /**
- * 강가 산책로 존 — 남쪽 들판에서 서쪽으로 이어지는 개울과 나무다리.
- * 개울은 바위 테두리 연못(Pond) 체인으로 표현하며, z 26~30 구간을
- * 비워 다리가 놓인다 (물 충돌이 없는 유일한 도하 지점).
+ * 강가 산책로 존 — 남쪽 들판에서 서쪽으로 이어지는 강과 나무다리.
+ * 강은 폴리라인 리본(River 컴포넌트)으로 흐르고, 다리 발자국 안의
+ * 충돌 샘플이 자동 제외되어 다리 위로만 건널 수 있다.
  * 동선: 들판 (-4,32) → 강둑 (-20,29.5) → 다리 (-33,28) → 건너편 쉼터 (-42,27)
  */
 export const RIVERSIDE: ZoneLayout = {
@@ -11,29 +11,37 @@ export const RIVERSIDE: ZoneLayout = {
   name: "강가 산책로",
   bounds: { minX: -50, maxX: -14, minZ: 12, maxZ: 48 },
 
-  // 개울: 남북으로 흐르는 연못 체인 (다리 구간 z 26.5~29.5는 비움)
-  ponds: [
-    { x: -32.5, z: 14, scale: 1.1, radius: 3.5 },
-    { x: -33.5, z: 21, scale: 1.2, radius: 3.8 },
-    { x: -34, z: 35, scale: 1.2, radius: 3.8 },
-    { x: -33, z: 42, scale: 1.1, radius: 3.5 },
-    { x: -32.5, z: 48, scale: 1.0, radius: 3.2 },
+  // 강: 월드 남서쪽을 북→남으로 흐르는 물줄기 (다리 밑을 지나감)
+  rivers: [
+    {
+      points: [
+        [-30.5, 6],
+        [-32.5, 12],
+        [-33.5, 20],
+        [-34, 28],
+        [-33.5, 36],
+        [-32.5, 44],
+        [-30, 52],
+        [-27, 58],
+      ],
+      width: 5,
+    },
   ],
 
   bridges: [
-    // 다리 구간(z≈28)은 연못 충돌이 없어 통행 가능 — 다리는 비주얼
-    { x: -33.5, z: 28, rotation: 0, length: 10, width: 3 },
+    // 다리 발자국 안은 강 충돌 샘플이 제외됨 — 유일한 도하 지점
+    { x: -33.8, z: 28, rotation: 0, length: 10.5, width: 3 },
   ],
 
   trees: [
     // 동쪽 강둑
-    { x: -22, z: 20, scale: 1.15, radius: 0.7 },
-    { x: -25, z: 38, scale: 1.25, radius: 0.8 },
-    { x: -19, z: 42, scale: 1.0, radius: 0.6 },
+    { x: -22, z: 20, scale: 1.15, radius: 0.7, variant: "round" },
+    { x: -25, z: 38, scale: 1.25, radius: 0.8, variant: "cherry" },
+    { x: -19, z: 42, scale: 1.0, radius: 0.6, variant: "round" },
     // 건너편 (서쪽)
-    { x: -43, z: 20, scale: 1.3, radius: 0.85 },
-    { x: -46, z: 30, scale: 1.1, radius: 0.7 },
-    { x: -44, z: 40, scale: 1.2, radius: 0.8 },
+    { x: -43, z: 20, scale: 1.3, radius: 0.85, variant: "round" },
+    { x: -46, z: 30, scale: 1.1, radius: 0.7, variant: "cherry" },
+    { x: -44, z: 40, scale: 1.2, radius: 0.8, variant: "round" },
   ],
 
   rocks: [

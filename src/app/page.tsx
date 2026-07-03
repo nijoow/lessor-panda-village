@@ -73,6 +73,11 @@ const ZoneBanner = dynamic(
   { ssr: false },
 );
 
+const Minimap = dynamic(
+  () => import("@/components/ui/Minimap").then((mod) => mod.Minimap),
+  { ssr: false },
+);
+
 const keyboardMap: KeyboardControlsEntry<Controls>[] = [
   { name: Controls.forward, keys: ["ArrowUp", "KeyW"] },
   { name: Controls.backward, keys: ["ArrowDown", "KeyS"] },
@@ -147,6 +152,7 @@ const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
           <InteractionPrompt />
           <EmoteBar />
           <ZoneBanner />
+          <Minimap />
           <VillageHeader isNight={isNight} />
         </>
       )}

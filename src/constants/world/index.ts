@@ -57,6 +57,7 @@ export const FENCES = ZONES.flatMap((z) => z.fences ?? []);
 export const SIGNS = ZONES.flatMap((z) => z.signs ?? []);
 export const BAMBOO = ZONES.flatMap((z) => z.bamboo ?? []);
 export const BRIDGES = ZONES.flatMap((z) => z.bridges ?? []);
+export const RIVERS = ZONES.flatMap((z) => z.rivers ?? []);
 export const GRASS_PATCHES = ZONES.flatMap((z) => z.grassPatches ?? []);
 export const DIRT_PATCHES = ZONES.flatMap((z) => z.dirtPatches ?? []);
 export const STONE_PATHS = ZONES.flatMap((z) => z.stonePaths ?? []);
@@ -111,6 +112,43 @@ export const COLLISION_LANTERNS: CollisionCircle[] = [
   ...BAMBOO,
 ];
 export const COLLISION_BENCHES: CollisionBox[] = BENCHES.map(benchBox);
-export const COLLISION_PONDS: CollisionCircle[] = PONDS;
+
+// 강 충돌: 중심선을 1.2 간격으로 샘플링한 원 — 다리 발자국 안은 제외
+const RIVER_SAMPLE_STEP = 1.2;
+const insideBridge = (x: number, z: number) =>
+  BRIDGES.some((b) => {
+    const cos = Math.cos(-b.rotation);
+    const sin = Math.sin(-b.rotation);
+    const dx = x - b.x;
+    const dz = z - b.z;
+    const lx = dx * cos - dz * sin;
+    const lz = dx * sin + dz * cos;
+    return (
+      Math.abs(lx) < b.length / 2 + 0.4 && Math.abs(lz) < b.width / 2 + 1.2
+    );
+  });
+
+const riverCircles = (r: (typeof RIVERS)[number]): CollisionCircle[] => {
+  const circles: CollisionCircle[] = [];
+  for (let i = 0; i < r.points.length - 1; i++) {
+    const [x0, z0] = r.points[i];
+    const [x1, z1] = r.points[i + 1];
+    const len = Math.hypot(x1 - x0, z1 - z0);
+    const steps = Math.max(1, Math.ceil(len / RIVER_SAMPLE_STEP));
+    for (let s = 0; s < steps; s++) {
+      const t = s / steps;
+      const x = x0 + (x1 - x0) * t;
+      const z = z0 + (z1 - z0) * t;
+      if (insideBridge(x, z)) continue;
+      circles.push({ x, z, radius: r.width / 2 + 0.2 });
+    }
+  }
+  return circles;
+};
+
+export const COLLISION_PONDS: CollisionCircle[] = [
+  ...PONDS,
+  ...RIVERS.flatMap(riverCircles),
+];
 export const COLLISION_HOUSES: CollisionBox[] = HOUSES.map((h) => h.box);
 export const COLLISION_FENCES: FenceSegment[] = FENCES.flatMap(fenceSegments);

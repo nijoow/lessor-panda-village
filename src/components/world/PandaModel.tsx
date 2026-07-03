@@ -45,15 +45,16 @@ export const usePandaModel = (groupRef: RefObject<THREE.Group>) => {
   const currentActionRef = useRef<string>("");
 
   // 현재 클립에서 지정 클립으로 페이드 전환 (동일 클립이면 no-op)
+  // timeScaleFactor: 기준 이동 속도 대비 배율 (NPC처럼 느리게 걷는 경우)
   const playAction = useCallback(
-    (name: string, fade = 0.2) => {
+    (name: string, fade = 0.2, timeScaleFactor = 1) => {
       if (currentActionRef.current === name) return;
       const next = actions[name];
       if (!next) return;
       actions[currentActionRef.current]?.fadeOut(fade);
       // 걷기/달리기는 발 미끄러짐 보정을 위해 가속 재생
       next.setEffectiveTimeScale(
-        PLAYER_ANIM_TIMESCALE[name as PlayerAnimType] ?? 1,
+        (PLAYER_ANIM_TIMESCALE[name as PlayerAnimType] ?? 1) * timeScaleFactor,
       );
       next.reset().fadeIn(fade).play();
       currentActionRef.current = name;

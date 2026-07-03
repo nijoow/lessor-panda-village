@@ -21,8 +21,13 @@ export interface CollisionBox {
 }
 
 // ---------- 반복 배치 오브젝트 ----------
+/** 나무 아키타입 — 존 분위기에 맞게 혼합 배치 */
+export type TreeVariant = "pine" | "round" | "cherry";
+
 export interface TreePlacement extends CollisionCircle {
   scale: number;
+  /** 생략 시 pine */
+  variant?: TreeVariant;
 }
 
 export interface RockPlacement extends CollisionCircle {
@@ -52,13 +57,23 @@ export interface BambooPlacement extends CollisionCircle {
   height: number;
 }
 
-/** 나무다리 (비주얼 전용 — 다리 아래 물 충돌이 없는 구간에 배치) */
+/** 나무다리 (비주얼 전용 — 강 충돌 샘플이 다리 밑에서 자동 제외됨) */
 export interface BridgePlacement {
   x: number;
   z: number;
   /** 0이면 길이 방향이 x축 */
   rotation: number;
   length: number;
+  width: number;
+}
+
+/**
+ * 강 — 중심선 폴리라인을 따라 리본 지오메트리로 렌더된다.
+ * 충돌은 중심선을 일정 간격 샘플링한 원들로 파생되며,
+ * 다리 발자국 안의 샘플은 제외되어 도하가 가능하다.
+ */
+export interface RiverSpec {
+  points: Array<[number, number]>;
   width: number;
 }
 
@@ -140,6 +155,7 @@ export interface ZoneLayout {
   signs?: SignPlacement[];
   bamboo?: BambooPlacement[];
   bridges?: BridgePlacement[];
+  rivers?: RiverSpec[];
   grassPatches?: GrassPatch[];
   dirtPatches?: DirtPatch[];
   stonePaths?: StonePathSpec[];

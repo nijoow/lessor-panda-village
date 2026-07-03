@@ -14,15 +14,15 @@ export const SOUTH_FIELD: ZoneLayout = {
 
   trees: [
     // 서쪽 가장자리
-    { x: -12, z: 21, scale: 1.2, radius: 0.8 },
-    { x: -14, z: 27, scale: 1.0, radius: 0.6 },
-    { x: -12, z: 34, scale: 1.3, radius: 0.85 },
+    { x: -12, z: 21, scale: 1.2, radius: 0.8, variant: "round" },
+    { x: -14, z: 27, scale: 1.0, radius: 0.6, variant: "cherry" },
+    { x: -12, z: 34, scale: 1.3, radius: 0.85, variant: "round" },
     // 남쪽 가장자리
-    { x: -6, z: 37, scale: 1.1, radius: 0.7 },
-    { x: 3, z: 37.5, scale: 1.25, radius: 0.8 },
-    { x: 11, z: 36, scale: 1.0, radius: 0.6 },
+    { x: -6, z: 37, scale: 1.1, radius: 0.7, variant: "round" },
+    { x: 3, z: 37.5, scale: 1.25, radius: 0.8, variant: "cherry" },
+    { x: 11, z: 36, scale: 1.0, radius: 0.6, variant: "round" },
     // 동쪽 가장자리
-    { x: 15, z: 31, scale: 1.2, radius: 0.8 },
+    { x: 15, z: 31, scale: 1.2, radius: 0.8, variant: "round" },
     { x: 16.5, z: 24, scale: 1.1, radius: 0.7 },
   ],
 

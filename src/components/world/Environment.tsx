@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
 import { useGLTF, Instances, Instance, Text } from "@react-three/drei";
 import { Pond } from "./Pond";
+import { Rivers } from "./River";
 import {
   TREES,
   ROCKS,
@@ -17,10 +18,90 @@ import {
   SIGNS,
   BAMBOO,
   BRIDGES,
+  RIVERS,
+  GRASS_PATCHES,
+  DIRT_PATCHES,
+  COLLISION_PONDS,
+  COLLISION_HOUSES,
   BridgePlacement,
   LandmarkTreePlacement,
   SignPlacement,
 } from "@/constants/world";
+
+// ---------- 그라운드 클러터 (풀숲·자갈) — 결정적 산개 ----------
+const rand01 = (seed: number) => {
+  const s = Math.sin(seed * 127.1 + 311.7) * 43758.5453;
+  return s - Math.floor(s);
+};
+
+const isClear = (x: number, z: number) => {
+  for (const d of DIRT_PATCHES) {
+    const dx = x - d.x;
+    const dz = z - d.z;
+    if (dx * dx + dz * dz < (d.radius + 0.4) ** 2) return false;
+  }
+  for (const p of COLLISION_PONDS) {
+    const dx = x - p.x;
+    const dz = z - p.z;
+    if (dx * dx + dz * dz < (p.radius + 0.6) ** 2) return false;
+  }
+  for (const h of COLLISION_HOUSES) {
+    if (x > h.minX - 1 && x < h.maxX + 1 && z > h.minZ - 1 && z < h.maxZ + 1)
+      return false;
+  }
+  return true;
+};
+
+interface TuftData {
+  x: number;
+  z: number;
+  s: number;
+  rot: number;
+  shade: number;
+}
+
+// 존 잔디 패치마다 면적 비례로 풀숲을 뿌린다 (물·흙길·집 회피)
+const GRASS_TUFTS: TuftData[] = (() => {
+  const tufts: TuftData[] = [];
+  GRASS_PATCHES.forEach((g, gi) => {
+    const count = Math.min(320, Math.floor(g.width * g.depth * 0.28));
+    for (let i = 0; i < count; i++) {
+      const seed = gi * 1000 + i;
+      const x = g.x + (rand01(seed) - 0.5) * g.width;
+      const z = g.z + (rand01(seed + 0.5) - 0.5) * g.depth;
+      if (!isClear(x, z)) continue;
+      tufts.push({
+        x,
+        z,
+        s: 0.7 + rand01(seed + 0.25) * 0.7,
+        rot: rand01(seed + 0.75) * Math.PI,
+        shade: rand01(seed + 0.33),
+      });
+    }
+  });
+  return tufts;
+})();
+
+// 흙길 위 자갈
+const PEBBLES: TuftData[] = (() => {
+  const pebbles: TuftData[] = [];
+  DIRT_PATCHES.forEach((d, di) => {
+    const count = 3 + (di % 3);
+    for (let i = 0; i < count; i++) {
+      const seed = di * 500 + i + 77;
+      const a = rand01(seed) * Math.PI * 2;
+      const r = rand01(seed + 0.4) * d.radius * 0.8;
+      pebbles.push({
+        x: d.x + Math.cos(a) * r,
+        z: d.z + Math.sin(a) * r,
+        s: 0.5 + rand01(seed + 0.2) * 0.8,
+        rot: rand01(seed + 0.6) * Math.PI,
+        shade: rand01(seed + 0.8),
+      });
+    }
+  });
+  return pebbles;
+})();
 
 // ---------- 거대 고목 (Ancient Tree - 제공된 GLB 모델) ----------
 const AncientTree = ({ placement }: { placement: LandmarkTreePlacement }) => {
@@ -277,6 +358,13 @@ export const Lantern = ({
   );
 };
 
+// ---------- 나무 아키타입 분류 ----------
+const PINES = TREES.filter((t) => (t.variant ?? "pine") === "pine");
+const ROUND_TREES = TREES.filter((t) => t.variant === "round");
+const CHERRY_TREES = TREES.filter((t) => t.variant === "cherry");
+
+const TUFT_COLORS = ["#79b859", "#8bcb66", "#9ad973"];
+
 // ---------- 정적 배경 (낮/밤과 무관하므로 memo로 리렌더 차단) ----------
 const StaticScenery = memo(function StaticScenery() {
   // 인스턴스용 공통 지오메트리 & 마테리얼 생성
@@ -285,10 +373,14 @@ const StaticScenery = memo(function StaticScenery() {
     flowerGeoms,
     fenceGeoms,
     bambooGeoms,
+    roundTreeGeoms,
+    clutterGeoms,
     treeMats,
     flowerMats,
     fenceMats,
     bambooMats,
+    roundTreeMats,
+    clutterMats,
   } = useMemo(() => {
       return {
         treeGeoms: {
@@ -309,6 +401,15 @@ const StaticScenery = memo(function StaticScenery() {
           // 단위 높이 줄기 — 인스턴스 y 스케일로 키를 조절
           stalk: new THREE.CylinderGeometry(0.07, 0.1, 1, 6),
           leaf: new THREE.ConeGeometry(0.42, 0.85, 5),
+        },
+        roundTreeGeoms: {
+          trunk: new THREE.CylinderGeometry(0.3, 0.46, 2.6, 8),
+          blob: new THREE.IcosahedronGeometry(1.7, 0),
+          blobSide: new THREE.IcosahedronGeometry(1.15, 0),
+        },
+        clutterGeoms: {
+          tuft: new THREE.ConeGeometry(0.3, 0.55, 5),
+          pebble: new THREE.IcosahedronGeometry(0.16, 0),
         },
         treeMats: {
           trunk: new THREE.MeshStandardMaterial({
@@ -356,34 +457,181 @@ const StaticScenery = memo(function StaticScenery() {
             roughness: 0.8,
           }),
         },
+        roundTreeMats: {
+          trunk: new THREE.MeshStandardMaterial({
+            color: "#7a5c3a",
+            roughness: 0.9,
+          }),
+          leafGreen: new THREE.MeshStandardMaterial({
+            color: "#63c06e",
+            roughness: 0.8,
+          }),
+          leafGreenDark: new THREE.MeshStandardMaterial({
+            color: "#4fae5f",
+            roughness: 0.85,
+          }),
+          leafPink: new THREE.MeshStandardMaterial({
+            color: "#f2b7d5",
+            roughness: 0.8,
+          }),
+          leafPinkDark: new THREE.MeshStandardMaterial({
+            color: "#e8a2c8",
+            roughness: 0.85,
+          }),
+        },
+        clutterMats: {
+          tuft: new THREE.MeshStandardMaterial({
+            color: "#ffffff", // 인스턴스별 색으로 틴트
+            roughness: 0.95,
+          }),
+          pebble: new THREE.MeshStandardMaterial({
+            color: "#a89f8d",
+            roughness: 1,
+          }),
+        },
       };
     }, []);
 
   return (
     <group>
-      {/* 나무 인스턴싱 */}
+      {/* 침엽수 인스턴싱 */}
       <group>
         <Instances geometry={treeGeoms.trunk} material={treeMats.trunk} castShadow>
-          {TREES.map((t, i) => (
+          {PINES.map((t, i) => (
             <Instance key={i} position={[t.x, 1.2, t.z]} scale={t.scale} />
           ))}
         </Instances>
         <Instances geometry={treeGeoms.leaf1} material={treeMats.leaf1} castShadow>
-          {TREES.map((t, i) => (
+          {PINES.map((t, i) => (
             <Instance key={i} position={[t.x, 3.2 * t.scale, t.z]} scale={t.scale} />
           ))}
         </Instances>
         <Instances geometry={treeGeoms.leaf2} material={treeMats.leaf2} castShadow>
-          {TREES.map((t, i) => (
+          {PINES.map((t, i) => (
             <Instance key={i} position={[t.x, 4.7 * t.scale, t.z]} scale={t.scale} />
           ))}
         </Instances>
         <Instances geometry={treeGeoms.leaf3} material={treeMats.leaf3} castShadow>
-          {TREES.map((t, i) => (
+          {PINES.map((t, i) => (
             <Instance key={i} position={[t.x, 6.0 * t.scale, t.z]} scale={t.scale} />
           ))}
         </Instances>
       </group>
+
+      {/* 활엽수 (둥근 수관) 인스턴싱 */}
+      <group>
+        <Instances
+          geometry={roundTreeGeoms.trunk}
+          material={roundTreeMats.trunk}
+          castShadow
+        >
+          {ROUND_TREES.map((t, i) => (
+            <Instance key={i} position={[t.x, 1.3 * t.scale, t.z]} scale={t.scale} />
+          ))}
+        </Instances>
+        <Instances
+          geometry={roundTreeGeoms.blob}
+          material={roundTreeMats.leafGreen}
+          castShadow
+        >
+          {ROUND_TREES.map((t, i) => (
+            <Instance
+              key={i}
+              position={[t.x, 3.4 * t.scale, t.z]}
+              scale={t.scale}
+              rotation={[0, i * 1.1, 0]}
+            />
+          ))}
+        </Instances>
+        <Instances
+          geometry={roundTreeGeoms.blobSide}
+          material={roundTreeMats.leafGreenDark}
+          castShadow
+        >
+          {ROUND_TREES.map((t, i) => (
+            <Instance
+              key={`a-${i}`}
+              position={[t.x + 0.95 * t.scale, 2.8 * t.scale, t.z + 0.3]}
+              scale={t.scale}
+              rotation={[0, i * 2.3, 0.2]}
+            />
+          ))}
+          {ROUND_TREES.map((t, i) => (
+            <Instance
+              key={`b-${i}`}
+              position={[t.x - 0.9 * t.scale, 3.0 * t.scale, t.z - 0.35]}
+              scale={t.scale * 0.9}
+              rotation={[0.15, i * 1.7, 0]}
+            />
+          ))}
+        </Instances>
+      </group>
+
+      {/* 벚나무 (분홍 수관) 인스턴싱 */}
+      <group>
+        <Instances
+          geometry={roundTreeGeoms.trunk}
+          material={roundTreeMats.trunk}
+          castShadow
+        >
+          {CHERRY_TREES.map((t, i) => (
+            <Instance key={i} position={[t.x, 1.3 * t.scale, t.z]} scale={t.scale} />
+          ))}
+        </Instances>
+        <Instances
+          geometry={roundTreeGeoms.blob}
+          material={roundTreeMats.leafPink}
+          castShadow
+        >
+          {CHERRY_TREES.map((t, i) => (
+            <Instance
+              key={i}
+              position={[t.x, 3.3 * t.scale, t.z]}
+              scale={t.scale * 0.95}
+              rotation={[0, i * 1.9, 0]}
+            />
+          ))}
+        </Instances>
+        <Instances
+          geometry={roundTreeGeoms.blobSide}
+          material={roundTreeMats.leafPinkDark}
+          castShadow
+        >
+          {CHERRY_TREES.map((t, i) => (
+            <Instance
+              key={i}
+              position={[t.x + 0.85 * t.scale, 2.75 * t.scale, t.z - 0.3]}
+              scale={t.scale * 0.85}
+              rotation={[0, i * 2.6, 0.1]}
+            />
+          ))}
+        </Instances>
+      </group>
+
+      {/* 풀숲 클러터 (인스턴스 색 틴트) */}
+      <Instances geometry={clutterGeoms.tuft} material={clutterMats.tuft}>
+        {GRASS_TUFTS.map((t, i) => (
+          <Instance
+            key={i}
+            position={[t.x, 0.22 * t.s, t.z]}
+            scale={[t.s, t.s, t.s * 0.8]}
+            rotation={[0, t.rot, 0]}
+            color={TUFT_COLORS[Math.floor(t.shade * TUFT_COLORS.length)]}
+          />
+        ))}
+      </Instances>
+
+      {/* 흙길 자갈 */}
+      <Instances geometry={clutterGeoms.pebble} material={clutterMats.pebble}>
+        {PEBBLES.map((p, i) => (
+          <Instance
+            key={i}
+            position={[p.x, 0.05 * p.s, p.z]}
+            scale={[p.s, p.s * 0.6, p.s]}
+            rotation={[0, p.rot, 0]}
+          />
+        ))}
+      </Instances>
 
       <Cloud position={[12, 12, -10]} speed={0.0008} seed={0.8} />
       <Cloud position={[-18, 14, -12]} speed={0.0006} seed={2.1} />
@@ -403,6 +651,8 @@ const StaticScenery = memo(function StaticScenery() {
       {PONDS.map((p, i) => (
         <Pond key={i} position={[p.x, 0, p.z]} scale={p.scale} />
       ))}
+
+      <Rivers rivers={RIVERS} />
 
       {BRIDGES.map((b, i) => (
         <Bridge key={i} bridge={b} />
