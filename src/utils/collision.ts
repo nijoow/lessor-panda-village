@@ -73,7 +73,7 @@ export const checkCollision = (x: number, z: number, y: number = 0) => {
     if (dx * dx + dz * dz < pond.radius * pond.radius) return true;
   }
 
-  // 8. 석등 충돌 (항상 충돌)
+  // 8. 석등·표지판 충돌 (항상 충돌)
   for (const lantern of COLLISION_LANTERNS) {
     const dx = x - lantern.x;
     const dz = z - lantern.z;

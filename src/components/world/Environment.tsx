@@ -3,7 +3,7 @@
 import { memo, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
-import { useGLTF, Instances, Instance } from "@react-three/drei";
+import { useGLTF, Instances, Instance, Text } from "@react-three/drei";
 import { Pond } from "./Pond";
 import {
   TREES,
@@ -14,7 +14,9 @@ import {
   PONDS,
   LANDMARK_TREES,
   FENCES,
+  SIGNS,
   LandmarkTreePlacement,
+  SignPlacement,
 } from "@/constants/world";
 
 // ---------- 거대 고목 (Ancient Tree - 제공된 GLB 모델) ----------
@@ -142,6 +144,32 @@ const Cloud = ({
     </group>
   );
 };
+
+// ---------- 나무 표지판 ----------
+const Signpost = ({ sign }: { sign: SignPlacement }) => (
+  <group position={[sign.x, 0, sign.z]} rotation={[0, sign.rotation, 0]}>
+    {/* 기둥 */}
+    <mesh castShadow position={[0, 0.8, 0]}>
+      <cylinderGeometry args={[0.08, 0.1, 1.6, 6]} />
+      <meshStandardMaterial color="#8d6e63" roughness={0.9} />
+    </mesh>
+    {/* 팻말 */}
+    <mesh castShadow position={[0, 1.35, 0]}>
+      <boxGeometry args={[1.5, 0.55, 0.08]} />
+      <meshStandardMaterial color="#a1887f" roughness={0.85} />
+    </mesh>
+    <Text
+      position={[0, 1.35, 0.05]}
+      font="/fonts/Jua-Regular.ttf"
+      fontSize={0.3}
+      color="#4e342e"
+      anchorX="center"
+      anchorY="middle"
+    >
+      {sign.label}
+    </Text>
+  </group>
+);
 
 // ---------- 석등 (Lantern/Toro - 밤에 빛남) ----------
 export const Lantern = ({
@@ -288,6 +316,10 @@ const StaticScenery = memo(function StaticScenery() {
 
       {BENCHES.map((b, i) => (
         <Bench key={i} position={[b.x, 0, b.z]} rotation={b.rotation} />
+      ))}
+
+      {SIGNS.map((s, i) => (
+        <Signpost key={i} sign={s} />
       ))}
 
       {ROCKS.map((r, i) => (

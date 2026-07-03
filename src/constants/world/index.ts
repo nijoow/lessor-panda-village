@@ -12,11 +12,12 @@ import {
   ZoneLayout,
 } from "./types";
 import { VILLAGE } from "./village";
+import { SOUTH_FIELD } from "./southField";
 
 export * from "./types";
-export { VILLAGE };
+export { VILLAGE, SOUTH_FIELD };
 
-export const ZONES: ZoneLayout[] = [VILLAGE];
+export const ZONES: ZoneLayout[] = [VILLAGE, SOUTH_FIELD];
 
 // ---------- 월드 경계 ----------
 export const WORLD_BOUNDS = {
@@ -24,16 +25,20 @@ export const WORLD_BOUNDS = {
   max: 39,
 };
 
-// ---------- 비주얼 배치 집계 (Environment/World/Player에서 사용) ----------
-export const TREES = ZONES.flatMap((z) => z.trees);
-export const ROCKS = ZONES.flatMap((z) => z.rocks);
-export const LANTERNS = ZONES.flatMap((z) => z.lanterns);
-export const BENCHES = ZONES.flatMap((z) => z.benches);
-export const FLOWERS = ZONES.flatMap((z) => z.flowers);
-export const PONDS = ZONES.flatMap((z) => z.ponds);
-export const LANDMARK_TREES = ZONES.flatMap((z) => z.landmarkTrees);
-export const HOUSES = ZONES.flatMap((z) => z.houses);
-export const FENCES = ZONES.flatMap((z) => z.fences);
+// ---------- 비주얼 배치 집계 (Environment/World/Ground/Player에서 사용) ----------
+export const TREES = ZONES.flatMap((z) => z.trees ?? []);
+export const ROCKS = ZONES.flatMap((z) => z.rocks ?? []);
+export const LANTERNS = ZONES.flatMap((z) => z.lanterns ?? []);
+export const BENCHES = ZONES.flatMap((z) => z.benches ?? []);
+export const FLOWERS = ZONES.flatMap((z) => z.flowers ?? []);
+export const PONDS = ZONES.flatMap((z) => z.ponds ?? []);
+export const LANDMARK_TREES = ZONES.flatMap((z) => z.landmarkTrees ?? []);
+export const HOUSES = ZONES.flatMap((z) => z.houses ?? []);
+export const FENCES = ZONES.flatMap((z) => z.fences ?? []);
+export const SIGNS = ZONES.flatMap((z) => z.signs ?? []);
+export const GRASS_PATCHES = ZONES.flatMap((z) => z.grassPatches ?? []);
+export const DIRT_PATCHES = ZONES.flatMap((z) => z.dirtPatches ?? []);
+export const STONE_PATHS = ZONES.flatMap((z) => z.stonePaths ?? []);
 
 // ---------- 충돌 판정용 파생 데이터 (collision.ts에서 사용) ----------
 // 좌석 2.2 x 0.8 크기 기준, ±90° 회전 시 긴 축이 z 방향
@@ -78,7 +83,8 @@ export const COLLISION_TREES: CollisionCircle[] = [
   ...LANDMARK_TREES,
 ];
 export const COLLISION_ROCKS: CollisionCircle[] = ROCKS;
-export const COLLISION_LANTERNS: CollisionCircle[] = LANTERNS;
+// 석등·표지판은 동일한 "항상 충돌" 기둥이므로 하나로 합쳐 판정
+export const COLLISION_LANTERNS: CollisionCircle[] = [...LANTERNS, ...SIGNS];
 export const COLLISION_BENCHES: CollisionBox[] = BENCHES.map(benchBox);
 export const COLLISION_PONDS: CollisionCircle[] = PONDS;
 export const COLLISION_HOUSES: CollisionBox[] = HOUSES.map((h) => h.box);

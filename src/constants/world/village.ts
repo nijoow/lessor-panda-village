@@ -126,4 +126,27 @@ export const VILLAGE: ZoneLayout = {
       },
     },
   ],
+
+  signs: [
+    // 남쪽 출입구 안내 (게이트 x 9.5~16.5 앞)
+    { x: 10.3, z: 15, rotation: 0.15, radius: 0.4, label: "남쪽 들판" },
+  ],
+
+  grassPatches: [
+    { x: 0, z: 0, width: 33, depth: 33, color: "#8fcf5a", opacity: 0.55 },
+  ],
+
+  dirtPatches: [
+    { x: 0, z: -3, radius: 4.5 },
+    { x: -2, z: 5, radius: 7 },
+  ],
+
+  stonePaths: [
+    // 집 앞마당 -> 중앙 광장
+    { start: [0, -2], end: [0, 4], width: 3, density: 2.5 },
+    // 중앙 광장 -> 연못
+    { start: [2, 5], end: [6, 6], width: 2, density: 2 },
+    // 집 -> 왼쪽 나무 구역
+    { start: [-2, -2], end: [-6, 0], width: 1.5, density: 1.8 },
+  ],
 };

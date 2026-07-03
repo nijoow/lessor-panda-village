@@ -41,6 +41,38 @@ export interface FlowerPlacement {
   color: string;
 }
 
+/** 나무 표지판 (기둥 충돌 있음) */
+export interface SignPlacement extends CollisionCircle {
+  rotation: number;
+  label: string;
+}
+
+// ---------- 바닥 스타일 ----------
+/** 존 바닥에 겹쳐 그리는 잔디 색 패치 (사각) */
+export interface GrassPatch {
+  x: number;
+  z: number;
+  width: number;
+  depth: number;
+  color: string;
+  opacity: number;
+}
+
+/** 흙바닥 원형 패치 */
+export interface DirtPatch {
+  x: number;
+  z: number;
+  radius: number;
+}
+
+/** 징검돌 길 (Ground의 StonePath로 렌더) */
+export interface StonePathSpec {
+  start: [number, number];
+  end: [number, number];
+  width?: number;
+  density?: number;
+}
+
 // ---------- 단일 배치 오브젝트 ----------
 export interface PondPlacement extends CollisionCircle {
   scale: number;
@@ -75,16 +107,21 @@ export interface FenceLayout {
 }
 
 // ---------- 존 ----------
+/** 모든 배치 필드는 선택적 — 존은 자기 구역에 있는 것만 서술한다. */
 export interface ZoneLayout {
   id: string;
   name: string;
-  trees: TreePlacement[];
-  rocks: RockPlacement[];
-  lanterns: CollisionCircle[];
-  benches: BenchPlacement[];
-  flowers: FlowerPlacement[];
-  ponds: PondPlacement[];
-  landmarkTrees: LandmarkTreePlacement[];
-  houses: HousePlacement[];
-  fences: FenceLayout[];
+  trees?: TreePlacement[];
+  rocks?: RockPlacement[];
+  lanterns?: CollisionCircle[];
+  benches?: BenchPlacement[];
+  flowers?: FlowerPlacement[];
+  ponds?: PondPlacement[];
+  landmarkTrees?: LandmarkTreePlacement[];
+  houses?: HousePlacement[];
+  fences?: FenceLayout[];
+  signs?: SignPlacement[];
+  grassPatches?: GrassPatch[];
+  dirtPatches?: DirtPatch[];
+  stonePaths?: StonePathSpec[];
 }

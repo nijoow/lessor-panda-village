@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { useMemo, useRef, useState, useCallback } from 'react';
 import { useFrame, ThreeEvent } from '@react-three/fiber';
 import { useMoveTargetStore } from '@/stores/moveTargetStore';
+import { GRASS_PATCHES, DIRT_PATCHES, STONE_PATHS } from '@/constants/world';
 
 // ---------- 클릭 지점 표시 마커 컴포넌트 ----------
 // setState 대신 ref로 직접 조작하여 매 프레임 리렌더/geometry 재생성을 방지
@@ -168,31 +169,46 @@ export const Ground = ({ disableClick }: { disableClick?: boolean }) => {
         />
       )}
 
-      {/* 안쪽 원형 잔디 */}
-      <mesh rotation-x={-Math.PI / 2} receiveShadow position={[0, -0.008, 0]}>
-        <planeGeometry args={[33, 33]} />
-        <meshStandardMaterial color="#8fcf5a" transparent opacity={0.55} />
-      </mesh>
+      {/* 존별 잔디 색 패치 */}
+      {GRASS_PATCHES.map((g, i) => (
+        <mesh
+          key={i}
+          rotation-x={-Math.PI / 2}
+          receiveShadow
+          position={[g.x, -0.008, g.z]}
+        >
+          <planeGeometry args={[g.width, g.depth]} />
+          <meshStandardMaterial
+            color={g.color}
+            transparent
+            opacity={g.opacity}
+          />
+        </mesh>
+      ))}
 
-      {/* 베이스 흙길 (Subtle) */}
-      <mesh rotation-x={-Math.PI / 2} position={[0, -0.005, -3]} receiveShadow>
-        <circleGeometry args={[4.5, 36]} />
-        <meshStandardMaterial color="#bda17a" roughness={1.0} />
-      </mesh>
-      <mesh rotation-x={-Math.PI / 2} position={[-2, -0.005, 5]} receiveShadow>
-        <circleGeometry args={[7, 32]} />
-        <meshStandardMaterial color="#bda17a" roughness={1.0} />
-      </mesh>
+      {/* 존별 흙바닥 패치 */}
+      {DIRT_PATCHES.map((d, i) => (
+        <mesh
+          key={i}
+          rotation-x={-Math.PI / 2}
+          position={[d.x, -0.005, d.z]}
+          receiveShadow
+        >
+          <circleGeometry args={[d.radius, 32]} />
+          <meshStandardMaterial color="#bda17a" roughness={1.0} />
+        </mesh>
+      ))}
 
-      {/* 입체 돌길 (Stone Paths) */}
-      {/* 집 앞마당 -> 중앙 광장 */}
-      <StonePath start={[0, -2]} end={[0, 4]} width={3} density={2.5} />
-
-      {/* 중앙 광장 -> 연못 (x:8, z:6) */}
-      <StonePath start={[2, 5]} end={[6, 6]} width={2} density={2} />
-
-      {/* 집 -> 왼쪽 나무 구역 */}
-      <StonePath start={[-2, -2]} end={[-6, 0]} width={1.5} density={1.8} />
+      {/* 존별 입체 돌길 (Stone Paths) */}
+      {STONE_PATHS.map((p, i) => (
+        <StonePath
+          key={i}
+          start={p.start}
+          end={p.end}
+          width={p.width}
+          density={p.density}
+        />
+      ))}
     </group>
   );
 };
