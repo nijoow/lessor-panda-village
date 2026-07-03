@@ -44,3 +44,6 @@ next-env.d.ts
 AGENTS.md
 CLAUDE.md
 docs/
+
+# Claude Code 로컬 설정 (local only)
+.claude/
