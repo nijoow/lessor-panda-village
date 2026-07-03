@@ -13,6 +13,7 @@ import {
   qmul,
   axisAngle,
   X,
+  Y,
   Z,
 } from "./lib/clip-gen.mjs";
 
@@ -42,6 +43,13 @@ const waveClip = solveClip(rig, {
         return axisAngle(Z, swing * 2);
       case "Head":
         return qmul(axisAngle(Z, 7), axisAngle(X, -4)); // 고개 살짝 기울이고 들기
+      // 반갑게 꼬리도 함께 살랑임
+      case "Tail2":
+        return axisAngle(Y, swing * 4);
+      case "Tail3":
+        return axisAngle(Y, swing * 7);
+      case "Tail4":
+        return axisAngle(Y, Math.sin(phase * TWO_PI * 2 - 0.4) * 10);
       default:
         return null;
     }
@@ -84,6 +92,18 @@ const danceClip = solveClip(rig, {
       case "LeftLeg":
       case "RightLeg":
         return axisAngle(X, bounce * 10);
+      // 신나서 꼬리를 크게 휘두름 (스웨이 반대 위상 + 바운스 들썩임)
+      case "Tail1":
+        return axisAngle(Y, sway * -6);
+      case "Tail2":
+        return qmul(axisAngle(Y, sway * -11), axisAngle(X, bounce * 6));
+      case "Tail3":
+        return qmul(axisAngle(Y, sway * -16), axisAngle(X, bounce * 9));
+      case "Tail4":
+        return qmul(
+          axisAngle(Y, Math.sin(phase * TWO_PI - 0.5) * -20),
+          axisAngle(X, bounce * 10),
+        );
       default:
         return null;
     }

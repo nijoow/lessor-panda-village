@@ -19,6 +19,7 @@ import {
   qmul,
   axisAngle,
   X,
+  Y,
   Z,
 } from "./lib/clip-gen.mjs";
 
@@ -43,14 +44,26 @@ const idleClip = solveClip(rig, {
         return axisAngle(X, breathe * -1.0);
       case "Spine":
         return axisAngle(X, breathe * 1.4); // 상체 반작용으로 자연스럽게
-      // 어깨가 호흡에 맞춰 살짝 들림
+      // 어깨가 호흡에 맞춰 살짝 들림 (진폭 과하면 얼굴까지 흔들려 보임)
       case "LeftShoulder":
-        return axisAngle(Z, breathe * 2.0);
+        return axisAngle(Z, breathe * 1.0);
       case "RightShoulder":
-        return axisAngle(Z, breathe * -2.0);
+        return axisAngle(Z, breathe * -1.0);
       // 느린 고개 갸웃 + 호흡 끄덕임
       case "Head":
         return qmul(axisAngle(Z, sway * 2.5), axisAngle(X, breathe * -1.2));
+      // 꼬리가 고개 스웨이에 맞춰 반대 위상으로 잔잔하게 살랑임
+      case "Tail1":
+        return axisAngle(Y, sway * -2);
+      case "Tail2":
+        return axisAngle(Y, sway * -4);
+      case "Tail3":
+        return qmul(axisAngle(Y, sway * -6), axisAngle(X, breathe * 1.5));
+      case "Tail4":
+        return qmul(
+          axisAngle(Y, Math.sin(phase * TWO_PI - 0.4) * -8),
+          axisAngle(X, breathe * 2),
+        );
       default:
         return null;
     }

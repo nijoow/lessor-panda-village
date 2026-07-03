@@ -1,13 +1,13 @@
 export const PLAYER_ANIM = {
-  IDLE: 'idle',
-  WALK: 'Armature|walking_man|baselayer',
-  RUN: 'Armature|running|baselayer',
-  SIT: 'sit',
-  WAVE: 'wave',
-  DANCE: 'dance',
+  IDLE: "idle",
+  WALK: "Armature|walking_man|baselayer",
+  RUN: "Armature|running|baselayer",
+  SIT: "sit",
+  WAVE: "wave",
+  DANCE: "dance",
 } as const;
 
-export type PlayerAnimType = typeof PLAYER_ANIM[keyof typeof PLAYER_ANIM];
+export type PlayerAnimType = (typeof PLAYER_ANIM)[keyof typeof PLAYER_ANIM];
 
 /**
  * 클립 재생 속도 배율.
@@ -16,14 +16,14 @@ export type PlayerAnimType = typeof PLAYER_ANIM[keyof typeof PLAYER_ANIM];
  * 보폭을 맞춘다 (scripts 진단: diagnose-clip-speed 기준).
  */
 export const PLAYER_ANIM_TIMESCALE: Partial<Record<PlayerAnimType, number>> = {
-  [PLAYER_ANIM.WALK]: 2.4,
+  [PLAYER_ANIM.WALK]: 2.0,
   [PLAYER_ANIM.RUN]: 1.7,
 };
 
 /** UI(EmoteBar)와 Player가 공유하는 이모트 목록 */
 export const EMOTES = [
-  { anim: PLAYER_ANIM.WAVE, label: '인사', icon: '👋' },
-  { anim: PLAYER_ANIM.DANCE, label: '춤', icon: '🕺' },
+  { anim: PLAYER_ANIM.WAVE, label: "인사", icon: "👋" },
+  { anim: PLAYER_ANIM.DANCE, label: "춤", icon: "🕺" },
 ] as const;
 
-export type EmoteAnim = (typeof EMOTES)[number]['anim'];
+export type EmoteAnim = (typeof EMOTES)[number]["anim"];
