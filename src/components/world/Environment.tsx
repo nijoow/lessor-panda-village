@@ -11,14 +11,14 @@ import {
   LANTERNS,
   BENCHES,
   FLOWERS,
-  POND,
-  LANDMARK_TREE,
-  FENCE_DIST,
-  FENCE_LINES,
-} from "@/constants/worldLayout";
+  PONDS,
+  LANDMARK_TREES,
+  FENCES,
+  LandmarkTreePlacement,
+} from "@/constants/world";
 
 // ---------- 거대 고목 (Ancient Tree - 제공된 GLB 모델) ----------
-const AncientTree = () => {
+const AncientTree = ({ placement }: { placement: LandmarkTreePlacement }) => {
   const { scene } = useGLTF("/models/tree/cherry_blossom_tree.glb");
 
   // 그림자 설정 및 최적화
@@ -36,9 +36,9 @@ const AncientTree = () => {
   return (
     <primitive
       object={treeModel}
-      position={[LANDMARK_TREE.x, LANDMARK_TREE.y, LANDMARK_TREE.z]}
-      scale={LANDMARK_TREE.scale}
-      rotation={[0, LANDMARK_TREE.rotation, 0]}
+      position={[placement.x, placement.y, placement.z]}
+      scale={placement.scale}
+      rotation={[0, placement.rotation, 0]}
     />
   );
 };
@@ -278,9 +278,13 @@ const StaticScenery = memo(function StaticScenery() {
       <Cloud position={[-8, 13, 18]} speed={0.0007} seed={5.2} />
       <Cloud position={[5, 11, -18]} speed={0.0009} seed={1.4} />
 
-      <AncientTree />
+      {LANDMARK_TREES.map((t, i) => (
+        <AncientTree key={i} placement={t} />
+      ))}
 
-      <Pond position={[POND.x, 0, POND.z]} scale={POND.scale} />
+      {PONDS.map((p, i) => (
+        <Pond key={i} position={[p.x, 0, p.z]} scale={p.scale} />
+      ))}
 
       {BENCHES.map((b, i) => (
         <Bench key={i} position={[b.x, 0, b.z]} rotation={b.rotation} />
@@ -307,71 +311,79 @@ const StaticScenery = memo(function StaticScenery() {
         ))}
       </Instances>
 
-      {/* 울타리 인스턴싱 */}
+      {/* 울타리 인스턴싱 (모든 존의 울타리를 한 배치로) */}
       <group>
         {/* 기둥 */}
         <Instances geometry={fenceGeoms.post} material={fenceMats.post} castShadow>
-          {FENCE_LINES.south.map((x) => (
-            <group key={`s-post-${x}`}>
-              <Instance position={[x - 1.0, 0.9, FENCE_DIST]} />
-              <Instance position={[x + 1.0, 0.9, FENCE_DIST]} />
-            </group>
-          ))}
-          {FENCE_LINES.north.map((x) => (
-            <group key={`n-post-${x}`}>
-              <Instance position={[x - 1.0, 0.9, -FENCE_DIST]} />
-              <Instance position={[x + 1.0, 0.9, -FENCE_DIST]} />
-            </group>
-          ))}
-          {FENCE_LINES.west.map((z) => (
-            <group key={`w-post-${z}`}>
-              <Instance position={[-FENCE_DIST, 0.9, z - 1.0]} />
-              <Instance position={[-FENCE_DIST, 0.9, z + 1.0]} />
-            </group>
-          ))}
-          {FENCE_LINES.east.map((z) => (
-            <group key={`e-post-${z}`}>
-              <Instance position={[FENCE_DIST, 0.9, z - 1.0]} />
-              <Instance position={[FENCE_DIST, 0.9, z + 1.0]} />
+          {FENCES.map((f, fi) => (
+            <group key={fi}>
+              {f.lines.south.map((x) => (
+                <group key={`s-post-${x}`}>
+                  <Instance position={[x - 1.0, 0.9, f.dist]} />
+                  <Instance position={[x + 1.0, 0.9, f.dist]} />
+                </group>
+              ))}
+              {f.lines.north.map((x) => (
+                <group key={`n-post-${x}`}>
+                  <Instance position={[x - 1.0, 0.9, -f.dist]} />
+                  <Instance position={[x + 1.0, 0.9, -f.dist]} />
+                </group>
+              ))}
+              {f.lines.west.map((z) => (
+                <group key={`w-post-${z}`}>
+                  <Instance position={[-f.dist, 0.9, z - 1.0]} />
+                  <Instance position={[-f.dist, 0.9, z + 1.0]} />
+                </group>
+              ))}
+              {f.lines.east.map((z) => (
+                <group key={`e-post-${z}`}>
+                  <Instance position={[f.dist, 0.9, z - 1.0]} />
+                  <Instance position={[f.dist, 0.9, z + 1.0]} />
+                </group>
+              ))}
             </group>
           ))}
         </Instances>
         {/* 가로대 */}
         <Instances geometry={fenceGeoms.rail} material={fenceMats.rail} castShadow>
-          {FENCE_LINES.south.map((x) => (
-            <group key={`s-rail-${x}`}>
-              <Instance position={[x, 1.4, FENCE_DIST]} />
-              <Instance position={[x, 0.6, FENCE_DIST]} />
-            </group>
-          ))}
-          {FENCE_LINES.north.map((x) => (
-            <group key={`n-rail-${x}`}>
-              <Instance position={[x, 1.4, -FENCE_DIST]} />
-              <Instance position={[x, 0.6, -FENCE_DIST]} />
-            </group>
-          ))}
-          {FENCE_LINES.west.map((z) => (
-            <group key={`w-rail-${z}`}>
-              <Instance
-                position={[-FENCE_DIST, 1.4, z]}
-                rotation={[0, Math.PI / 2, 0]}
-              />
-              <Instance
-                position={[-FENCE_DIST, 0.6, z]}
-                rotation={[0, Math.PI / 2, 0]}
-              />
-            </group>
-          ))}
-          {FENCE_LINES.east.map((z) => (
-            <group key={`e-rail-${z}`}>
-              <Instance
-                position={[FENCE_DIST, 1.4, z]}
-                rotation={[0, Math.PI / 2, 0]}
-              />
-              <Instance
-                position={[FENCE_DIST, 0.6, z]}
-                rotation={[0, Math.PI / 2, 0]}
-              />
+          {FENCES.map((f, fi) => (
+            <group key={fi}>
+              {f.lines.south.map((x) => (
+                <group key={`s-rail-${x}`}>
+                  <Instance position={[x, 1.4, f.dist]} />
+                  <Instance position={[x, 0.6, f.dist]} />
+                </group>
+              ))}
+              {f.lines.north.map((x) => (
+                <group key={`n-rail-${x}`}>
+                  <Instance position={[x, 1.4, -f.dist]} />
+                  <Instance position={[x, 0.6, -f.dist]} />
+                </group>
+              ))}
+              {f.lines.west.map((z) => (
+                <group key={`w-rail-${z}`}>
+                  <Instance
+                    position={[-f.dist, 1.4, z]}
+                    rotation={[0, Math.PI / 2, 0]}
+                  />
+                  <Instance
+                    position={[-f.dist, 0.6, z]}
+                    rotation={[0, Math.PI / 2, 0]}
+                  />
+                </group>
+              ))}
+              {f.lines.east.map((z) => (
+                <group key={`e-rail-${z}`}>
+                  <Instance
+                    position={[f.dist, 1.4, z]}
+                    rotation={[0, Math.PI / 2, 0]}
+                  />
+                  <Instance
+                    position={[f.dist, 0.6, z]}
+                    rotation={[0, Math.PI / 2, 0]}
+                  />
+                </group>
+              ))}
             </group>
           ))}
         </Instances>

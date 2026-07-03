@@ -7,7 +7,7 @@ import { PetalParticles, FireflyParticles } from "@/components/world/Particles";
 import { Player } from "@/components/world/Player";
 import { RemotePlayer } from "@/components/world/RemotePlayer";
 import { PlayerState } from "@/types/multiplayer";
-import { HOUSE } from "@/constants/worldLayout";
+import { HOUSES } from "@/constants/world";
 import * as THREE from "three";
 
 interface WorldProps {
@@ -37,7 +37,9 @@ export const World = ({
     <>
       <Ground disableClick={isChatFocused} />
       <Environment isNight={isNight} />
-      <House position={HOUSE.position} rotation={[0, 0, 0]} scale={HOUSE.scale} />
+      {HOUSES.map((h, i) => (
+        <House key={i} position={h.position} rotation={[0, 0, 0]} scale={h.scale} />
+      ))}
       <FireflyParticles isNight={isNight} />
       <PetalParticles isNight={isNight} />
 
