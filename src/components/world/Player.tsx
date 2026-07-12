@@ -19,6 +19,7 @@ import { frameLerp, lerpAngle } from "@/utils/math";
 import { useMoveTargetStore } from "@/stores/moveTargetStore";
 import { useInteractionStore } from "@/stores/interactionStore";
 import { useZoneStore } from "@/stores/zoneStore";
+import { audio } from "@/lib/audio";
 import { usePandaModel, PandaBody, PandaNameTag } from "./PandaModel";
 
 interface Props {
@@ -131,6 +132,7 @@ export const Player = forwardRef<THREE.Group, Props>(
 
     // 물리 상태 ref로 관리
     const targetPosition = useRef(new THREE.Vector3(0, 0, 0));
+    const stepDistRef = useRef(0);
     const targetRotation = useRef(0);
     const velocityY = useRef(0);
     const isGrounded = useRef(true);
@@ -326,6 +328,7 @@ export const Player = forwardRef<THREE.Group, Props>(
           velocityY.current = JUMP_FORCE;
           isGrounded.current = false;
           emoteRef.current = null;
+          audio.jump();
         }
 
         const currentY = targetPosition.current.y;
@@ -338,6 +341,7 @@ export const Player = forwardRef<THREE.Group, Props>(
             targetPosition.current.y = 0;
             velocityY.current = 0;
             isGrounded.current = true;
+            audio.land();
           }
         }
 
@@ -410,6 +414,15 @@ export const Player = forwardRef<THREE.Group, Props>(
           }
           if (canMoveZ) {
             targetPosition.current.z = nextZ;
+          }
+
+          // 발소리 — 실제 이동 거리 누적으로 보폭마다 재생
+          if ((canMoveX || canMoveZ) && isGrounded.current) {
+            stepDistRef.current += moveStep;
+            if (stepDistRef.current >= (run ? 1.7 : 1.25)) {
+              stepDistRef.current = 0;
+              audio.footstep(run);
+            }
           }
 
           // 클릭 이동 중인데 양쪽 다 막혔다면 목표 취소

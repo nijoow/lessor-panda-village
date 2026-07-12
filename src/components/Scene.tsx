@@ -11,9 +11,10 @@ import {
   AdaptiveEvents,
 } from "@react-three/drei";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
-import { ReactNode, useRef, Suspense } from "react";
+import { ReactNode, useMemo, useRef, Suspense } from "react";
 import * as THREE from "three";
 import { frameLerp } from "@/utils/math";
+import { useZoneStore } from "@/stores/zoneStore";
 
 // ──────────────────────────────────────────────────
 // 낮/밤 사이클 (태양 진행도 하나로 조명 + 하늘을 함께 갱신)
@@ -27,6 +28,8 @@ const DayNightCycle = ({ isNight }: { isNight: boolean }) => {
   const ambLightRef = useRef<THREE.AmbientLight>(null!);
   const skyRef = useRef<SkyImpl | null>(null);
   const sunProgress = useRef(0);
+  // 그림자 카메라(±30)가 플레이어를 따라다니도록 라이트 타깃을 이동
+  const lightTarget = useMemo(() => new THREE.Object3D(), []);
 
   useFrame((_state, delta) => {
     // isNight 상태에 따라 sunProgress (0: 밤, 1: 낮)를 부드럽게 보간
@@ -44,7 +47,17 @@ const DayNightCycle = ({ isNight }: { isNight: boolean }) => {
     const dayIntensity = Math.max(0, sunY);
 
     if (dirLightRef.current) {
-      dirLightRef.current.position.set(sunX * 30, sunY * 30, 15);
+      const p = useZoneStore.getState().playerPos;
+      dirLightRef.current.position.set(
+        p.x + sunX * 30,
+        Math.max(sunY * 30, 8),
+        p.z + 15,
+      );
+      if (dirLightRef.current.target !== lightTarget) {
+        dirLightRef.current.target = lightTarget;
+      }
+      lightTarget.position.set(p.x, 0, p.z);
+      lightTarget.updateMatrixWorld();
 
       // 낮에는 강한 빛, 밤에는 은은한 푸른빛
       dirLightRef.current.intensity =
@@ -77,16 +90,18 @@ const DayNightCycle = ({ isNight }: { isNight: boolean }) => {
   return (
     <>
       <ambientLight ref={ambLightRef} intensity={1.0} />
+      <primitive object={lightTarget} />
       <directionalLight
         ref={dirLightRef}
         position={[10, 20, 10]}
         intensity={2.5}
         castShadow
-        shadow-mapSize={[1024, 1024]}
+        shadow-mapSize={[2048, 2048]}
         shadow-camera-left={-30}
         shadow-camera-right={30}
         shadow-camera-top={30}
         shadow-camera-bottom={-30}
+        shadow-bias={-0.0004}
       />
       <Sky
         // @ts-expect-error drei Sky가 ref 타입을 노출하지 않음

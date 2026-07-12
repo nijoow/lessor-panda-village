@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect } from "react";
 import { motion } from "framer-motion";
 import { useZoneStore } from "@/stores/zoneStore";
+import { audio } from "@/lib/audio";
 
 /**
  * 존 진입 시 상단에 존 이름을 잠깐 보여주는 배너.
@@ -11,6 +13,11 @@ import { useZoneStore } from "@/stores/zoneStore";
 export const ZoneBanner = () => {
   const zoneName = useZoneStore((s) => s.currentZoneName);
   const enterCount = useZoneStore((s) => s.enterCount);
+
+  // 존 진입 차임 (최초 스폰 제외)
+  useEffect(() => {
+    if (enterCount > 1 && zoneName) audio.zoneChime();
+  }, [enterCount, zoneName]);
 
   // 최초 스폰(첫 판정)은 조용히 넘어가고, 이동으로 존이 바뀔 때만 표시
   if (enterCount <= 1 || !zoneName) return null;

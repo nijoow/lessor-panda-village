@@ -315,6 +315,26 @@ const Bridge = ({ bridge }: { bridge: BridgePlacement }) => {
 };
 
 // ---------- 석등 (Lantern/Toro - 밤에 빛남) ----------
+// 실광원(pointLight) 대신 발광 재질(블룸이 후광 처리) + 바닥 글로우 풀.
+// 라이트 수가 전체 셰이더 비용을 곱하고 낮밤 전환 시 재컴파일 히치를
+// 만들던 문제(H2)의 해결이자, 동숲식 아늑한 웅덩이 빛 연출.
+let glowTexture: THREE.CanvasTexture | null = null;
+const getGlowTexture = () => {
+  if (glowTexture) return glowTexture;
+  const c = document.createElement("canvas");
+  c.width = 128;
+  c.height = 128;
+  const ctx = c.getContext("2d")!;
+  const g = ctx.createRadialGradient(64, 64, 4, 64, 64, 64);
+  g.addColorStop(0, "rgba(255,180,90,0.85)");
+  g.addColorStop(0.4, "rgba(255,150,60,0.35)");
+  g.addColorStop(1, "rgba(255,140,40,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 128, 128);
+  glowTexture = new THREE.CanvasTexture(c);
+  return glowTexture;
+};
+
 export const Lantern = ({
   position,
   isNight = false,
@@ -322,6 +342,7 @@ export const Lantern = ({
   position: [number, number, number];
   isNight?: boolean;
 }) => {
+  const glow = useMemo(() => getGlowTexture(), []);
   return (
     <group position={position}>
       {/* 받침대 */}
@@ -339,7 +360,7 @@ export const Lantern = ({
         <cylinderGeometry args={[0.5, 0.4, 0.2, 6]} />
         <meshStandardMaterial color="#757575" roughness={0.9} />
       </mesh>
-      {/* 전등 (빛이 나오는 곳) */}
+      {/* 전등 (빛이 나오는 곳 — 블룸이 후광을 만듦) */}
       <mesh position={[0, 2.2, 0]}>
         <boxGeometry args={[0.3, 0.4, 0.3]} />
         <meshStandardMaterial
@@ -347,8 +368,19 @@ export const Lantern = ({
           emissive={isNight ? "#ff9800" : "#000000"}
           emissiveIntensity={isNight ? 8 : 0}
         />
-        {isNight && <pointLight color="#ff8800" intensity={15} distance={10} />}
       </mesh>
+      {/* 바닥 글로우 풀 (밤 전용) */}
+      {isNight && (
+        <mesh rotation-x={-Math.PI / 2} position={[0, 0.03, 0]}>
+          <circleGeometry args={[3.4, 24]} />
+          <meshBasicMaterial
+            map={glow}
+            transparent
+            depthWrite={false}
+            blending={THREE.AdditiveBlending}
+          />
+        </mesh>
+      )}
       {/* 지붕 */}
       <mesh castShadow position={[0, 2.5, 0]}>
         <cylinderGeometry args={[0.1, 0.6, 0.3, 6]} />

@@ -15,6 +15,7 @@ import { VillageHeader } from "@/components/ui/VillageHeader";
 import { useMultiplayer } from "@/hooks/useMultiplayer";
 import { useDayNightCycle } from "@/hooks/useDayNightCycle";
 import { useViewportHeight } from "@/hooks/useViewportHeight";
+import { audio } from "@/lib/audio";
 
 // ─────────────────────────────────────────────
 // 다이나믹 임포트 (Lighthouse TBT & Render Blocking 최적화)
@@ -78,6 +79,11 @@ const Minimap = dynamic(
   { ssr: false },
 );
 
+const SoundToggle = dynamic(
+  () => import("@/components/ui/SoundToggle").then((mod) => mod.SoundToggle),
+  { ssr: false },
+);
+
 const keyboardMap: KeyboardControlsEntry<Controls>[] = [
   { name: Controls.forward, keys: ["ArrowUp", "KeyW"] },
   { name: Controls.backward, keys: ["ArrowDown", "KeyS"] },
@@ -126,6 +132,11 @@ const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
     }
   }, [progress]);
 
+  // 낮밤 전환 시 앰비언스(새소리↔풀벌레) 크로스페이드
+  useEffect(() => {
+    audio.setNight(isNight);
+  }, [isNight]);
+
   // 멀티플레이어 훅 (Zero-Rerender 아키텍처)
   const { remotePlayerIds, getPlayerData, broadcastMove, broadcastChat, myId } =
     useMultiplayer(nickname);
@@ -139,7 +150,14 @@ const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
 
       <AnimatePresence>
         {showNicknameOverlay && (
-          <NicknameOverlay onJoin={(name) => setNickname(name)} />
+          <NicknameOverlay
+            onJoin={(name) => {
+              // 사용자 제스처 컨텍스트 안에서 오디오 시작 (자동재생 정책)
+              audio.init();
+              audio.setNight(isNight);
+              setNickname(name);
+            }}
+          />
         )}
       </AnimatePresence>
 
@@ -153,6 +171,7 @@ const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
           <EmoteBar />
           <ZoneBanner />
           <Minimap />
+          <SoundToggle />
           <VillageHeader isNight={isNight} />
         </>
       )}
