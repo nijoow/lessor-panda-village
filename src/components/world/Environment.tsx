@@ -6,6 +6,7 @@ import { useFrame } from "@react-three/fiber";
 import { useGLTF, Instances, Instance, Text } from "@react-three/drei";
 import { Pond } from "./Pond";
 import { Rivers } from "./River";
+import { useHarvestStore } from "@/stores/harvestStore";
 import {
   TREES,
   ROCKS,
@@ -390,6 +391,78 @@ export const Lantern = ({
   );
 };
 
+// ---------- 대나무 (수확 반응형 — 수확된 줄기는 리스폰까지 숨김) ----------
+const BambooField = () => {
+  const harvestedIds = useHarvestStore((s) => s.harvestedIds);
+  const harvested = useMemo(() => new Set(harvestedIds), [harvestedIds]);
+
+  const { stalkGeom, leafGeom, stalkMat, leafMat } = useMemo(
+    () => ({
+      // 단위 높이 줄기 — 인스턴스 y 스케일로 키를 조절
+      stalkGeom: new THREE.CylinderGeometry(0.07, 0.1, 1, 6),
+      leafGeom: new THREE.ConeGeometry(0.42, 0.85, 5),
+      stalkMat: new THREE.MeshStandardMaterial({
+        color: "#5fae4d",
+        roughness: 0.75,
+      }),
+      leafMat: new THREE.MeshStandardMaterial({
+        color: "#6ecb5a",
+        roughness: 0.8,
+      }),
+    }),
+    [],
+  );
+
+  const HIDDEN = 0.001; // 인스턴스 수를 고정한 채 스케일로만 숨김
+  return (
+    <group>
+      <Instances
+        geometry={stalkGeom}
+        material={stalkMat}
+        limit={BAMBOO.length}
+        castShadow
+      >
+        {BAMBOO.map((b, i) => (
+          <Instance
+            key={i}
+            position={[b.x, b.height / 2, b.z]}
+            scale={harvested.has(i) ? HIDDEN : [1, b.height, 1]}
+          />
+        ))}
+      </Instances>
+      <Instances geometry={leafGeom} material={leafMat} limit={BAMBOO.length * 2}>
+        {BAMBOO.map((b, i) => (
+          <Instance
+            key={`t-${i}`}
+            position={[b.x + 0.12, b.height - 0.25, b.z]}
+            rotation={[0.35, i * 1.7, 0]}
+            scale={harvested.has(i) ? HIDDEN : 1}
+          />
+        ))}
+        {BAMBOO.map((b, i) => (
+          <Instance
+            key={`m-${i}`}
+            position={[b.x - 0.14, b.height - 1.0, b.z + 0.08]}
+            rotation={[-0.3, i * 2.3, 0.2]}
+            scale={harvested.has(i) ? HIDDEN : 1}
+          />
+        ))}
+      </Instances>
+    </group>
+  );
+};
+
+// 울타리 인스턴스 상한 (기둥·가로대 각각 세그먼트당 2개)
+const FENCE_SEG_COUNT = FENCES.reduce(
+  (n, f) =>
+    n +
+    f.lines.south.length +
+    f.lines.north.length +
+    f.lines.west.length +
+    f.lines.east.length,
+  0,
+);
+
 // ---------- 나무 아키타입 분류 ----------
 const PINES = TREES.filter((t) => (t.variant ?? "pine") === "pine");
 const ROUND_TREES = TREES.filter((t) => t.variant === "round");
@@ -404,13 +477,11 @@ const StaticScenery = memo(function StaticScenery() {
     treeGeoms,
     flowerGeoms,
     fenceGeoms,
-    bambooGeoms,
     roundTreeGeoms,
     clutterGeoms,
     treeMats,
     flowerMats,
     fenceMats,
-    bambooMats,
     roundTreeMats,
     clutterMats,
   } = useMemo(() => {
@@ -428,11 +499,6 @@ const StaticScenery = memo(function StaticScenery() {
         fenceGeoms: {
           post: new THREE.BoxGeometry(0.2, 1.8, 0.2),
           rail: new THREE.BoxGeometry(2.0, 0.15, 0.15),
-        },
-        bambooGeoms: {
-          // 단위 높이 줄기 — 인스턴스 y 스케일로 키를 조절
-          stalk: new THREE.CylinderGeometry(0.07, 0.1, 1, 6),
-          leaf: new THREE.ConeGeometry(0.42, 0.85, 5),
         },
         roundTreeGeoms: {
           trunk: new THREE.CylinderGeometry(0.3, 0.46, 2.6, 8),
@@ -479,16 +545,6 @@ const StaticScenery = memo(function StaticScenery() {
             roughness: 0.9,
           }),
         },
-        bambooMats: {
-          stalk: new THREE.MeshStandardMaterial({
-            color: "#5fae4d",
-            roughness: 0.75,
-          }),
-          leaf: new THREE.MeshStandardMaterial({
-            color: "#6ecb5a",
-            roughness: 0.8,
-          }),
-        },
         roundTreeMats: {
           trunk: new THREE.MeshStandardMaterial({
             color: "#7a5c3a",
@@ -528,22 +584,22 @@ const StaticScenery = memo(function StaticScenery() {
     <group>
       {/* 침엽수 인스턴싱 */}
       <group>
-        <Instances geometry={treeGeoms.trunk} material={treeMats.trunk} castShadow>
+        <Instances geometry={treeGeoms.trunk} material={treeMats.trunk} limit={PINES.length} castShadow>
           {PINES.map((t, i) => (
             <Instance key={i} position={[t.x, 1.2, t.z]} scale={t.scale} />
           ))}
         </Instances>
-        <Instances geometry={treeGeoms.leaf1} material={treeMats.leaf1} castShadow>
+        <Instances geometry={treeGeoms.leaf1} material={treeMats.leaf1} limit={PINES.length} castShadow>
           {PINES.map((t, i) => (
             <Instance key={i} position={[t.x, 3.2 * t.scale, t.z]} scale={t.scale} />
           ))}
         </Instances>
-        <Instances geometry={treeGeoms.leaf2} material={treeMats.leaf2} castShadow>
+        <Instances geometry={treeGeoms.leaf2} material={treeMats.leaf2} limit={PINES.length} castShadow>
           {PINES.map((t, i) => (
             <Instance key={i} position={[t.x, 4.7 * t.scale, t.z]} scale={t.scale} />
           ))}
         </Instances>
-        <Instances geometry={treeGeoms.leaf3} material={treeMats.leaf3} castShadow>
+        <Instances geometry={treeGeoms.leaf3} material={treeMats.leaf3} limit={PINES.length} castShadow>
           {PINES.map((t, i) => (
             <Instance key={i} position={[t.x, 6.0 * t.scale, t.z]} scale={t.scale} />
           ))}
@@ -555,6 +611,7 @@ const StaticScenery = memo(function StaticScenery() {
         <Instances
           geometry={roundTreeGeoms.trunk}
           material={roundTreeMats.trunk}
+          limit={ROUND_TREES.length}
           castShadow
         >
           {ROUND_TREES.map((t, i) => (
@@ -564,6 +621,7 @@ const StaticScenery = memo(function StaticScenery() {
         <Instances
           geometry={roundTreeGeoms.blob}
           material={roundTreeMats.leafGreen}
+          limit={ROUND_TREES.length}
           castShadow
         >
           {ROUND_TREES.map((t, i) => (
@@ -578,6 +636,7 @@ const StaticScenery = memo(function StaticScenery() {
         <Instances
           geometry={roundTreeGeoms.blobSide}
           material={roundTreeMats.leafGreenDark}
+          limit={ROUND_TREES.length * 2}
           castShadow
         >
           {ROUND_TREES.map((t, i) => (
@@ -604,6 +663,7 @@ const StaticScenery = memo(function StaticScenery() {
         <Instances
           geometry={roundTreeGeoms.trunk}
           material={roundTreeMats.trunk}
+          limit={CHERRY_TREES.length}
           castShadow
         >
           {CHERRY_TREES.map((t, i) => (
@@ -613,6 +673,7 @@ const StaticScenery = memo(function StaticScenery() {
         <Instances
           geometry={roundTreeGeoms.blob}
           material={roundTreeMats.leafPink}
+          limit={CHERRY_TREES.length}
           castShadow
         >
           {CHERRY_TREES.map((t, i) => (
@@ -627,6 +688,7 @@ const StaticScenery = memo(function StaticScenery() {
         <Instances
           geometry={roundTreeGeoms.blobSide}
           material={roundTreeMats.leafPinkDark}
+          limit={CHERRY_TREES.length}
           castShadow
         >
           {CHERRY_TREES.map((t, i) => (
@@ -641,7 +703,7 @@ const StaticScenery = memo(function StaticScenery() {
       </group>
 
       {/* 풀숲 클러터 (인스턴스 색 틴트) */}
-      <Instances geometry={clutterGeoms.tuft} material={clutterMats.tuft}>
+      <Instances geometry={clutterGeoms.tuft} material={clutterMats.tuft} limit={GRASS_TUFTS.length}>
         {GRASS_TUFTS.map((t, i) => (
           <Instance
             key={i}
@@ -654,7 +716,7 @@ const StaticScenery = memo(function StaticScenery() {
       </Instances>
 
       {/* 흙길 자갈 */}
-      <Instances geometry={clutterGeoms.pebble} material={clutterMats.pebble}>
+      <Instances geometry={clutterGeoms.pebble} material={clutterMats.pebble} limit={PEBBLES.length}>
         {PEBBLES.map((p, i) => (
           <Instance
             key={i}
@@ -690,38 +752,7 @@ const StaticScenery = memo(function StaticScenery() {
         <Bridge key={i} bridge={b} />
       ))}
 
-      {/* 대나무 인스턴싱 (줄기 + 잎 2단) */}
-      <group>
-        <Instances
-          geometry={bambooGeoms.stalk}
-          material={bambooMats.stalk}
-          castShadow
-        >
-          {BAMBOO.map((b, i) => (
-            <Instance
-              key={i}
-              position={[b.x, b.height / 2, b.z]}
-              scale={[1, b.height, 1]}
-            />
-          ))}
-        </Instances>
-        <Instances geometry={bambooGeoms.leaf} material={bambooMats.leaf}>
-          {BAMBOO.map((b, i) => (
-            <Instance
-              key={`t-${i}`}
-              position={[b.x + 0.12, b.height - 0.25, b.z]}
-              rotation={[0.35, i * 1.7, 0]}
-            />
-          ))}
-          {BAMBOO.map((b, i) => (
-            <Instance
-              key={`m-${i}`}
-              position={[b.x - 0.14, b.height - 1.0, b.z + 0.08]}
-              rotation={[-0.3, i * 2.3, 0.2]}
-            />
-          ))}
-        </Instances>
-      </group>
+      {/* 대나무는 수확 반응형이라 BambooField(별도 컴포넌트)에서 렌더 */}
 
       {BENCHES.map((b, i) => (
         <Bench key={i} position={[b.x, 0, b.z]} rotation={b.rotation} />
@@ -741,12 +772,12 @@ const StaticScenery = memo(function StaticScenery() {
       ))}
 
       {/* 꽃 인스턴싱 (줄기 + 머리, 머리는 인스턴스별 색상) */}
-      <Instances geometry={flowerGeoms.stem} material={flowerMats.stem}>
+      <Instances geometry={flowerGeoms.stem} material={flowerMats.stem} limit={FLOWERS.length}>
         {FLOWERS.map((f, i) => (
           <Instance key={i} position={[f.pos[0], 0.15, f.pos[2]]} />
         ))}
       </Instances>
-      <Instances geometry={flowerGeoms.head} material={flowerMats.head}>
+      <Instances geometry={flowerGeoms.head} material={flowerMats.head} limit={FLOWERS.length}>
         {FLOWERS.map((f, i) => (
           <Instance key={i} position={[f.pos[0], 0.35, f.pos[2]]} color={f.color} />
         ))}
@@ -755,7 +786,7 @@ const StaticScenery = memo(function StaticScenery() {
       {/* 울타리 인스턴싱 (모든 존의 울타리를 한 배치로) */}
       <group>
         {/* 기둥 */}
-        <Instances geometry={fenceGeoms.post} material={fenceMats.post} castShadow>
+        <Instances geometry={fenceGeoms.post} material={fenceMats.post} limit={FENCE_SEG_COUNT * 2} castShadow>
           {FENCES.map((f, fi) => (
             <group key={fi}>
               {f.lines.south.map((x) => (
@@ -786,7 +817,7 @@ const StaticScenery = memo(function StaticScenery() {
           ))}
         </Instances>
         {/* 가로대 */}
-        <Instances geometry={fenceGeoms.rail} material={fenceMats.rail} castShadow>
+        <Instances geometry={fenceGeoms.rail} material={fenceMats.rail} limit={FENCE_SEG_COUNT * 2} castShadow>
           {FENCES.map((f, fi) => (
             <group key={fi}>
               {f.lines.south.map((x) => (
@@ -840,6 +871,7 @@ export const Environment = ({ isNight = false }: { isNight?: boolean }) => {
       <fog attach="fog" args={["#c9e8f5", 35, 80]} />
 
       <StaticScenery />
+      <BambooField />
 
       {/* 석등만 isNight에 반응 */}
       {LANTERNS.map((l, i) => (

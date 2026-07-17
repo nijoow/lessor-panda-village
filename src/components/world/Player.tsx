@@ -12,13 +12,14 @@ import {
 import * as THREE from "three";
 import { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { PLAYER_ANIM } from "@/constants/playerAnimations";
-import { BENCHES, zoneAt } from "@/constants/world";
+import { BAMBOO, BENCHES, zoneAt } from "@/constants/world";
 import { checkCollision } from "@/utils/collision";
 import { findPath, Point } from "@/utils/pathfinder";
 import { frameLerp, lerpAngle } from "@/utils/math";
 import { useMoveTargetStore } from "@/stores/moveTargetStore";
 import { useInteractionStore } from "@/stores/interactionStore";
 import { useZoneStore } from "@/stores/zoneStore";
+import { useHarvestStore } from "@/stores/harvestStore";
 import { audio } from "@/lib/audio";
 import { usePandaModel, PandaBody, PandaNameTag } from "./PandaModel";
 
@@ -61,6 +62,7 @@ const MAX_DELTA = 0.1; // 탭 전환 등 비정상적으로 큰 delta 클램프
 
 // 벤치 앉기 상수
 const SIT_RANGE = 2.2; // 벤치 중심 기준 상호작용 가능 거리
+const HARVEST_RANGE = 1.9; // 대나무 수확 가능 거리
 const SEAT_SLOT_OFFSET = 0.55; // 좌석 2칸의 벤치 긴 축 방향 오프셋
 const SIT_GROUP_Y = 0.04; // 앉기 클립의 엉덩이 높이에 맞춘 그룹 y 보정
 const STAND_OFFSET = 0.9; // 일어설 때 벤치 앞으로 내려서는 거리 (충돌 박스 밖)
@@ -157,6 +159,7 @@ export const Player = forwardRef<THREE.Group, Props>(
     const seatRef = useRef<Seat | null>(null);
     const prevInteractRef = useRef(false);
     const lastSitRequestIdRef = useRef(0);
+    const lastHarvestRequestIdRef = useRef(0);
 
     // 이모트 상태 (이동·점프·앉기 등 다른 행동 시 해제)
     const emoteRef = useRef<string | null>(null);
@@ -306,8 +309,40 @@ export const Player = forwardRef<THREE.Group, Props>(
           }
         }
         interaction.setNearbyBench(nearby);
+
+        // 대나무 근접 감지 (수확된 줄기는 제외, 벤치가 우선)
+        const harvestState = useHarvestStore.getState();
+        let nearBamboo: number | null = null;
+        let bestBambooSq = HARVEST_RANGE * HARVEST_RANGE;
+        for (let i = 0; i < BAMBOO.length; i++) {
+          if (harvestState.harvestedSet.has(i)) continue;
+          const distSq =
+            (BAMBOO[i].x - targetPosition.current.x) ** 2 +
+            (BAMBOO[i].z - targetPosition.current.z) ** 2;
+          if (distSq < bestBambooSq) {
+            bestBambooSq = distSq;
+            nearBamboo = i;
+          }
+        }
+        harvestState.setNearbyBamboo(nearBamboo);
+        const harvestButtonRequested =
+          harvestState.harvestRequestId !== lastHarvestRequestIdRef.current;
+        lastHarvestRequestIdRef.current = harvestState.harvestRequestId;
+        const harvestRequested =
+          !inputDisabled &&
+          nearBamboo !== null &&
+          (harvestButtonRequested || (toggleRequested && nearby === null));
+
         if (toggleRequested && nearby !== null) {
           sitDown(nearby);
+        } else if (harvestRequested && nearBamboo !== null) {
+          // 수확: 카운트 증가 + 폴짝 점프 + 팝 사운드
+          harvestState.harvest(nearBamboo);
+          audio.harvestPop();
+          if (isGrounded.current) {
+            velocityY.current = JUMP_FORCE * 0.45;
+            isGrounded.current = false;
+          }
         } else if (requestedEmote && isGrounded.current) {
           // 같은 이모트를 다시 요청하면 해제, 다른 이모트면 전환
           emoteRef.current =

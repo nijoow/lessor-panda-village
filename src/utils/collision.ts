@@ -6,8 +6,10 @@ import {
   COLLISION_PONDS,
   COLLISION_LANTERNS,
   COLLISION_FENCES,
+  BAMBOO,
   WORLD_BOUNDS,
 } from "@/constants/world";
+import { useHarvestStore } from "@/stores/harvestStore";
 
 /**
  * 공간 해시 그리드 기반 충돌 판정.
@@ -26,6 +28,8 @@ const FENCE_THICKNESS = 0.4;
 
 type Shape =
   | { kind: "circle"; x: number; z: number; r2: number; maxY: number }
+  // 수확으로 일시 제거되는 대나무 (idx로 harvestedSet 조회)
+  | { kind: "bamboo"; x: number; z: number; r2: number; idx: number }
   | {
       kind: "box";
       minX: number;
@@ -81,8 +85,17 @@ const insertCircle = (
 
 // ---------- 그리드 구축 (모듈 로드 시 1회) ----------
 for (const t of COLLISION_TREES) insertCircle(t, Infinity);
-for (const l of COLLISION_LANTERNS) insertCircle(l, Infinity); // 석등·표지판·대나무
+for (const l of COLLISION_LANTERNS) insertCircle(l, Infinity); // 석등·표지판
 for (const p of COLLISION_PONDS) insertCircle(p, Infinity); // 연못·강
+BAMBOO.forEach((b, idx) => {
+  insert(
+    { kind: "bamboo", x: b.x, z: b.z, r2: b.radius * b.radius, idx },
+    b.x - b.radius,
+    b.x + b.radius,
+    b.z - b.radius,
+    b.z + b.radius,
+  );
+});
 for (const r of COLLISION_ROCKS) insertCircle(r, 1.0);
 for (const h of COLLISION_HOUSES) {
   insert(
@@ -119,7 +132,15 @@ export const checkCollision = (x: number, z: number, y: number = 0) => {
   const shapes = grid.get(keyOf(cellOf(x), cellOf(z)));
   if (!shapes) return false;
 
+  const harvested = useHarvestStore.getState().harvestedSet;
   for (const s of shapes) {
+    if (s.kind === "bamboo") {
+      if (harvested.has(s.idx)) continue;
+      const dx = x - s.x;
+      const dz = z - s.z;
+      if (dx * dx + dz * dz < s.r2) return true;
+      continue;
+    }
     if (y >= s.maxY) continue;
     if (s.kind === "circle") {
       const dx = x - s.x;

@@ -105,12 +105,9 @@ export const COLLISION_TREES: CollisionCircle[] = [
   ...LANDMARK_TREES,
 ];
 export const COLLISION_ROCKS: CollisionCircle[] = ROCKS;
-// 석등·표지판·대나무는 동일한 "항상 충돌" 기둥이므로 하나로 합쳐 판정
-export const COLLISION_LANTERNS: CollisionCircle[] = [
-  ...LANTERNS,
-  ...SIGNS,
-  ...BAMBOO,
-];
+// 석등·표지판은 동일한 "항상 충돌" 기둥이므로 하나로 합쳐 판정.
+// 대나무는 수확으로 사라질 수 있어 collision.ts에서 인덱스와 함께 별도 처리.
+export const COLLISION_LANTERNS: CollisionCircle[] = [...LANTERNS, ...SIGNS];
 export const COLLISION_BENCHES: CollisionBox[] = BENCHES.map(benchBox);
 
 // 강 충돌: 중심선을 1.2 간격으로 샘플링한 원 — 다리 발자국 안은 제외

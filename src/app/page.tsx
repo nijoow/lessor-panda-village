@@ -84,6 +84,11 @@ const SoundToggle = dynamic(
   { ssr: false },
 );
 
+const InventoryHUD = dynamic(
+  () => import("@/components/ui/InventoryHUD").then((mod) => mod.InventoryHUD),
+  { ssr: false },
+);
+
 const keyboardMap: KeyboardControlsEntry<Controls>[] = [
   { name: Controls.forward, keys: ["ArrowUp", "KeyW"] },
   { name: Controls.backward, keys: ["ArrowDown", "KeyS"] },
@@ -172,6 +177,7 @@ const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
           <ZoneBanner />
           <Minimap />
           <SoundToggle />
+          <InventoryHUD />
           <VillageHeader isNight={isNight} />
         </>
       )}
