@@ -12,7 +12,7 @@ import {
 import * as THREE from "three";
 import { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { PLAYER_ANIM } from "@/constants/playerAnimations";
-import { BAMBOO, BENCHES, zoneAt } from "@/constants/world";
+import { BAMBOO, BENCHES, NOTICE_BOARDS, zoneAt } from "@/constants/world";
 import { checkCollision } from "@/utils/collision";
 import { findPath, Point } from "@/utils/pathfinder";
 import { frameLerp, lerpAngle } from "@/utils/math";
@@ -20,6 +20,7 @@ import { useMoveTargetStore } from "@/stores/moveTargetStore";
 import { useInteractionStore } from "@/stores/interactionStore";
 import { useZoneStore } from "@/stores/zoneStore";
 import { useHarvestStore } from "@/stores/harvestStore";
+import { useGuestbookStore } from "@/stores/guestbookStore";
 import { audio } from "@/lib/audio";
 import { usePandaModel, PandaBody, PandaNameTag } from "./PandaModel";
 
@@ -310,6 +311,22 @@ export const Player = forwardRef<THREE.Group, Props>(
         }
         interaction.setNearbyBench(nearby);
 
+        // 방명록 게시판 근접 감지 (벤치 다음, 대나무보다 우선)
+        const guestbook = useGuestbookStore.getState();
+        let nearBoard: number | null = null;
+        let bestBoardSq = Infinity;
+        for (let i = 0; i < NOTICE_BOARDS.length; i++) {
+          const board = NOTICE_BOARDS[i];
+          const distSq =
+            (board.x - targetPosition.current.x) ** 2 +
+            (board.z - targetPosition.current.z) ** 2;
+          if (distSq < board.range * board.range && distSq < bestBoardSq) {
+            bestBoardSq = distSq;
+            nearBoard = i;
+          }
+        }
+        guestbook.setNearbyBoard(nearBoard);
+
         // 대나무 근접 감지 (수확된 줄기는 제외, 벤치가 우선)
         const harvestState = useHarvestStore.getState();
         let nearBamboo: number | null = null;
@@ -331,10 +348,15 @@ export const Player = forwardRef<THREE.Group, Props>(
         const harvestRequested =
           !inputDisabled &&
           nearBamboo !== null &&
-          (harvestButtonRequested || (toggleRequested && nearby === null));
+          (harvestButtonRequested ||
+            (toggleRequested && nearby === null && nearBoard === null));
 
         if (toggleRequested && nearby !== null) {
           sitDown(nearby);
+        } else if (toggleRequested && nearBoard !== null) {
+          // 패널이 열리면 page.tsx가 입력을 잠그므로 여기서 더 할 일은 없다
+          guestbook.open();
+          clearClickPath();
         } else if (harvestRequested && nearBamboo !== null) {
           // 수확: 카운트 증가 + 폴짝 점프 + 팝 사운드
           harvestState.harvest(nearBamboo);

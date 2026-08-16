@@ -3,6 +3,7 @@
 import { Environment } from "@/components/world/Environment";
 import { Ground } from "@/components/world/Ground";
 import { House } from "@/components/world/House";
+import { NoticeBoards } from "@/components/world/NoticeBoard";
 import { NPCPanda } from "@/components/world/NPCPanda";
 import { NPCS } from "@/constants/npcs";
 import { PetalParticles, FireflyParticles } from "@/components/world/Particles";
@@ -16,7 +17,8 @@ interface WorldProps {
   isNight: boolean;
   nickname: string | null;
   playerRef: React.MutableRefObject<THREE.Group>;
-  isChatFocused: boolean;
+  /** 채팅 입력 또는 방명록 패널이 열려 있어 플레이어 조작을 막아야 하는 상태 */
+  inputLocked: boolean;
   remotePlayerIds: string[];
   getPlayerData: (id: string) => PlayerState | undefined;
   myId: string;
@@ -29,7 +31,7 @@ export const World = ({
   isNight,
   nickname,
   playerRef,
-  isChatFocused,
+  inputLocked,
   remotePlayerIds,
   getPlayerData,
   myId,
@@ -37,11 +39,12 @@ export const World = ({
 }: WorldProps) => {
   return (
     <>
-      <Ground disableClick={isChatFocused} />
+      <Ground disableClick={inputLocked} />
       <Environment isNight={isNight} />
       {HOUSES.map((h, i) => (
         <House key={i} position={h.position} rotation={[0, 0, 0]} scale={h.scale} />
       ))}
+      <NoticeBoards isNight={isNight} />
       <FireflyParticles isNight={isNight} />
       <PetalParticles isNight={isNight} />
 
@@ -62,7 +65,7 @@ export const World = ({
           id={myId}
           nickname={nickname}
           onMove={broadcastMove}
-          inputDisabled={isChatFocused}
+          inputDisabled={inputLocked}
         />
       ) : null}
     </>

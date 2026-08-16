@@ -3,11 +3,12 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { useInteractionStore } from "@/stores/interactionStore";
 import { useHarvestStore } from "@/stores/harvestStore";
+import { useGuestbookStore } from "@/stores/guestbookStore";
 
 /**
  * 상호작용 가능 오브젝트 근처에서 표시되는 안내 프롬프트.
  * 데스크톱은 E 키 안내, 모바일은 버튼 탭으로 동작합니다 (둘 다 클릭 가능).
- * 우선순위: 앉는 중/벤치 > 대나무 수확.
+ * 우선순위: 앉는 중/벤치 > 방명록 > 대나무 수확.
  */
 export const InteractionPrompt = () => {
   const nearbyBenchIndex = useInteractionStore((s) => s.nearbyBenchIndex);
@@ -15,15 +16,28 @@ export const InteractionPrompt = () => {
   const requestToggleSit = useInteractionStore((s) => s.requestToggleSit);
   const nearbyBambooIndex = useHarvestStore((s) => s.nearbyBambooIndex);
   const requestHarvest = useHarvestStore((s) => s.requestHarvest);
+  const nearbyBoardIndex = useGuestbookStore((s) => s.nearbyBoardIndex);
+  const isGuestbookOpen = useGuestbookStore((s) => s.isOpen);
+  const openGuestbook = useGuestbookStore((s) => s.open);
 
   const benchMode = isSitting || nearbyBenchIndex !== null;
-  const visible = benchMode || nearbyBambooIndex !== null;
+  const boardMode = !benchMode && nearbyBoardIndex !== null;
+  // 패널이 열려 있는 동안에는 프롬프트를 숨긴다
+  const visible =
+    !isGuestbookOpen &&
+    (benchMode || boardMode || nearbyBambooIndex !== null);
   const label = benchMode
     ? isSitting
       ? "일어서기"
       : "벤치에 앉기"
-    : "🎋 대나무 수확";
-  const onClick = benchMode ? requestToggleSit : requestHarvest;
+    : boardMode
+      ? "📜 방명록 보기"
+      : "🎋 대나무 수확";
+  const onClick = benchMode
+    ? requestToggleSit
+    : boardMode
+      ? openGuestbook
+      : requestHarvest;
 
   return (
     <div className="absolute inset-x-0 bottom-28 sm:bottom-36 z-40 flex justify-center pointer-events-none">

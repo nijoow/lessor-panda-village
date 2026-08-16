@@ -53,6 +53,7 @@ export const FLOWERS = ZONES.flatMap((z) => z.flowers ?? []);
 export const PONDS = ZONES.flatMap((z) => z.ponds ?? []);
 export const LANDMARK_TREES = ZONES.flatMap((z) => z.landmarkTrees ?? []);
 export const HOUSES = ZONES.flatMap((z) => z.houses ?? []);
+export const NOTICE_BOARDS = ZONES.flatMap((z) => z.noticeBoards ?? []);
 export const FENCES = ZONES.flatMap((z) => z.fences ?? []);
 export const SIGNS = ZONES.flatMap((z) => z.signs ?? []);
 export const BAMBOO = ZONES.flatMap((z) => z.bamboo ?? []);
@@ -148,4 +149,5 @@ export const COLLISION_PONDS: CollisionCircle[] = [
   ...RIVERS.flatMap(riverCircles),
 ];
 export const COLLISION_HOUSES: CollisionBox[] = HOUSES.map((h) => h.box);
+export const COLLISION_BOARDS: CollisionBox[] = NOTICE_BOARDS.map((b) => b.box);
 export const COLLISION_FENCES: FenceSegment[] = FENCES.flatMap(fenceSegments);

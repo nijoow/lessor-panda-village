@@ -25,10 +25,14 @@ interface HarvestState {
   setNearbyBamboo: (index: number | null) => void;
   requestHarvest: () => void;
   harvest: (index: number) => void;
+  /** 죽순 소비 (방명록 쪽지 등). 부족하면 아무것도 하지 않고 false */
+  spendBamboo: (amount: number) => boolean;
 }
 
 export const useHarvestStore = create<HarvestState>((set, get) => ({
-  bambooCount: 0,
+  // 처음 온 방문자도 쪽지 한 장은 걸 수 있도록 마을이 죽순 하나를 준다.
+  // 두 번째 쪽지부터는 대나무 숲까지 걸어가야 한다.
+  bambooCount: 1,
   harvestedIds: [],
   harvestedSet: new Set<number>(),
   nearbyBambooIndex: null,
@@ -53,5 +57,11 @@ export const useHarvestStore = create<HarvestState>((set, get) => ({
       state.harvestedSet.delete(index);
       set({ harvestedIds: state.harvestedIds.filter((i) => i !== index) });
     }, BAMBOO_RESPAWN_MS);
+  },
+  spendBamboo: (amount) => {
+    const { bambooCount } = get();
+    if (amount <= 0 || bambooCount < amount) return false;
+    set({ bambooCount: bambooCount - amount });
+    return true;
   },
 }));

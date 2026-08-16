@@ -1,9 +1,12 @@
-import { useEffect, useState, useRef, useCallback } from "react";
-import { supabase } from "@/lib/supabase";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { RealtimeChannel } from "@supabase/supabase-js";
 import { PLAYER_ANIM } from "@/constants/playerAnimations";
-import { PlayerState } from "@/types/multiplayer";
+import { supabase } from "@/lib/supabase";
 import { useChatStore } from "@/stores/chatStore";
+import {
+  MultiplayerConnectionStatus,
+  PlayerState,
+} from "@/types/multiplayer";
 
 export const MAX_CHAT_LENGTH = 100;
 export const MAX_NICKNAME_LENGTH = 10;
@@ -20,156 +23,240 @@ interface PresencePayload {
 }
 
 // 네트워크로 수신한 값은 항상 정제 후 사용
-const toFinite = (v: unknown, fallback = 0): number =>
-  typeof v === "number" && Number.isFinite(v) ? v : fallback;
+const toFinite = (value: unknown, fallback = 0): number =>
+  typeof value === "number" && Number.isFinite(value) ? value : fallback;
 
-const sanitizeNickname = (v: unknown): string =>
-  typeof v === "string" && v.trim().length > 0
-    ? v.trim().slice(0, MAX_NICKNAME_LENGTH)
+const sanitizeNickname = (value: unknown): string =>
+  typeof value === "string" && value.trim().length > 0
+    ? value.trim().slice(0, MAX_NICKNAME_LENGTH)
     : "Unknown";
 
 const VALID_ANIMS = new Set<string>(Object.values(PLAYER_ANIM));
 
-const sanitizeAnim = (v: unknown): string =>
-  typeof v === "string" && VALID_ANIMS.has(v) ? v : PLAYER_ANIM.IDLE;
+const sanitizeAnim = (value: unknown): string =>
+  typeof value === "string" && VALID_ANIMS.has(value)
+    ? value
+    : PLAYER_ANIM.IDLE;
 
-export const useMultiplayer = (nickname: string | null) => {
+export const useMultiplayer = (
+  nickname: string | null,
+  worldKey: string | null,
+  myId: string | null,
+) => {
   const [remotePlayerIds, setRemotePlayerIds] = useState<string[]>([]);
+  const [connectionStatus, setConnectionStatus] =
+    useState<MultiplayerConnectionStatus>("idle");
+  // 방명록이 다시 읽어야 한다는 신호만 세는 카운터 (내용은 담지 않는다)
+  const [guestbookRevision, setGuestbookRevision] = useState(0);
   const playersDataRef = useRef<Map<string, PlayerState>>(new Map());
+  const knownPresenceIdsRef = useRef<Set<string>>(new Set());
   const channelRef = useRef<RealtimeChannel | null>(null);
-  const [myId] = useState(() => crypto.randomUUID());
   const isChannelReadyRef = useRef(false);
 
   useEffect(() => {
-    if (!nickname) return;
+    let cancelled = false;
+    const canConnect = Boolean(nickname && worldKey && myId);
 
-    const channel = supabase.channel("village", {
-      config: {
-        presence: { key: myId },
-      },
+    playersDataRef.current.clear();
+    knownPresenceIdsRef.current.clear();
+    useChatStore.getState().reset();
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setRemotePlayerIds([]);
+      setConnectionStatus(canConnect ? "connecting" : "idle");
     });
 
-    channelRef.current = channel;
+    if (!canConnect || !nickname || !worldKey || !myId) {
+      return () => {
+        cancelled = true;
+      };
+    }
 
-    channel
-      .on("presence", { event: "sync" }, () => {
-        const state = channel.presenceState<PresencePayload>();
+    let channel: RealtimeChannel | null = null;
 
-        const newIds: string[] = [];
-        const currentKeys = Object.keys(state);
+    const connect = async () => {
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
 
-        currentKeys.forEach((key) => {
-          if (key === myId) return;
-          newIds.push(key);
-
-          const presence = state[key]?.[0];
-          if (!presence) return;
-
-          const existing = playersDataRef.current.get(key);
-
-          if (existing) {
-            // presence의 위치는 입장 시점(track 호출) 값이라 stale함.
-            // 이미 move 브로드캐스트로 받은 위치를 덮어쓰지 않고 닉네임만 갱신.
-            existing.nickname = sanitizeNickname(presence.nickname);
-          } else {
-            playersDataRef.current.set(key, {
-              id: key,
-              nickname: sanitizeNickname(presence.nickname),
-              x: toFinite(presence.x),
-              y: toFinite(presence.y),
-              z: toFinite(presence.z),
-              ry: toFinite(presence.ry),
-              anim: sanitizeAnim(presence.anim),
-              lastUpdated: Date.now(),
-            });
-          }
-        });
-
-        // state에 없는 (나간) 유저의 데이터는 Map에서 정리
-        for (const key of playersDataRef.current.keys()) {
-          if (!currentKeys.includes(key)) {
-            playersDataRef.current.delete(key);
-            useChatStore.getState().removePlayer(key);
-          }
-        }
-
-        setRemotePlayerIds((prev) => {
-          if (
-            prev.length === newIds.length &&
-            prev.every((v, i) => v === newIds[i])
-          ) {
-            return prev;
-          }
-          return newIds;
-        });
-      })
-      .on("presence", { event: "leave" }, ({ key }) => {
-        // Map 정리는 sync 이벤트에서 완벽하게 처리되므로,
-        // leave 이벤트에서는 즉각적인 UI 반영을 위해 state만 업데이트
-        setRemotePlayerIds((prev) => prev.filter((id) => id !== key));
-      });
-
-    channel.on("broadcast", { event: "move" }, ({ payload }) => {
-      if (!payload || typeof payload.id !== "string" || payload.id === myId)
+      if (cancelled) return;
+      if (error || !session) {
+        setConnectionStatus("error");
         return;
-
-      playersDataRef.current.set(payload.id, {
-        id: payload.id,
-        nickname: sanitizeNickname(payload.nickname),
-        x: toFinite(payload.x),
-        y: toFinite(payload.y),
-        z: toFinite(payload.z),
-        ry: toFinite(payload.ry),
-        anim: sanitizeAnim(payload.anim),
-        lastUpdated: Date.now(),
-      });
-    });
-
-    channel.on("broadcast", { event: "chat" }, ({ payload }) => {
-      if (
-        !payload ||
-        typeof payload.id !== "string" ||
-        typeof payload.message !== "string"
-      )
-        return;
-
-      useChatStore.getState().addMessage({
-        id: payload.id,
-        nickname: sanitizeNickname(payload.nickname),
-        message: payload.message.slice(0, MAX_CHAT_LENGTH),
-        timestamp: Date.now(),
-      });
-    });
-
-    channel.subscribe(async (status) => {
-      if (status === "SUBSCRIBED") {
-        isChannelReadyRef.current = true;
-        await channel.track({
-          id: myId,
-          nickname,
-          x: 0,
-          y: 0,
-          z: 0,
-          ry: 0,
-          anim: PLAYER_ANIM.IDLE,
-          online_at: new Date().toISOString(),
-        });
       }
+
+      await supabase.realtime.setAuth(session.access_token);
+      if (cancelled) return;
+
+      channel = supabase.channel(`world:${worldKey}`, {
+        config: {
+          private: true,
+          broadcast: { ack: true },
+          presence: { key: myId },
+        },
+      });
+      channelRef.current = channel;
+
+      channel
+        .on("presence", { event: "sync" }, () => {
+          if (!channel) return;
+
+          const state = channel.presenceState<PresencePayload>();
+          const currentKeys = Object.keys(state);
+          const newIds: string[] = [];
+          knownPresenceIdsRef.current = new Set(currentKeys);
+
+          currentKeys.forEach((key) => {
+            if (key === myId) return;
+            newIds.push(key);
+
+            const presence = state[key]?.[0];
+            if (!presence) return;
+
+            const existing = playersDataRef.current.get(key);
+
+            if (existing) {
+              // presence 위치는 최초 입장 값이므로 move로 갱신된 위치를 보존한다.
+              existing.nickname = sanitizeNickname(presence.nickname);
+            } else {
+              playersDataRef.current.set(key, {
+                id: key,
+                nickname: sanitizeNickname(presence.nickname),
+                x: toFinite(presence.x),
+                y: toFinite(presence.y),
+                z: toFinite(presence.z),
+                ry: toFinite(presence.ry),
+                anim: sanitizeAnim(presence.anim),
+                lastUpdated: Date.now(),
+              });
+            }
+          });
+
+          for (const key of playersDataRef.current.keys()) {
+            if (!currentKeys.includes(key)) {
+              playersDataRef.current.delete(key);
+              useChatStore.getState().removePlayer(key);
+            }
+          }
+
+          setRemotePlayerIds((previous) => {
+            if (
+              previous.length === newIds.length &&
+              previous.every((value, index) => value === newIds[index])
+            ) {
+              return previous;
+            }
+            return newIds;
+          });
+        })
+        .on("presence", { event: "leave" }, ({ key }) => {
+          knownPresenceIdsRef.current.delete(key);
+          playersDataRef.current.delete(key);
+          useChatStore.getState().removePlayer(key);
+          setRemotePlayerIds((previous) =>
+            previous.filter((id) => id !== key),
+          );
+        })
+        .on("broadcast", { event: "move" }, ({ payload }) => {
+          if (
+            !payload ||
+            typeof payload.id !== "string" ||
+            payload.id === myId ||
+            !knownPresenceIdsRef.current.has(payload.id)
+          ) {
+            return;
+          }
+
+          playersDataRef.current.set(payload.id, {
+            id: payload.id,
+            nickname: sanitizeNickname(payload.nickname),
+            x: toFinite(payload.x),
+            y: toFinite(payload.y),
+            z: toFinite(payload.z),
+            ry: toFinite(payload.ry),
+            anim: sanitizeAnim(payload.anim),
+            lastUpdated: Date.now(),
+          });
+        })
+        // broadcast는 위조될 수 있으므로 payload를 쓰지 않고 재조회만 유발한다.
+        // 실제 쪽지 내용은 항상 RLS가 걸린 데이터베이스에서 다시 읽는다.
+        .on("broadcast", { event: "guestbook" }, () => {
+          setGuestbookRevision((revision) => revision + 1);
+        })
+        .on("broadcast", { event: "chat" }, ({ payload }) => {
+          if (
+            !payload ||
+            typeof payload.id !== "string" ||
+            typeof payload.message !== "string" ||
+            !knownPresenceIdsRef.current.has(payload.id)
+          ) {
+            return;
+          }
+
+          useChatStore.getState().addMessage({
+            id: payload.id,
+            nickname: sanitizeNickname(payload.nickname),
+            message: payload.message.slice(0, MAX_CHAT_LENGTH),
+            timestamp: Date.now(),
+          });
+        })
+        .subscribe(async (status) => {
+          if (cancelled || !channel) return;
+
+          if (status === "SUBSCRIBED") {
+            isChannelReadyRef.current = true;
+            setConnectionStatus("connected");
+            await channel.track({
+              nickname,
+              x: 0,
+              y: 0,
+              z: 0,
+              ry: 0,
+              anim: PLAYER_ANIM.IDLE,
+              online_at: new Date().toISOString(),
+            });
+          } else if (
+            status === "CHANNEL_ERROR" ||
+            status === "TIMED_OUT" ||
+            status === "CLOSED"
+          ) {
+            isChannelReadyRef.current = false;
+            setConnectionStatus("error");
+          }
+        });
+    };
+
+    void connect().catch(() => {
+      if (!cancelled) setConnectionStatus("error");
     });
 
     return () => {
+      cancelled = true;
       isChannelReadyRef.current = false;
-      channel.unsubscribe();
-      channelRef.current = null;
+      knownPresenceIdsRef.current.clear();
+
+      if (channelRef.current === channel) {
+        channelRef.current = null;
+      }
+      if (channel) {
+        void supabase.removeChannel(channel);
+      }
     };
-  }, [nickname, myId]);
+  }, [nickname, worldKey, myId]);
 
   const broadcastMove = useCallback(
     (state: Omit<PlayerState, "id" | "nickname" | "lastUpdated">) => {
-      if (!channelRef.current || !nickname || !isChannelReadyRef.current)
+      if (
+        !channelRef.current ||
+        !nickname ||
+        !myId ||
+        !isChannelReadyRef.current
+      ) {
         return;
+      }
 
-      channelRef.current.send({
+      void channelRef.current.send({
         type: "broadcast",
         event: "move",
         payload: {
@@ -184,8 +271,14 @@ export const useMultiplayer = (nickname: string | null) => {
 
   const broadcastChat = useCallback(
     (message: string) => {
-      if (!channelRef.current || !nickname || !isChannelReadyRef.current)
+      if (
+        !channelRef.current ||
+        !nickname ||
+        !myId ||
+        !isChannelReadyRef.current
+      ) {
         return;
+      }
 
       const payload = {
         id: myId,
@@ -193,13 +286,13 @@ export const useMultiplayer = (nickname: string | null) => {
         message: message.slice(0, MAX_CHAT_LENGTH),
       };
 
-      channelRef.current.send({
+      void channelRef.current.send({
         type: "broadcast",
         event: "chat",
         payload,
       });
 
-      // 로컬에서도 처리 (본인이 보낸 메시지)
+      // 브로드캐스트 self 수신은 끄고 로컬 메시지를 즉시 표시한다.
       useChatStore.getState().addMessage({
         ...payload,
         timestamp: Date.now(),
@@ -208,6 +301,16 @@ export const useMultiplayer = (nickname: string | null) => {
     [nickname, myId],
   );
 
+  const broadcastGuestbook = useCallback(() => {
+    if (!channelRef.current || !isChannelReadyRef.current) return;
+
+    void channelRef.current.send({
+      type: "broadcast",
+      event: "guestbook",
+      payload: {},
+    });
+  }, []);
+
   const getPlayerData = useCallback(
     (id: string) => playersDataRef.current.get(id),
     [],
@@ -215,9 +318,11 @@ export const useMultiplayer = (nickname: string | null) => {
 
   return {
     remotePlayerIds,
+    connectionStatus,
+    guestbookRevision,
     getPlayerData,
     broadcastMove,
     broadcastChat,
-    myId,
+    broadcastGuestbook,
   };
 };

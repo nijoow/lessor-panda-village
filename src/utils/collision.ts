@@ -2,6 +2,7 @@ import {
   COLLISION_TREES,
   COLLISION_ROCKS,
   COLLISION_HOUSES,
+  COLLISION_BOARDS,
   COLLISION_BENCHES,
   COLLISION_PONDS,
   COLLISION_LANTERNS,
@@ -104,6 +105,15 @@ for (const h of COLLISION_HOUSES) {
     h.maxX,
     h.minZ,
     h.maxZ,
+  );
+}
+for (const b of COLLISION_BOARDS) {
+  insert(
+    { kind: "box", ...b, maxY: Infinity },
+    b.minX,
+    b.maxX,
+    b.minZ,
+    b.maxZ,
   );
 }
 for (const b of COLLISION_BENCHES) {

@@ -95,9 +95,9 @@ export const VILLAGE: ZoneLayout = {
     { pos: [-7, 0, -6], color: "#ff6b8a" },
     { pos: [-9, 0, -4], color: "#ffb347" },
     { pos: [-10, 0, -7], color: "#a78bfa" },
-    // 집 오른쪽
-    { pos: [5, 0, -5], color: "#f9ca24" },
-    { pos: [7, 0, -6], color: "#ff99cc" },
+    // 집 오른쪽 (게시판 자리는 비움)
+    { pos: [3, 0, -2.5], color: "#f9ca24" },
+    { pos: [8.6, 0, -6.8], color: "#ff99cc" },
     { pos: [9, 0, -4], color: "#ff6b8a" },
     { pos: [10, 0, -7], color: "#ffb347" },
   ],
@@ -113,6 +113,19 @@ export const VILLAGE: ZoneLayout = {
       position: [0, 4.5, -7],
       scale: 5,
       box: { minX: -4.5, maxX: 4.5, minZ: -10.5, maxZ: -3.5 },
+    },
+  ],
+
+  // 마을 방명록 — 집 오른쪽, 스폰 지점(원점)에서 바로 보이는 자리.
+  // 판이 +z(스폰 쪽)를 향하도록 rotation 0.
+  noticeBoards: [
+    {
+      placeId: "village:guestbook",
+      x: 6,
+      z: -5.5,
+      rotation: 0,
+      range: 2.6,
+      box: { minX: 4.8, maxX: 7.2, minZ: -5.9, maxZ: -5.1 },
     },
   ],
 

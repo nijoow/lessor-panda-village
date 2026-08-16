@@ -122,6 +122,24 @@ export interface HousePlacement {
 }
 
 /**
+ * 방명록 게시판. 마을에 남는 쪽지(world_traces)가 걸리는 장소다.
+ *
+ * placeId는 데이터베이스의 `world_traces.place_id`와 1:1로 대응하며,
+ * 이미 쌓인 쪽지가 장소를 잃지 않도록 배포 후에는 바꾸지 않는다.
+ * (`^[a-z0-9][a-z0-9:_-]{0,63}$` 형식을 지켜야 한다.)
+ */
+export interface NoticeBoardPlacement {
+  placeId: string;
+  x: number;
+  z: number;
+  /** 판이 바라보는 방향. 0이면 +z(남쪽) */
+  rotation: number;
+  /** 상호작용 가능 거리 */
+  range: number;
+  box: CollisionBox;
+}
+
+/**
  * 사각 울타리. lines는 측면별 세그먼트 중심 좌표(간격 2) — 비주얼과
  * 충돌 스팬(min-1.5 ~ max+1.5)이 모두 여기서 파생됩니다.
  * 출입구는 해당 측면의 좌표를 비워서 표현합니다.
@@ -151,6 +169,7 @@ export interface ZoneLayout {
   ponds?: PondPlacement[];
   landmarkTrees?: LandmarkTreePlacement[];
   houses?: HousePlacement[];
+  noticeBoards?: NoticeBoardPlacement[];
   fences?: FenceLayout[];
   signs?: SignPlacement[];
   bamboo?: BambooPlacement[];

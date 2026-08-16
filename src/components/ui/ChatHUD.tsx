@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getNicknameColor } from "@/utils/color";
 import { useChatStore } from "@/stores/chatStore";
+import { useGuestbookStore } from "@/stores/guestbookStore";
 
 interface Props {
   onSendMessage: (message: string) => void;
@@ -28,6 +29,9 @@ export const ChatHUD = ({ onSendMessage, onFocusChange }: Props) => {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // 방명록 패널에서 타이핑 중인 Enter/Escape가 채팅을 열지 않도록 한다
+      if (useGuestbookStore.getState().isOpen) return;
+
       if (e.key === "Enter") {
         if (!isTyping) {
           setIsTyping(true);

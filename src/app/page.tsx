@@ -13,8 +13,12 @@ import * as THREE from "three";
 import { Controls } from "@/components/world/Player";
 import { VillageHeader } from "@/components/ui/VillageHeader";
 import { useMultiplayer } from "@/hooks/useMultiplayer";
+import { useGlobalWorld } from "@/hooks/useGlobalWorld";
+import { useGuestbook } from "@/hooks/useGuestbook";
 import { useDayNightCycle } from "@/hooks/useDayNightCycle";
 import { useViewportHeight } from "@/hooks/useViewportHeight";
+import { useGuestbookStore } from "@/stores/guestbookStore";
+import { NOTICE_BOARDS } from "@/constants/world";
 import { audio } from "@/lib/audio";
 
 // ─────────────────────────────────────────────
@@ -89,6 +93,20 @@ const InventoryHUD = dynamic(
   { ssr: false },
 );
 
+const WorldHUD = dynamic(
+  () => import("@/components/ui/WorldHUD").then((mod) => mod.WorldHUD),
+  { ssr: false },
+);
+
+const GuestbookPanel = dynamic(
+  () =>
+    import("@/components/ui/GuestbookPanel").then((mod) => mod.GuestbookPanel),
+  { ssr: false },
+);
+
+// 현재 흔적 장소는 마을 게시판 하나뿐이다 (docs/roadmap.md)
+const GUESTBOOK_PLACE_ID = NOTICE_BOARDS[0]?.placeId ?? "";
+
 const keyboardMap: KeyboardControlsEntry<Controls>[] = [
   { name: Controls.forward, keys: ["ArrowUp", "KeyW"] },
   { name: Controls.backward, keys: ["ArrowDown", "KeyS"] },
@@ -124,9 +142,16 @@ interface HomeContentProps {
 
 const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
   const { progress } = useProgress();
-  const [nickname, setNickname] = useState<string | null>(null);
   const [isChatFocused, setIsChatFocused] = useState(false);
   const [isAssetsReady, setIsAssetsReady] = useState(false);
+  const {
+    worldSession,
+    savedNickname,
+    isReady: isWorldReady,
+    isEntering,
+    entryError,
+    enterWorld,
+  } = useGlobalWorld();
 
   useEffect(() => {
     if (progress === 100) {
@@ -143,11 +168,39 @@ const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
   }, [isNight]);
 
   // 멀티플레이어 훅 (Zero-Rerender 아키텍처)
-  const { remotePlayerIds, getPlayerData, broadcastMove, broadcastChat, myId } =
-    useMultiplayer(nickname);
+  const {
+    remotePlayerIds,
+    connectionStatus,
+    guestbookRevision,
+    getPlayerData,
+    broadcastMove,
+    broadcastChat,
+    broadcastGuestbook,
+  } = useMultiplayer(
+    worldSession?.nickname ?? null,
+    worldSession?.worldKey ?? null,
+    worldSession?.userId ?? null,
+  );
+
+  const {
+    submit: submitNote,
+    remove: removeNote,
+    isSubmitting: isWritingNote,
+    writeError: noteError,
+  } = useGuestbook(
+    GUESTBOOK_PLACE_ID,
+    worldSession?.userId ?? null,
+    guestbookRevision,
+    broadcastGuestbook,
+  );
+
+  // 방명록 패널이 열려 있는 동안에도 플레이어 조작을 잠근다
+  const isGuestbookOpen = useGuestbookStore((state) => state.isOpen);
+  const inputLocked = isChatFocused || isGuestbookOpen;
 
   // 로딩과 지연 처리가 모두 끝난 후에만 닉네임 입력창이 보이도록 함
-  const showNicknameOverlay = isAssetsReady && nickname === null;
+  const showNicknameOverlay =
+    isAssetsReady && isWorldReady && worldSession === null;
 
   return (
     <main className="w-full h-full relative overflow-hidden bg-[#fdfaf6]">
@@ -156,17 +209,20 @@ const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
       <AnimatePresence>
         {showNicknameOverlay && (
           <NicknameOverlay
-            onJoin={(name) => {
+            initialNickname={savedNickname}
+            isSubmitting={isEntering}
+            error={entryError}
+            onJoin={async (name) => {
               // 사용자 제스처 컨텍스트 안에서 오디오 시작 (자동재생 정책)
               audio.init();
               audio.setNight(isNight);
-              setNickname(name);
+              await enterWorld(name);
             }}
           />
         )}
       </AnimatePresence>
 
-      {nickname !== null && (
+      {worldSession !== null && (
         <>
           <ChatHUD
             onSendMessage={broadcastChat}
@@ -178,6 +234,21 @@ const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
           <Minimap />
           <SoundToggle />
           <InventoryHUD />
+          <GuestbookPanel
+            userId={worldSession.userId}
+            onSubmit={submitNote}
+            onDelete={removeNote}
+            isSubmitting={isWritingNote}
+            writeError={noteError}
+          />
+          <WorldHUD
+            onlineCount={
+              connectionStatus === "connected"
+                ? remotePlayerIds.length + 1
+                : 0
+            }
+            connectionStatus={connectionStatus}
+          />
           <VillageHeader isNight={isNight} />
         </>
       )}
@@ -185,13 +256,13 @@ const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
       <Scene isNight={isNight}>
         <World
           isNight={isNight}
-          nickname={nickname}
-          isChatFocused={isChatFocused}
+          nickname={worldSession?.nickname ?? null}
+          inputLocked={inputLocked}
           playerRef={playerRef}
           remotePlayerIds={remotePlayerIds}
           getPlayerData={getPlayerData}
           broadcastMove={broadcastMove}
-          myId={myId}
+          myId={worldSession?.userId ?? ""}
         />
       </Scene>
     </main>
