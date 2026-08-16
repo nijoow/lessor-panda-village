@@ -6,7 +6,8 @@
 
 - 걷기, 달리기, 점프, 클릭 이동
 - 인사·춤 이모트, 벤치 앉기
-- 대나무 수확과 낮밤 전환
+- 마을 게시판 방명록 — 죽순으로 쪽지를 걸고, 다시 와서 확인
+- 대나무 수확과 낮밤 전환(2분 주기)
 - Supabase 기반 익명 정체성
 - 하나의 전역 월드에서 실시간 위치, 접속 상태, 채팅 공유
 - 영속 프로필과 장소 기반 흔적을 위한 데이터 구조
@@ -40,7 +41,7 @@ Supabase Dashboard에서 `Authentication → Sign In / Providers → Anonymous S
 - 이동: `WASD` 또는 방향키
 - 달리기: `Shift`
 - 점프: `Space`
-- 상호작용: `E`
+- 상호작용(벤치 앉기 / 방명록 열기 / 대나무 수확): `E`
 - 인사 / 춤: `1` / `2`
 - 클릭 이동: 마우스 오른쪽 버튼
 - 카메라: 드래그와 휠
@@ -52,9 +53,17 @@ pnpm exec tsc --noEmit
 pnpm lint
 pnpm build
 pnpm player:validate
+pnpm scenery:validate
 ```
 
-플레이어 GLB를 원본에서 다시 만들려면 `pnpm player:rebuild`를 사용합니다.
+3D 에셋은 원본이 `assets/`에 있고, 스크립트가 `public/models`로 런타임 버전을 굽습니다.
+
+- 플레이어 GLB 재생성: `pnpm player:rebuild`
+- 경관 GLB(집·고목) 재압축: `pnpm scenery:optimize`
+
+경관 파이프라인은 지오메트리를 간소화하지 않고 meshopt 양자화와 webp
+텍스처로만 줄입니다. `scenery:validate`가 압축 전후의 정점 수와 bbox를
+비교해 품질 손실과 크기 변화를 잡아냅니다.
 
 ## 문서
 
