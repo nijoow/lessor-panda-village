@@ -29,9 +29,11 @@ export const ZONES: ZoneLayout[] = [
 ];
 
 // ---------- 월드 경계 ----------
+// 경계 숲(wilds)이 ±88까지 이어지므로, 걷기 한계를 그보다 안쪽에 둔다.
+// 멈춰 선 지점에서도 나무가 계속 보여 "숲이 깊어 더 못 간다"로 읽힌다.
 export const WORLD_BOUNDS = {
-  min: -80,
-  max: 80,
+  min: -74,
+  max: 74,
 };
 
 /** 현재 좌표가 속한 존 (bounds 있는 존만 대상, 없으면 null) */

@@ -4,9 +4,11 @@ import { Environment } from "@/components/world/Environment";
 import { Ground } from "@/components/world/Ground";
 import { House } from "@/components/world/House";
 import { NoticeBoards } from "@/components/world/NoticeBoard";
-import { NPCPanda } from "@/components/world/NPCPanda";
-import { NPCS } from "@/constants/npcs";
-import { PetalParticles, FireflyParticles } from "@/components/world/Particles";
+import {
+  PetalParticles,
+  FireflyParticles,
+  ButterflyParticles,
+} from "@/components/world/Particles";
 import { Player } from "@/components/world/Player";
 import { RemotePlayer } from "@/components/world/RemotePlayer";
 import { PlayerState } from "@/types/multiplayer";
@@ -47,11 +49,7 @@ export const World = ({
       <NoticeBoards isNight={isNight} />
       <FireflyParticles isNight={isNight} />
       <PetalParticles isNight={isNight} />
-
-      {/* 배회 NPC 판다들 */}
-      {NPCS.map((npc) => (
-        <NPCPanda key={npc.id} spec={npc} />
-      ))}
+      <ButterflyParticles isNight={isNight} />
 
       {/* 다른 플레이어들 렌더링 (Zero-Rerender 최적화) */}
       {remotePlayerIds.map((id) => (

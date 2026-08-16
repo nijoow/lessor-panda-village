@@ -274,3 +274,131 @@ export const FireflyParticles = ({ isNight }: ParticleProps) => {
     </instancedMesh>
   );
 };
+
+// ─────────────────────────────────────────────
+// 나비 파티클 (낮)
+//
+// NPC를 걷어낸 뒤 혼자 접속했을 때도 월드에 움직이는 것이 남아 있도록
+// 하는 앰비언트 생물입니다. AI 없이 앵커 주위를 도는 궤도만 그리므로
+// 길찾기 비용이 들지 않습니다.
+// ─────────────────────────────────────────────
+const BUTTERFLY_COUNT = 20;
+
+// 존별로 흩어 두어 어느 구역에 있어도 한두 마리가 보인다
+const BUTTERFLY_ANCHORS = [
+  { x: -6, z: 5 }, // 마을 고목
+  { x: 6, z: 8 }, // 마을 광장
+  { x: 2, z: 28 }, // 남쪽 들판
+  { x: 33, z: 31 }, // 대숲 공터
+  { x: -30, z: 29 }, // 강가
+];
+
+const BUTTERFLY_COLORS = [
+  new THREE.Color("#fff1a8"),
+  new THREE.Color("#ffd0e0"),
+  new THREE.Color("#cfe8ff"),
+  new THREE.Color("#ffdaa8"),
+];
+
+interface ButterflyData {
+  anchorX: number;
+  anchorZ: number;
+  angle: number;
+  angularSpeed: number;
+  radius: number;
+  baseY: number;
+  bobPhase: number;
+  flapSpeed: number;
+  colorIndex: number;
+}
+
+const generateButterflyData = (): ButterflyData[] => {
+  const butterflies: ButterflyData[] = [];
+  for (let i = 0; i < BUTTERFLY_COUNT; i++) {
+    const anchor = BUTTERFLY_ANCHORS[i % BUTTERFLY_ANCHORS.length];
+    butterflies.push({
+      anchorX: anchor.x + getRandomPos(4),
+      anchorZ: anchor.z + getRandomPos(4),
+      angle: Math.random() * Math.PI * 2,
+      // 방향이 섞이도록 절반은 반대로 돈다
+      angularSpeed: (0.25 + Math.random() * 0.35) * (i % 2 === 0 ? 1 : -1),
+      radius: 1.2 + Math.random() * 2.4,
+      baseY: 0.8 + Math.random() * 1.4,
+      bobPhase: Math.random() * Math.PI * 2,
+      flapSpeed: 9 + Math.random() * 5,
+      colorIndex: Math.floor(Math.random() * BUTTERFLY_COLORS.length),
+    });
+  }
+  return butterflies;
+};
+
+export const ButterflyParticles = ({ isNight }: ParticleProps) => {
+  const meshRef = useRef<THREE.InstancedMesh>(null!);
+  const materialRef = useRef<THREE.MeshStandardMaterial>(null!);
+  const [butterflies] = useState(() => generateButterflyData());
+
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+
+  // 색은 변하지 않으므로 mount 시 1회만 설정
+  useEffect(() => {
+    if (!meshRef.current) return;
+    butterflies.forEach((b, i) => {
+      meshRef.current.setColorAt(i, BUTTERFLY_COLORS[b.colorIndex]);
+    });
+    if (meshRef.current.instanceColor)
+      meshRef.current.instanceColor.needsUpdate = true;
+  }, [butterflies]);
+
+  useFrame((state, delta) => {
+    if (!meshRef.current || !materialRef.current) return;
+    const t = state.clock.elapsedTime;
+    const dt = Math.min(delta, 0.1);
+
+    // 밤에는 반딧불이에게 자리를 내준다
+    const targetOpacity = isNight ? 0 : 0.95;
+    materialRef.current.opacity = THREE.MathUtils.lerp(
+      materialRef.current.opacity,
+      targetOpacity,
+      frameLerp(0.02, dt),
+    );
+
+    if (materialRef.current.opacity < 0.01) {
+      meshRef.current.visible = false;
+      return;
+    }
+    meshRef.current.visible = true;
+
+    butterflies.forEach((b, i) => {
+      b.angle += b.angularSpeed * dt;
+
+      dummy.position.set(
+        b.anchorX + Math.cos(b.angle) * b.radius,
+        b.baseY + Math.sin(t * 1.6 + b.bobPhase) * 0.35,
+        b.anchorZ + Math.sin(b.angle) * b.radius,
+      );
+      // 진행 방향을 보게 하고, 진행축 회전으로 날갯짓을 흉내낸다
+      dummy.rotation.set(0, -b.angle, Math.sin(t * b.flapSpeed) * 1.0);
+      dummy.scale.setScalar(0.17);
+      dummy.updateMatrix();
+      meshRef.current.setMatrixAt(i, dummy.matrix);
+    });
+
+    meshRef.current.instanceMatrix.needsUpdate = true;
+  });
+
+  return (
+    <instancedMesh
+      ref={meshRef}
+      args={[undefined, undefined, BUTTERFLY_COUNT]}
+    >
+      <planeGeometry args={[1, 0.62]} />
+      <meshStandardMaterial
+        ref={materialRef}
+        side={THREE.DoubleSide}
+        transparent
+        opacity={0.95}
+        roughness={0.6}
+      />
+    </instancedMesh>
+  );
+};
