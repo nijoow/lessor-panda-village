@@ -16,6 +16,8 @@ interface ChatState {
   addMessage: (msg: ChatMessage) => void;
   /** 퇴장한 플레이어의 말풍선 데이터 정리 (메모리 누수 방지) */
   removePlayer: (id: string) => void;
+  /** 다른 방의 채팅이 새 방에 남지 않도록 전체 초기화 */
+  reset: () => void;
 }
 
 export const useChatStore = create<ChatState>((set) => ({
@@ -38,4 +40,6 @@ export const useChatStore = create<ChatState>((set) => ({
       delete lastMessages[id];
       return { lastMessages };
     }),
+
+  reset: () => set({ chatLog: [], lastMessages: {} }),
 }));

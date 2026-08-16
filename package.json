@@ -8,7 +8,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "player:rebuild": "node scripts/rebuild-player-model.mjs",
+    "player:validate": "node scripts/validate-player-model.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",

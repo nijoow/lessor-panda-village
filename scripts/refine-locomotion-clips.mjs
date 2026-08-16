@@ -1,7 +1,7 @@
 /**
  * 걷기/달리기 클립 리파인:
- * 1. 어깨 회전 감쇠 — Meshy 리타게팅 클립이 어깨를 과하게 내려
- *    상체가 출렁이므로, 휴식 포즈 기준 회전 진폭을 45%로 줄입니다.
+ * 1. 상체 회전 감쇠 — Meshy 리타게팅 클립이 어깨와 머리를 과하게 내려
+ *    얼굴까지 끌려가므로, 휴식 포즈 기준으로 본별 진폭을 줄입니다.
  * 2. 꼬리 스웨이 합성 — 새 꼬리 본(Tail1~4)용 흔들림 트랙을 추가합니다.
  *    걷기: 몸 스웨이에 맞춘 좌우 흔들기(체인 아래로 진폭·위상 증가),
  *    달리기: 상하 바운스 위주로 꼬리가 흐르는 느낌.
@@ -14,8 +14,19 @@
 import fs from "node:fs";
 import { loadRig, qmul, qnorm, axisAngle, X, Y } from "./lib/clip-gen.mjs";
 
-const SHOULDER_FACTOR = 0.45; // 어깨 회전 잔존 비율
-const SHOULDER_BONES = new Set(["LeftShoulder", "RightShoulder"]);
+const BONE_FACTORS = new Map([
+  ["LeftShoulder", 0.08],
+  ["RightShoulder", 0.08],
+  ["LeftArm", 0.55],
+  ["RightArm", 0.55],
+  ["LeftForeArm", 0.7],
+  ["RightForeArm", 0.7],
+  ["Spine02", 0.35],
+  ["Spine01", 0.35],
+  ["Spine", 0.35],
+  ["neck", 0.25],
+  ["Head", 0.2],
+]);
 const TAIL_KEYS = 17;
 
 // 꼬리 본 rest TRS는 base.glb에서 가져옴
@@ -148,15 +159,16 @@ const refine = (path, spec) => {
   const clip = loadClipGlb(path);
   const duration = Math.max(...clip.tracks.map((t) => t.times.at(-1)));
 
-  // 1. 어깨 감쇠
+  // 1. 상체 감쇠
   let attenuated = 0;
   for (const t of clip.tracks) {
-    if (t.path !== "rotation" || !SHOULDER_BONES.has(t.node)) continue;
+    if (t.path !== "rotation" || !BONE_FACTORS.has(t.node)) continue;
     const rest = baseRig.boneByName.get(t.node).r;
+    const factor = BONE_FACTORS.get(t.node);
     const keyCount = t.values.length / 4;
     for (let k = 0; k < keyCount; k++) {
       const q = t.values.slice(k * 4, k * 4 + 4);
-      const out = nlerp(rest, q, SHOULDER_FACTOR);
+      const out = nlerp(rest, q, factor);
       for (let i = 0; i < 4; i++) t.values[k * 4 + i] = out[i];
     }
     attenuated++;
@@ -194,7 +206,7 @@ const refine = (path, spec) => {
 
   saveClipGlb(path, clip);
   console.log(
-    `✅ ${path}: 어깨 트랙 ${attenuated}개 ${SHOULDER_FACTOR}× 감쇠, 꼬리 스웨이 4트랙 추가 (duration ${duration.toFixed(2)}s)`,
+    `✅ ${path}: 상체 트랙 ${attenuated}개 본별 감쇠, 꼬리 스웨이 4트랙 추가 (duration ${duration.toFixed(2)}s)`,
   );
 };
 

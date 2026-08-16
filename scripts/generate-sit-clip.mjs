@@ -36,12 +36,9 @@ const SIT_POSE = {
   RightArm: axisAngle(Z, 34),
   LeftForeArm: qmul(axisAngle(X, -48), axisAngle(Z, -10)), // 손을 무릎 위로
   RightForeArm: qmul(axisAngle(X, -48), axisAngle(Z, 10)),
-  // 꼬리는 등받이를 뚫지 않도록 좌석 면을 따라 몸 옆으로 낮게 휘감음
-  // (레서판다가 앉을 때 꼬리를 몸에 두르는 시그니처 포즈)
+  // 꼬리는 등받이를 뚫지 않도록 몸 옆으로 통째로 회전시킵니다.
+  // 현재 메시의 꼬리 표면은 Tail1에 강체 가중되어 형태가 찌그러지지 않습니다.
   Tail1: qmul(axisAngle(Y, 75), axisAngle(X, -6)),
-  Tail2: qmul(axisAngle(Y, 115), axisAngle(X, -12)),
-  Tail3: qmul(axisAngle(Y, 150), axisAngle(X, -14)),
-  Tail4: qmul(axisAngle(Y, 178), axisAngle(X, -14)),
 };
 
 // 앉은 높이: 엉덩이를 휴식 높이에서 살짝 내려 좌석에 밀착 (cm 단위)
@@ -62,11 +59,6 @@ const breathDelta = (boneName, phase) => {
       return axisAngle(Z, breath * -1.5);
     case "RightArm":
       return axisAngle(Z, breath * 1.5);
-    // 꼬리 끝이 호흡에 맞춰 잔잔하게 살랑임
-    case "Tail3":
-      return axisAngle(Y, breath * 2);
-    case "Tail4":
-      return axisAngle(Y, Math.sin(phase * Math.PI * 2 - 0.5) * 3.5);
     default:
       return null;
   }

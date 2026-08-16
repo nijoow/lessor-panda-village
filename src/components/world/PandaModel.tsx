@@ -98,7 +98,8 @@ export const PandaBody = ({
       map,
       roughness: 0.9,
       metalness: 0,
-      side: THREE.DoubleSide,
+      // Meshy 메시의 열린 표면 안쪽이 비치며 색 조각처럼 보이지 않게 한다.
+      side: THREE.FrontSide,
     });
   }, [srcMaterial]);
 
