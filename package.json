@@ -12,7 +12,8 @@
     "player:rebuild": "node scripts/rebuild-player-model.mjs",
     "player:validate": "node scripts/validate-player-model.mjs",
     "scenery:optimize": "node scripts/optimize-scenery-glb.mjs",
-    "scenery:validate": "node scripts/validate-scenery-glb.mjs"
+    "scenery:validate": "node scripts/validate-scenery-glb.mjs",
+    "world:verify": "node scripts/verify-world-access.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",

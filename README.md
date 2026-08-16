@@ -54,7 +54,12 @@ pnpm lint
 pnpm build
 pnpm player:validate
 pnpm scenery:validate
+pnpm world:verify
 ```
+
+`world:verify`는 앱과 같은 요청으로 Supabase 권한 경계를 확인합니다. 타입
+검사와 빌드는 RLS·grant 문제를 잡지 못하므로, 데이터베이스 DDL을 바꾼 뒤에는
+이 검사를 돌립니다. 실행할 때마다 익명 사용자가 하나 생깁니다.
 
 3D 에셋은 원본이 `assets/`에 있고, 스크립트가 `public/models`로 런타임 버전을 굽습니다.
 
