@@ -23,7 +23,10 @@ export const ZoneBanner = () => {
   if (enterCount <= 1 || !zoneName) return null;
 
   return (
-    <div className="absolute inset-x-0 top-24 sm:top-28 z-40 flex justify-center pointer-events-none">
+    // VillageHeader가 상단 중앙을 쓴다: 타이틀 카드 아래에 낮/밤 상태 토스트가
+    // 붙으므로, 그 아래(모바일 약 140px, 데스크톱 약 180px)에서 시작해야 겹치지
+    // 않는다.
+    <div className="absolute inset-x-0 top-40 sm:top-52 z-40 flex justify-center pointer-events-none">
       <motion.div
         key={enterCount}
         initial={{ opacity: 0, y: -14, scale: 0.96 }}

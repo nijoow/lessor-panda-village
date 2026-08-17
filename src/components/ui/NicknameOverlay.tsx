@@ -85,10 +85,10 @@ export const NicknameOverlay = ({
 
         <div className="text-center mb-10">
           <h2 className="text-2xl sm:text-4xl font-black text-sky-950 mb-3 tracking-tight">
-            모두의 레서판다 마을
+            레서판다 마을 입장
           </h2>
           <p className="text-sky-800/60 font-bold text-base sm:text-lg">
-            하나의 영속 월드에서 다른 방문자와 만나고 흔적을 이어가요.
+            대나무를 모으고, 게시판에 방명록을 남겨보세요.
           </p>
         </div>
 
@@ -145,7 +145,7 @@ export const NicknameOverlay = ({
               </span>
             ) : (
               <span className="flex items-center justify-center gap-2">
-                공유 월드 입장하기
+                마을로 들어가기
                 <svg
                   className="w-6 h-6"
                   fill="none"
