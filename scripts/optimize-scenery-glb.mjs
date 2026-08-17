@@ -4,10 +4,13 @@
  * assets/scenery/source의 원본을 읽어 public/models로 런타임 버전을 굽는다.
  * 원본은 저장소에 그대로 두고, 배포되는 파일만 압축한다.
  *
- * 방침: 품질을 낮추지 않는다.
- * - simplify(지오메트리 간소화)는 끈다. 실루엣이 뭉개지면 저폴리로
- *   내려가는 것과 같아진다.
- * - meshopt 양자화·압축으로 지오메트리 용량만 줄인다. drei의 useGLTF가
+ * 방침: 실루엣을 지키는 선에서 최대한 가볍게.
+ * - simplify를 오차 0.001(메시 반경의 0.1%)로 건다. 원본은 AI 생성 메시라
+ *   형상 정보 대비 폴리곤이 과했다(집 885k, 고목 350k). 이 오차에서 집
+ *   46k · 고목 22k로 내려가며, 실루엣 판정은 scenery:validate의 월드 bbox
+ *   비교가 맡는다. 용량이 아니라 렌더 비용을 줄이는 것이 목적이다 —
+ *   두 모델 모두 그림자를 던져 매 프레임 두 번씩 그려진다.
+ * - meshopt 양자화·압축으로 지오메트리 용량도 줄인다. drei의 useGLTF가
  *   three-stdlib의 MeshoptDecoder를 기본으로 물고 있어 CDN이 필요 없다
  *   (Draco를 쓰면 외부 디코더를 받아와야 한다).
  * - 텍스처는 1024로 리사이즈하고 webp로 바꾼다. 등각 카메라가 20~40 유닛
@@ -44,9 +47,12 @@ const OPTIONS = [
   "webp",
   "--texture-size",
   "1024",
-  // 지오메트리는 손대지 않는다
+  // weld가 선행되어야 simplify가 동작한다(원본은 정점이 쪼개져 있다).
+  // optimize의 --weld 기본값이 true라 그대로 둔다.
   "--simplify",
-  "false",
+  "true",
+  "--simplify-error",
+  "0.001",
 ];
 
 const mb = (bytes) => `${(bytes / 1024 / 1024).toFixed(2)} MB`;

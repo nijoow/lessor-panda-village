@@ -8,8 +8,9 @@
  *
  * 확인 항목:
  * - EXT_meshopt_compression / KHR_mesh_quantization 디코드
- * - 정점 수가 원본과 같은지 (간소화가 끼어들지 않았는지)
- * - 노드 변환까지 적용한 월드 bbox가 원본과 같은지
+ * - 간소화 비율이 의도한 범위 안인지 (설정 실수로 형상이 무너지지 않았는지)
+ * - 노드 변환까지 적용한 월드 bbox가 원본과 같은지 — 폴리곤을 줄여도
+ *   실루엣과 크기는 유지되어야 한다. 충돌 박스가 이 크기에 맞춰져 있다.
  *   (양자화는 정점을 정규화하고 노드 스케일로 복원하므로, 지오메트리만
  *    꺼내 쓰면 크기가 틀어진다. 렌더 코드가 씬을 통째로 쓰는지 잡아낸다.)
  *
@@ -68,6 +69,11 @@ const TARGETS = [
 // 부동소수 오차가 남는다. 모델 크기 대비 이 정도는 허용한다.
 const BBOX_TOLERANCE = 0.01;
 
+// 간소화 결과가 이 범위를 벗어나면 파이프라인 설정이 잘못된 것으로 본다.
+// (오차 0.001에서 집 9.4% · 고목 11.3% 수준을 유지한다)
+const MIN_KEPT_RATIO = 0.03;
+const MAX_KEPT_RATIO = 0.9;
+
 const parse = (path) =>
   new Promise((res, rej) => {
     const loader = new GLTFLoader();
@@ -122,8 +128,20 @@ for (const { source, output } of TARGETS) {
     if (after.meshes !== before.meshes) {
       problems.push(`메시 수 ${before.meshes} → ${after.meshes}`);
     }
-    if (after.vertices !== before.vertices) {
-      problems.push(`정점 수 ${before.vertices} → ${after.vertices}`);
+    // 간소화는 의도된 것이므로 정점 수가 같기를 요구하지 않는다. 다만
+    // 형상이 통째로 무너지는 사고(가령 오차 인자를 잘못 넣어 1%만 남는 것)는
+    // 잡아야 하므로 하한을 둔다. 실루엣 자체는 아래 bbox 비교가 검증한다.
+    const kept = after.vertices / before.vertices;
+    if (kept > MAX_KEPT_RATIO) {
+      problems.push(
+        `간소화가 적용되지 않음 (정점 ${(kept * 100).toFixed(1)}% 유지)`,
+      );
+    }
+    if (kept < MIN_KEPT_RATIO) {
+      problems.push(
+        `과도한 간소화 (정점 ${before.vertices.toLocaleString()} → ` +
+          `${after.vertices.toLocaleString()}, ${(kept * 100).toFixed(1)}%만 남음)`,
+      );
     }
     for (let i = 0; i < 3; i++) {
       if (
