@@ -1,38 +1,39 @@
 "use client";
 
 import { Html } from "@react-three/drei";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { chatStore } from "@/stores/chatStore";
+import { useChatStore } from "@/stores/chatStore";
 
 interface Props {
   playerId: string;
 }
 
-export const ChatBubble = ({ playerId }: Props) => {
-  useSyncExternalStore(
-    chatStore.subscribe,
-    chatStore.getChatLog,
-    chatStore.getChatLog,
-  );
+const BUBBLE_DURATION_MS = 8000;
 
-  const lastMsg = chatStore.getLastMessage(playerId);
-  const message = lastMsg?.message || "";
-  const timestamp = lastMsg?.timestamp || 0;
+export const ChatBubble = ({ playerId }: Props) => {
+  // 셀렉터 구독: 이 플레이어의 메시지가 바뀔 때만 리렌더
+  const lastMsg = useChatStore((state) => state.lastMessages[playerId]);
+  const message = lastMsg?.message ?? "";
+  const timestamp = lastMsg?.timestamp ?? 0;
 
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    if (message) {
-      const showTimer = setTimeout(() => setVisible(true), 10);
-      const hideTimer = setTimeout(() => {
-        setVisible(false);
-      }, 8000);
-      return () => {
-        clearTimeout(showTimer);
-        clearTimeout(hideTimer);
-      };
-    }
+    if (!message) return;
+
+    // 표시 시간이 이미 지난 메시지는 다시 띄우지 않음 (리마운트/재입장 대응)
+    const remaining = BUBBLE_DURATION_MS - (Date.now() - timestamp);
+    if (remaining <= 0) return;
+
+    const showTimer = setTimeout(() => setVisible(true), 10);
+    const hideTimer = setTimeout(() => {
+      setVisible(false);
+    }, remaining);
+    return () => {
+      clearTimeout(showTimer);
+      clearTimeout(hideTimer);
+    };
   }, [message, timestamp]);
 
   if (!message) return null;

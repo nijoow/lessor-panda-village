@@ -1,42 +1,45 @@
-import { ChatMessage } from '@/hooks/useMultiplayer';
+import { create } from "zustand";
+import { ChatMessage } from "@/types/multiplayer";
 
-/**
- * React State를 거치지 않는 초고속 채팅 저장소.
- * useFrame 내부에서 직접 참조하여 리렌더링 없이 말풍선을 제어합니다.
- */
+const MAX_LOG_SIZE = 20;
 
-// 플레이어별 최신 채팅 메시지 (말풍선용)
-const lastMessageMap = new Map<string, ChatMessage>();
+export interface ChatLogEntry extends ChatMessage {
+  /** 리스트 렌더링용 로컬 고유 키 (네트워크로 전송되지 않음) */
+  messageId: string;
+}
 
-// HUD용 채팅 로그 (최근 20개)
-let chatLog: ChatMessage[] = [];
+interface ChatState {
+  /** HUD용 채팅 로그 (최근 20개) */
+  chatLog: ChatLogEntry[];
+  /** 플레이어별 최신 메시지 (말풍선용) */
+  lastMessages: Record<string, ChatMessage>;
+  addMessage: (msg: ChatMessage) => void;
+  /** 퇴장한 플레이어의 말풍선 데이터 정리 (메모리 누수 방지) */
+  removePlayer: (id: string) => void;
+  /** 다른 방의 채팅이 새 방에 남지 않도록 전체 초기화 */
+  reset: () => void;
+}
 
-// HUD 구독자 (ChatHUD만 사용)
-type Listener = () => void;
-const listeners = new Set<Listener>();
+export const useChatStore = create<ChatState>((set) => ({
+  chatLog: [],
+  lastMessages: {},
 
-export const chatStore = {
-  /** 새 메시지 추가 (useMultiplayer에서 호출) */
-  addMessage: (msg: ChatMessage) => {
-    lastMessageMap.set(msg.id, msg);
-    chatLog = [...chatLog.slice(-19), msg];
-    // HUD 리스너에게만 알림 (Scene 리렌더링 없음)
-    listeners.forEach((fn) => fn());
-  },
+  addMessage: (msg) =>
+    set((state) => ({
+      chatLog: [
+        ...state.chatLog.slice(-(MAX_LOG_SIZE - 1)),
+        { ...msg, messageId: crypto.randomUUID() },
+      ],
+      lastMessages: { ...state.lastMessages, [msg.id]: msg },
+    })),
 
-  /** 특정 플레이어의 최신 채팅 가져오기 (useFrame에서 호출) */
-  getLastMessage: (id: string): ChatMessage | undefined => {
-    return lastMessageMap.get(id);
-  },
+  removePlayer: (id) =>
+    set((state) => {
+      if (!(id in state.lastMessages)) return state;
+      const lastMessages = { ...state.lastMessages };
+      delete lastMessages[id];
+      return { lastMessages };
+    }),
 
-  /** HUD용 전체 로그 가져오기 */
-  getChatLog: (): ChatMessage[] => {
-    return chatLog;
-  },
-
-  /** HUD 구독 (ChatHUD 전용) */
-  subscribe: (listener: Listener): (() => void) => {
-    listeners.add(listener);
-    return () => listeners.delete(listener);
-  },
-};
+  reset: () => set({ chatLog: [], lastMessages: {} }),
+}));

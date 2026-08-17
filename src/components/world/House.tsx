@@ -1,15 +1,8 @@
 "use client";
 
 import { useGLTF } from "@react-three/drei";
+import { useMemo } from "react";
 import * as THREE from "three";
-import { GLTF } from "three-stdlib";
-
-type GLTFResult = GLTF & {
-  nodes: {
-    mesh_0: THREE.Mesh;
-  };
-  materials: Record<string, THREE.Material>;
-};
 
 interface Props {
   position?: [number, number, number];
@@ -22,18 +15,25 @@ export const House = ({
   rotation = [0, 0, 0],
   scale = 1,
 }: Props) => {
-  const { nodes } = useGLTF(
-    "/models/house/panda_house.glb",
-  ) as unknown as GLTFResult;
+  const { scene } = useGLTF("/models/house/panda_house.glb");
+
+  // 지오메트리만 꺼내 쓰면 GLB 노드 자체의 변환이 사라진다.
+  // meshopt 양자화는 정점을 정규화 범위로 굽고 노드 스케일로 원래 크기를
+  // 복원하므로, 씬을 통째로 복제해야 압축 전후 크기가 같게 유지된다.
+  const model = useMemo(() => {
+    const clone = scene.clone(true);
+    clone.traverse((node) => {
+      if (node instanceof THREE.Mesh) {
+        node.castShadow = true;
+        node.receiveShadow = true;
+      }
+    });
+    return clone;
+  }, [scene]);
 
   return (
     <group position={position} rotation={rotation} scale={scale} dispose={null}>
-      <mesh
-        geometry={nodes.mesh_0.geometry}
-        material={nodes.mesh_0.material}
-        castShadow
-        receiveShadow
-      />
+      <primitive object={model} />
     </group>
   );
 };

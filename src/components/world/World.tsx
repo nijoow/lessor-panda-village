@@ -3,17 +3,24 @@
 import { Environment } from "@/components/world/Environment";
 import { Ground } from "@/components/world/Ground";
 import { House } from "@/components/world/House";
-import { PetalParticles, FireflyParticles } from "@/components/world/Particles";
+import { NoticeBoards } from "@/components/world/NoticeBoard";
+import {
+  PetalParticles,
+  FireflyParticles,
+  ButterflyParticles,
+} from "@/components/world/Particles";
 import { Player } from "@/components/world/Player";
 import { RemotePlayer } from "@/components/world/RemotePlayer";
-import { PlayerState } from "@/hooks/useMultiplayer";
+import { PlayerState } from "@/types/multiplayer";
+import { HOUSES } from "@/constants/world";
 import * as THREE from "three";
 
 interface WorldProps {
   isNight: boolean;
   nickname: string | null;
   playerRef: React.MutableRefObject<THREE.Group>;
-  isChatFocused: boolean;
+  /** 채팅 입력 또는 방명록 패널이 열려 있어 플레이어 조작을 막아야 하는 상태 */
+  inputLocked: boolean;
   remotePlayerIds: string[];
   getPlayerData: (id: string) => PlayerState | undefined;
   myId: string;
@@ -26,7 +33,7 @@ export const World = ({
   isNight,
   nickname,
   playerRef,
-  isChatFocused,
+  inputLocked,
   remotePlayerIds,
   getPlayerData,
   myId,
@@ -34,11 +41,15 @@ export const World = ({
 }: WorldProps) => {
   return (
     <>
-      <Ground disableClick={isChatFocused} />
+      <Ground disableClick={inputLocked} />
       <Environment isNight={isNight} />
-      <House position={[0, 4.5, -7]} rotation={[0, 0, 0]} scale={5} />
+      {HOUSES.map((h, i) => (
+        <House key={i} position={h.position} rotation={[0, 0, 0]} scale={h.scale} />
+      ))}
+      <NoticeBoards isNight={isNight} />
       <FireflyParticles isNight={isNight} />
       <PetalParticles isNight={isNight} />
+      <ButterflyParticles isNight={isNight} />
 
       {/* 다른 플레이어들 렌더링 (Zero-Rerender 최적화) */}
       {remotePlayerIds.map((id) => (
@@ -46,15 +57,15 @@ export const World = ({
       ))}
 
       {/* Player - 닉네임이 있을 때만 활성화 */}
-      {nickname && (
+      {nickname !== null ? (
         <Player
           ref={playerRef}
           id={myId}
-          nickname={nickname as string}
+          nickname={nickname}
           onMove={broadcastMove}
-          inputDisabled={isChatFocused}
+          inputDisabled={inputLocked}
         />
-      )}
+      ) : null}
     </>
   );
 };

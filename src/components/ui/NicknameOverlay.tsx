@@ -5,20 +5,28 @@ import { motion } from "framer-motion";
 import Image from "next/image";
 
 interface Props {
-  onJoin: (nickname: string) => void;
+  onJoin: (nickname: string) => Promise<void>;
+  initialNickname?: string;
+  isSubmitting?: boolean;
+  error?: string | null;
 }
 
-export const NicknameOverlay = ({ onJoin }: Props) => {
-  const [nickname, setNickname] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+export const NicknameOverlay = ({
+  onJoin,
+  initialNickname = "",
+  isSubmitting = false,
+  error,
+}: Props) => {
+  const [nickname, setNickname] = useState(initialNickname);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (nickname.trim().length > 0 && nickname.trim().length <= 10) {
-      setIsSubmitting(true);
-      setTimeout(() => {
-        onJoin(nickname.trim());
-      }, 500);
+    if (
+      !isSubmitting &&
+      nickname.trim().length > 0 &&
+      nickname.trim().length <= 10
+    ) {
+      await onJoin(nickname.trim());
     }
   };
 
@@ -80,7 +88,7 @@ export const NicknameOverlay = ({ onJoin }: Props) => {
             레서판다 마을 입장
           </h2>
           <p className="text-sky-800/60 font-bold text-base sm:text-lg">
-            마을에서 사용할 닉네임을 입력해주세요.
+            대나무를 모으고, 게시판에 방명록을 남겨보세요.
           </p>
         </div>
 
@@ -93,6 +101,8 @@ export const NicknameOverlay = ({ onJoin }: Props) => {
               placeholder="닉네임을 입력해주세요"
               maxLength={10}
               autoFocus
+              disabled={isSubmitting}
+              aria-describedby={error ? "room-entry-error" : undefined}
               className="w-full px-6 sm:px-10 py-4 sm:py-6 glass-input rounded-2xl sm:rounded-3xl text-lg sm:text-2xl font-bold text-sky-900 placeholder:text-sky-900/20 shadow-inner group-hover:bg-white/60"
             />
             <div className="absolute right-6 top-1/2 -translate-y-1/2 text-sky-900/30 text-sm font-black bg-white/40 px-3 py-1 rounded-full">
@@ -100,15 +110,25 @@ export const NicknameOverlay = ({ onJoin }: Props) => {
             </div>
           </div>
 
+          {error ? (
+            <p
+              id="room-entry-error"
+              role="alert"
+              className="-mt-4 rounded-2xl bg-red-50/80 px-5 py-3 text-center text-sm font-bold leading-relaxed text-red-700"
+            >
+              {error}
+            </p>
+          ) : null}
+
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
             type="submit"
-            disabled={nickname.trim().length === 0}
+            disabled={nickname.trim().length === 0 || isSubmitting}
             className={`
               relative w-full py-4 sm:py-6 rounded-2xl sm:rounded-3xl text-lg sm:text-2xl font-black shadow-2xl transition-all duration-300 overflow-hidden
               ${
-                nickname.trim().length > 0
+                nickname.trim().length > 0 && !isSubmitting
                   ? "bg-linear-to-br from-orange-400 to-orange-500 text-white shadow-orange-200 cursor-pointer"
                   : "bg-gray-200 text-gray-400 cursor-not-allowed"
               }
@@ -125,7 +145,7 @@ export const NicknameOverlay = ({ onJoin }: Props) => {
               </span>
             ) : (
               <span className="flex items-center justify-center gap-2">
-                마을로 향하기
+                마을로 들어가기
                 <svg
                   className="w-6 h-6"
                   fill="none"
