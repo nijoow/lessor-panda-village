@@ -49,10 +49,14 @@ export enum Controls {
   emoteDance = "emoteDance",
 }
 
-// 등각 뷰(Isometric)에서 카메라 방향을 기준으로 월드 이동 방향을 계산합니다.
-// 카메라 오프셋이 (+X, +Y, +Z) 방향이므로 카메라는 남서쪽에서 바라봅니다.
-const CAM_FORWARD = new THREE.Vector3(-1, 0, -1).normalize();
-const CAM_RIGHT = new THREE.Vector3(1, 0, -1).normalize();
+// 방향키는 "화면에서 보이는 방향"을 따른다.
+//
+// 예전에는 초기 카메라 각도(+X,+Y,+Z에서 내려다보는 등각)를 상수로 굳혀
+// 두었는데, OrbitControls는 좌우 회전이 열려 있어서 카메라를 반 바퀴 돌리면
+// 앞으로 가려던 입력이 뒤로 가는 문제가 있었다. 매 프레임 카메라에서 축을
+// 뽑으면 기본 각도에서는 예전 상수와 정확히 같은 값이 나오고(화면 아래쪽이
+// 월드 -X-Z), 돌린 만큼 그대로 따라온다.
+const WORLD_UP = new THREE.Vector3(0, 1, 0);
 
 // 물리 상수 (초당 단위 - 프레임레이트 무관)
 const WALK_SPEED = 4.8; // units/s (기존 0.08/frame @60fps)
@@ -96,6 +100,8 @@ const pickSeat = (benchIndex: number, px: number, pz: number): Seat => {
 // useFrame 스크래치 객체 (매 프레임 할당으로 인한 GC 압박 방지)
 const _moveDir = new THREE.Vector3();
 const _camDelta = new THREE.Vector3();
+const _camForward = new THREE.Vector3();
+const _camRight = new THREE.Vector3();
 
 export const Player = forwardRef<THREE.Group, Props>(
   ({ id, nickname, onMove, inputDisabled }, ref) => {
@@ -414,11 +420,23 @@ export const Player = forwardRef<THREE.Group, Props>(
         const keyboardRight = (right ? 1 : 0) - (left ? 1 : 0);
 
         if (keyboardForward !== 0 || keyboardRight !== 0) {
-          _moveDir
-            .addScaledVector(CAM_FORWARD, keyboardForward)
-            .addScaledVector(CAM_RIGHT, keyboardRight)
-            .normalize();
-          isMoving = true;
+          // 카메라에서 플레이어를 향하는 벡터를 바닥에 눕힌 것이 "화면 위쪽".
+          // 카메라 각도가 최대 30°까지 서므로 수평 성분이 0이 되는 일은
+          // 없지만, 만에 하나 축이 무너지면 이동을 건너뛴다.
+          _camForward
+            .subVectors(groupRef.current.position, state.camera.position)
+            .setY(0);
+
+          if (_camForward.lengthSq() > 1e-6) {
+            _camForward.normalize();
+            _camRight.crossVectors(_camForward, WORLD_UP);
+
+            _moveDir
+              .addScaledVector(_camForward, keyboardForward)
+              .addScaledVector(_camRight, keyboardRight)
+              .normalize();
+            isMoving = true;
+          }
         }
         // 클릭 이동 체크 (키보드 이동이 없을 때만)
         else if (clickTarget.current) {
@@ -535,6 +553,9 @@ export const Player = forwardRef<THREE.Group, Props>(
       zoneState.playerPos.x = groupRef.current.position.x;
       zoneState.playerPos.z = groupRef.current.position.z;
       zoneState.playerPos.ry = groupRef.current.rotation.y;
+      // 제자리 이모트는 위치가 그대로라 Scene의 그림자 갱신 판단에서
+      // 이동으로 잡히지 않는다. 자세는 바뀌므로 따로 알린다.
+      zoneState.playerPose.emoting = emoteRef.current !== null;
 
       // 네트워크 데이터 전송 최적화 (10fps + 변화 감지)
       lastUpdateRef.current += delta;

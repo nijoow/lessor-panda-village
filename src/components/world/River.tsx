@@ -161,8 +161,8 @@ const RiverRibbon = ({ river }: { river: RiverSpec }) => {
         />
       </mesh>
 
-      {/* 갈대 (줄기 + 이삭) */}
-      <Instances limit={reeds.length} castShadow>
+      {/* 갈대 (줄기 + 이삭) — frames={1} 이유는 Environment.tsx 참고 */}
+      <Instances frames={1} limit={reeds.length} castShadow>
         <cylinderGeometry args={[0.035, 0.05, 1.15, 5]} />
         <meshStandardMaterial color="#6f9c4a" roughness={0.85} />
         {reeds.map((p, i) => (
@@ -174,7 +174,7 @@ const RiverRibbon = ({ river }: { river: RiverSpec }) => {
           />
         ))}
       </Instances>
-      <Instances limit={reeds.length}>
+      <Instances frames={1} limit={reeds.length}>
         <cylinderGeometry args={[0.07, 0.07, 0.3, 5]} />
         <meshStandardMaterial color="#8a6b45" roughness={0.9} />
         {reeds.map((p, i) => (
@@ -188,7 +188,7 @@ const RiverRibbon = ({ river }: { river: RiverSpec }) => {
       </Instances>
 
       {/* 강가 돌 */}
-      <Instances limit={stones.length} castShadow receiveShadow>
+      <Instances frames={1} limit={stones.length} castShadow receiveShadow>
         <dodecahedronGeometry args={[0.4, 0]} />
         <meshStandardMaterial color="#9a9a98" roughness={0.95} />
         {stones.map((p, i) => (

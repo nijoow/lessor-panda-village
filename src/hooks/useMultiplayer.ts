@@ -92,7 +92,9 @@ export const useMultiplayer = (
       channel = supabase.channel(`world:${worldKey}`, {
         config: {
           private: true,
-          broadcast: { ack: true },
+          // ack는 send()가 돌려주는 Promise로만 쓸모가 있는데 아래 세 곳 모두
+          // 결과를 쓰지 않는다. 켜 두면 초당 최대 10건의 이동 브로드캐스트마다
+          // 읽지도 않는 서버 응답을 하나씩 더 받게 된다.
           presence: { key: myId },
         },
       });

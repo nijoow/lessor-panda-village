@@ -25,12 +25,26 @@ interface SkyImpl {
   material: { uniforms: { sunPosition: { value: THREE.Vector3 } } };
 }
 
-// 거리 안개. 경계를 감추고 깊이를 만들며, 월드 전체가 한눈에 들어오지
-// 않게 해서 같은 크기의 월드를 더 넓게 느끼도록 한다.
-// 카메라가 플레이어에서 20~40 떨어져 있으므로, 그 거리에서는 거의 투명하고
-// 60 유닛을 넘어가면서 서서히 짙어지는 밀도를 쓴다.
-const FOG_DENSITY_DAY = 0.0085;
-const FOG_DENSITY_NIGHT = 0.011;
+// 거리 안개. 깊이를 만들되 화면을 뿌옇게 만들지는 않아야 한다.
+//
+// fogExp2의 감쇠는 1 - exp(-(density × 거리)²)라 거리에 제곱으로 붙는다.
+// 카메라를 최대(40)로 당기면 캐릭터까지가 이미 40 유닛이므로, 이 지점에서
+// 몇 %가 끼는지가 체감 화질을 좌우한다. 0.0085에서는 40 유닛에 11%가 껴서
+// 줌아웃할 때마다 화면이 뿌옇게 보였다.
+//
+//   density   20유닛   40유닛   100유닛
+//   0.0085     2.8%    10.9%     42%
+//   0.005      1.0%     3.9%     22%
+//
+// 경계를 감추는 일은 경계 숲(wilds.ts)이 직접 하므로 안개가 짙을 이유가
+// 없다. 가까이는 거의 투명하고 먼 배경만 물드는 값으로 잡는다.
+const FOG_DENSITY_DAY = 0.005;
+const FOG_DENSITY_NIGHT = 0.0065;
+
+// 그림자맵 갱신 임계값. 이보다 작은 변화는 2048 그림자맵에서 한 텍셀도
+// 움직이지 않으므로 다시 그릴 이유가 없다.
+const SHADOW_MOVE_EPS = 0.02; // 월드 유닛 / 라디안
+const SHADOW_SUN_EPS = 0.0005; // 태양 진행도(0~1)
 
 const DayNightCycle = ({ isNight }: { isNight: boolean }) => {
   const dirLightRef = useRef<THREE.DirectionalLight>(null!);
@@ -41,7 +55,19 @@ const DayNightCycle = ({ isNight }: { isNight: boolean }) => {
   // 그림자 카메라(±30)가 플레이어를 따라다니도록 라이트 타깃을 이동
   const lightTarget = useMemo(() => new THREE.Object3D(), []);
 
-  useFrame((_state, delta) => {
+  // 그림자맵을 마지막으로 그렸을 때의 캐스터 상태
+  const shadowAnchor = useRef({ x: Infinity, z: 0, ry: 0, sun: -1 });
+
+  useFrame((state, delta) => {
+    // 이 월드에서 움직이는 그림자 캐스터는 플레이어와 해뿐이고 나머지는
+    // 전부 정적이다(원격 플레이어는 가짜 원형 그림자를 쓴다). 그런데도
+    // three는 기본적으로 매 프레임 그림자맵을 다시 그린다 — 서 있기만 해도
+    // 100만 삼각형이 넘는 그림자 패스를 60번씩 반복하게 된다.
+    // 아래에서 캐스터가 움직인 프레임에만 직접 needsUpdate를 올린다.
+    if (state.gl.shadowMap.autoUpdate) {
+      state.gl.shadowMap.autoUpdate = false;
+    }
+
     // isNight 상태에 따라 sunProgress (0: 밤, 1: 낮)를 부드럽게 보간
     const targetProgress = isNight ? 0 : 1;
     sunProgress.current = THREE.MathUtils.lerp(
@@ -108,6 +134,25 @@ const DayNightCycle = ({ isNight }: { isNight: boolean }) => {
       sunY * 20,
       15,
     );
+
+    // 캐스터가 실제로 움직인 프레임에만 그림자맵을 다시 그린다.
+    // 걷기·회전은 위치로, 제자리 이모트는 playerPose로, 낮밤 전환 중의
+    // 해 이동은 진행도로 잡는다. 그 외에는 직전 그림자맵을 그대로 쓴다.
+    const anchor = shadowAnchor.current;
+    const { playerPos, playerPose } = useZoneStore.getState();
+    if (
+      playerPose.emoting ||
+      Math.abs(playerPos.x - anchor.x) > SHADOW_MOVE_EPS ||
+      Math.abs(playerPos.z - anchor.z) > SHADOW_MOVE_EPS ||
+      Math.abs(playerPos.ry - anchor.ry) > SHADOW_MOVE_EPS ||
+      Math.abs(sunProgress.current - anchor.sun) > SHADOW_SUN_EPS
+    ) {
+      anchor.x = playerPos.x;
+      anchor.z = playerPos.z;
+      anchor.ry = playerPos.ry;
+      anchor.sun = sunProgress.current;
+      state.gl.shadowMap.needsUpdate = true;
+    }
   });
 
   return (
@@ -148,10 +193,12 @@ const DayNightCycle = ({ isNight }: { isNight: boolean }) => {
 // 플라스틱처럼 보인다. drei의 preset은 CDN에서 HDR을 받아오므로, 외부 의존
 // 없이 하늘·지면·해를 직접 그려 작은 큐브맵으로 굽는다.
 //
-// frames={1}이라 한 번만 굽고, 낮밤이 바뀔 때 key로 다시 굽는다.
+// frames={1}이라 한 번만 굽는다. 낮밤이 바뀌면 children이 바뀌므로 drei가
+// 같은 큐브 타깃에 다시 구워 준다(three가 pmremVersion으로 갱신을 감지한다).
+// key로 리마운트하면 60초마다 큐브 렌더 타깃을 새로 할당·해제하게 된다.
 // ──────────────────────────────────────────────────
 const StylizedEnvironment = ({ isNight }: { isNight: boolean }) => (
-  <EnvironmentMap key={isNight ? "night" : "day"} resolution={64} frames={1}>
+  <EnvironmentMap resolution={64} frames={1}>
     {/* 하늘 */}
     <mesh scale={100}>
       <sphereGeometry args={[1, 24, 16]} />
@@ -224,7 +271,10 @@ export const Scene = ({ children, isNight }: SceneProps) => {
 
       <Suspense fallback={null}>{children}</Suspense>
 
-      <EffectComposer>
+      {/* multisampling 기본값 8은 화면 크기 × 8배짜리 HalfFloat 렌더 타깃을
+          잡는다(1080p·dpr 1.5에서 약 300MB). 0으로 끄면 SMAA만 남아 화면이
+          뿌옇게 물러지므로, 눈에 띄는 차이 없이 비용만 절반인 4로 둔다. */}
+      <EffectComposer multisampling={4}>
         {/* 밤 임계값이 낮으면 장면 전체가 번져 석등·게시판 불빛이 묻힌다.
             빛나야 할 것만 빛나도록 임계값을 올리고 강도를 낮춘다. */}
         <Bloom
