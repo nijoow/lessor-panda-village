@@ -132,10 +132,10 @@ for (const f of COLLISION_FENCES) {
 export const checkCollision = (x: number, z: number, y: number = 0) => {
   // 월드 경계
   if (
-    x < WORLD_BOUNDS.min ||
-    x > WORLD_BOUNDS.max ||
-    z < WORLD_BOUNDS.min ||
-    z > WORLD_BOUNDS.max
+    x < WORLD_BOUNDS.minX ||
+    x > WORLD_BOUNDS.maxX ||
+    z < WORLD_BOUNDS.minZ ||
+    z > WORLD_BOUNDS.maxZ
   )
     return true;
 

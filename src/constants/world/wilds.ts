@@ -1,3 +1,4 @@
+import { WORLD_BOUNDS } from "./bounds";
 import { TreePlacement, ZoneLayout } from "./types";
 
 /**
@@ -6,10 +7,10 @@ import { TreePlacement, ZoneLayout } from "./types";
  * 두 층으로 구성한다.
  *
  * 1. 중거리 뒷숲: 마을 울타리 너머와 존 사이의 빈 곳을 메워 깊이를 만든다.
- * 2. 경계 숲: 걸어갈 수 있는 한계(WORLD_BOUNDS ±74)를 지나서까지 이어지는
- *    숲의 띠. 바깥으로 갈수록 촘촘해지고, 걷기 한계보다 더 멀리 나무가
- *    보이기 때문에 플레이어가 멈춰 서도 "숲이 계속된다"로 읽힌다.
- *    안개(Scene의 fog)가 그 너머를 감춘다.
+ * 2. 경계 숲: 걷기 한계(WORLD_BOUNDS) 사각형을 감싸는 숲의 띠. 한계보다
+ *    조금 안쪽에서 시작해 바깥까지 이어지고 바깥으로 갈수록 촘촘해져서,
+ *    플레이어가 멈춰 서도 "숲이 깊어 더 못 간다"로 읽힌다.
+ *    안개(Scene의 fogExp2)가 그 너머를 감춘다.
  *
  * bounds가 없어 진입 배너 대상이 아니며, 나무 충돌만 존재한다.
  */
@@ -37,29 +38,59 @@ const scatter = (
   return trees;
 };
 
+const hash01 = (i: number, seed: number) => {
+  const s = Math.sin(i * 127.1 + seed * 311.7) * 43758.5453;
+  return s - Math.floor(s);
+};
+
 /**
- * 사각 링 모양의 경계 숲.
- * 둘레는 황금각으로 고르게 훑고, 깊이는 제곱근 분포로 뽑아 바깥쪽이
- * 촘촘해지게 한다 (숲이 점점 깊어지는 인상).
+ * 걷기 한계 직사각형을 감싸는 경계 숲의 띠.
+ *
+ * 둘레를 균등 분할한 뒤 한 칸 폭만큼 결정적으로 흐트러뜨린다. 순수 난수로
+ * 뿌리면 같은 그루 수로도 벽 한쪽에 십수 유닛짜리 구멍이 생겨 월드의 끝이
+ * 그대로 보인다 — 줄 서 보이지 않으면서 빈틈도 없어야 한다.
+ *
+ * 벽에서 바깥으로 나가는 깊이는 제곱근 분포로 뽑아 바깥쪽이 촘촘해지고
+ * (숲이 점점 깊어지는 인상), inset만큼은 벽 안쪽에서 시작해 플레이어가
+ * 숲에 발을 들인 채로 막힌다.
  */
-const boundaryRing = (
-  inner: number,
-  outer: number,
+const boundaryBelt = (
+  inset: number,
+  outset: number,
   count: number,
   seed: number,
 ): TreePlacement[] => {
+  const b = WORLD_BOUNDS;
+  // 모서리가 끊기지 않도록 각 변을 outset만큼 늘린 사각형의 둘레를 훑는다
+  const width = b.maxX - b.minX + outset * 2;
+  const depthSpan = b.maxZ - b.minZ + outset * 2;
+  const perimeter = (width + depthSpan) * 2;
+  const step = perimeter / count;
+
   const trees: TreePlacement[] = [];
   for (let i = 0; i < count; i++) {
-    const t = ((i * 0.618033988749 + seed * 0.137) % 1) * 4;
-    const side = Math.floor(t);
-    const along = (t - side) * 2 - 1; // -1 ~ 1
+    const jittered = (i + 0.5) * step + (hash01(i, seed) - 0.5) * step;
+    const u = ((jittered % perimeter) + perimeter) % perimeter;
 
-    const f = (Math.sin(seed * 12.9898 + i * 78.233) + 1) / 2;
-    const r = inner + (outer - inner) * Math.sqrt(f);
-    const cross = r * along;
+    // 벽 기준 바깥 방향 깊이 (-inset: 안쪽, +outset: 바깥쪽)
+    const depth =
+      -inset + (inset + outset) * Math.sqrt(hash01(i + 0.37, seed));
 
-    const x = side === 0 ? cross : side === 1 ? r : side === 2 ? cross : -r;
-    const z = side === 0 ? -r : side === 1 ? cross : side === 2 ? r : cross;
+    let x: number;
+    let z: number;
+    if (u < width) {
+      x = b.minX - outset + u;
+      z = b.minZ - depth;
+    } else if (u < width + depthSpan) {
+      x = b.maxX + depth;
+      z = b.minZ - outset + (u - width);
+    } else if (u < width * 2 + depthSpan) {
+      x = b.maxX + outset - (u - width - depthSpan);
+      z = b.maxZ + depth;
+    } else {
+      x = b.minX - depth;
+      z = b.maxZ + outset - (u - width * 2 - depthSpan);
+    }
 
     trees.push({
       x,
@@ -78,15 +109,17 @@ export const WILDS: ZoneLayout = {
   trees: [
     // ---------- 중거리 뒷숲 ----------
     // 마을 북쪽 뒷숲 (울타리 너머 경관)
-    ...scatter(-38, 38, -52, -22, 22, 1),
+    ...scatter(-38, 38, -42, -22, 18, 1),
     // 마을 동서 측면 틈새
     ...scatter(-52, -24, -18, 8, 8, 5),
     ...scatter(24, 52, -18, 10, 8, 6),
 
     // ---------- 경계 숲 ----------
-    // 걷기 한계(±74) 안쪽에서 시작해 바깥(±88)까지 이어진다
-    ...boundaryRing(60, 88, 130, 7),
-    ...boundaryRing(64, 84, 110, 8),
+    // 바깥으로 물러나며 깊어지는 숲
+    ...boundaryBelt(4, 14, 100, 7),
+    // 벽에 바짝 붙는 울. 깊이 분포가 제곱근이라 바깥층만으로는 벽 선이
+    // 성겨져 5~10 유닛짜리 구멍으로 월드 밖이 비친다. 이 층이 그걸 막는다.
+    ...boundaryBelt(5, 2, 100, 8),
   ],
 
   rocks: [

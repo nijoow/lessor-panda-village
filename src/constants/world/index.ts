@@ -18,6 +18,7 @@ import { RIVERSIDE } from "./riverside";
 import { WILDS } from "./wilds";
 
 export * from "./types";
+export * from "./bounds";
 export { VILLAGE, SOUTH_FIELD, BAMBOO_GROVE, RIVERSIDE, WILDS };
 
 export const ZONES: ZoneLayout[] = [
@@ -27,14 +28,6 @@ export const ZONES: ZoneLayout[] = [
   RIVERSIDE,
   WILDS,
 ];
-
-// ---------- 월드 경계 ----------
-// 경계 숲(wilds)이 ±88까지 이어지므로, 걷기 한계를 그보다 안쪽에 둔다.
-// 멈춰 선 지점에서도 나무가 계속 보여 "숲이 깊어 더 못 간다"로 읽힌다.
-export const WORLD_BOUNDS = {
-  min: -74,
-  max: 74,
-};
 
 /** 현재 좌표가 속한 존 (bounds 있는 존만 대상, 없으면 null) */
 export const zoneAt = (x: number, z: number): ZoneLayout | null => {
@@ -47,7 +40,36 @@ export const zoneAt = (x: number, z: number): ZoneLayout | null => {
 };
 
 // ---------- 비주얼 배치 집계 (Environment/World/Ground/Player에서 사용) ----------
-export const TREES = ZONES.flatMap((z) => z.trees ?? []);
+export const RIVERS = ZONES.flatMap((z) => z.rivers ?? []);
+
+/** 점에서 모든 강 중심선까지의 최단 거리 */
+const distanceToRiver = (x: number, z: number): number => {
+  let best = Infinity;
+  for (const river of RIVERS) {
+    for (let i = 0; i < river.points.length - 1; i++) {
+      const [x0, z0] = river.points[i];
+      const [x1, z1] = river.points[i + 1];
+      const dx = x1 - x0;
+      const dz = z1 - z0;
+      const lengthSq = dx * dx + dz * dz;
+      const t = lengthSq
+        ? Math.max(0, Math.min(1, ((x - x0) * dx + (z - z0) * dz) / lengthSq))
+        : 0;
+      const cx = x0 + dx * t;
+      const cz = z0 + dz * t;
+      best = Math.min(best, Math.hypot(x - cx, z - cz));
+    }
+  }
+  return best;
+};
+
+// 뒷숲·경계 숲은 결정적 산개라 물길과 겹치는 그루가 나온다. 물 위에 선
+// 나무는 바로 눈에 띄므로 강폭(2.5) + 나무 반경(0.7) + 여유만큼 비운다.
+const RIVER_TREE_CLEARANCE = 3.7;
+
+export const TREES = ZONES.flatMap((z) => z.trees ?? []).filter(
+  (t) => distanceToRiver(t.x, t.z) > RIVER_TREE_CLEARANCE,
+);
 export const ROCKS = ZONES.flatMap((z) => z.rocks ?? []);
 export const LANTERNS = ZONES.flatMap((z) => z.lanterns ?? []);
 export const BENCHES = ZONES.flatMap((z) => z.benches ?? []);
@@ -60,7 +82,6 @@ export const FENCES = ZONES.flatMap((z) => z.fences ?? []);
 export const SIGNS = ZONES.flatMap((z) => z.signs ?? []);
 export const BAMBOO = ZONES.flatMap((z) => z.bamboo ?? []);
 export const BRIDGES = ZONES.flatMap((z) => z.bridges ?? []);
-export const RIVERS = ZONES.flatMap((z) => z.rivers ?? []);
 export const GRASS_PATCHES = ZONES.flatMap((z) => z.grassPatches ?? []);
 export const DIRT_PATCHES = ZONES.flatMap((z) => z.dirtPatches ?? []);
 export const STONE_PATHS = ZONES.flatMap((z) => z.stonePaths ?? []);
