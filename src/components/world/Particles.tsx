@@ -1,6 +1,8 @@
 import { useRef, useMemo, useState, useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
+import { useGraphicsStore } from "@/stores/graphicsStore";
+import { GRAPHICS_PRESETS } from "@/constants/rendering";
 import { frameLerp } from "@/utils/math";
 
 // ─────────────────────────────────────────────
@@ -99,6 +101,8 @@ interface ParticleProps {
 }
 
 export const PetalParticles = ({ isNight }: ParticleProps) => {
+  const quality = useGraphicsStore((state) => state.quality);
+  const count = Math.ceil(PETAL_COUNT * GRAPHICS_PRESETS[quality].particleRatio);
   const meshRef = useRef<THREE.InstancedMesh>(null!);
   const materialRef = useRef<THREE.MeshStandardMaterial>(null!);
 
@@ -120,6 +124,7 @@ export const PetalParticles = ({ isNight }: ParticleProps) => {
   useFrame((state, delta) => {
     if (!meshRef.current || !materialRef.current) return;
     const t = state.clock.elapsedTime;
+    const speed = Math.min(delta, 0.1) * 60;
 
     // isNight 상태에 따라 불투명도 부드럽게 전환 (프레임레이트 보정)
     const targetOpacity = isNight ? 0 : 0.85;
@@ -135,16 +140,18 @@ export const PetalParticles = ({ isNight }: ParticleProps) => {
       return;
     }
     meshRef.current.visible = true;
+    meshRef.current.count = count;
 
     particles.forEach((p, i) => {
+      if (i >= count) return;
       // 펄럭이는 움직임 추가 (Fluttering)
       const flutter = Math.sin(t * 2 + p.phase) * 0.015;
-      p.position.x += p.velocity.x + flutter;
-      p.position.y += p.velocity.y;
-      p.position.z += p.velocity.z + Math.cos(t * 1.5 + p.phase) * 0.015;
+      p.position.x += (p.velocity.x + flutter) * speed;
+      p.position.y += p.velocity.y * speed;
+      p.position.z += (p.velocity.z + Math.cos(t * 1.5 + p.phase) * 0.015) * speed;
 
       // 회전 속도에 펄럭임 반영
-      p.rotation += p.rotationSpeed + Math.sin(t * 3) * 0.01;
+      p.rotation += (p.rotationSpeed + Math.sin(t * 3) * 0.01) * speed;
 
       if (p.position.y < -0.5) {
         const isConcentrated = Math.random() < 0.75;
@@ -212,6 +219,8 @@ const generateFireflyDataSync = (): FireflyData[] => {
 };
 
 export const FireflyParticles = ({ isNight }: ParticleProps) => {
+  const quality = useGraphicsStore((state) => state.quality);
+  const count = Math.ceil(FIREFLY_COUNT * GRAPHICS_PRESETS[quality].particleRatio);
   const meshRef = useRef<THREE.InstancedMesh>(null!);
   const materialRef = useRef<THREE.MeshStandardMaterial>(null!);
   const [fireflies] = useState(() => generateFireflyDataSync());
@@ -230,7 +239,7 @@ export const FireflyParticles = ({ isNight }: ParticleProps) => {
       targetOpacity,
       frameLerp(0.02, Math.min(delta, 0.1)),
     );
-    materialRef.current.emissiveIntensity = materialRef.current.opacity * 6;
+    materialRef.current.emissiveIntensity = materialRef.current.opacity * 2.5;
 
     // 완전히 투명해지면 그리기/업데이트 모두 중단
     if (materialRef.current.opacity < 0.01) {
@@ -238,8 +247,10 @@ export const FireflyParticles = ({ isNight }: ParticleProps) => {
       return;
     }
     meshRef.current.visible = true;
+    meshRef.current.count = count;
 
     fireflies.forEach((f, i) => {
+      if (i >= count) return;
       const x = f.position.x + Math.sin(t * f.speed + f.phase) * f.radius;
       const y = f.position.y + Math.sin(t * f.speed * 1.3 + f.phase) * 0.4;
       const z = f.position.z + Math.cos(t * f.speed + f.phase) * f.radius;
@@ -266,7 +277,7 @@ export const FireflyParticles = ({ isNight }: ParticleProps) => {
       <meshStandardMaterial
         ref={materialRef}
         emissive="#ffa500"
-        emissiveIntensity={12}
+        emissiveIntensity={2.5}
         transparent
         opacity={0.9}
         roughness={0}
@@ -333,6 +344,8 @@ const generateButterflyData = (): ButterflyData[] => {
 };
 
 export const ButterflyParticles = ({ isNight }: ParticleProps) => {
+  const quality = useGraphicsStore((state) => state.quality);
+  const count = Math.ceil(BUTTERFLY_COUNT * GRAPHICS_PRESETS[quality].particleRatio);
   const meshRef = useRef<THREE.InstancedMesh>(null!);
   const materialRef = useRef<THREE.MeshStandardMaterial>(null!);
   const [butterflies] = useState(() => generateButterflyData());
@@ -367,8 +380,10 @@ export const ButterflyParticles = ({ isNight }: ParticleProps) => {
       return;
     }
     meshRef.current.visible = true;
+    meshRef.current.count = count;
 
     butterflies.forEach((b, i) => {
+      if (i >= count) return;
       b.angle += b.angularSpeed * dt;
 
       dummy.position.set(

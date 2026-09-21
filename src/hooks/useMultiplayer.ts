@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RealtimeChannel } from "@supabase/supabase-js";
+import { WORLD_BOUNDS } from "@/constants/world";
 import { PLAYER_ANIM } from "@/constants/playerAnimations";
 import { supabase } from "@/lib/supabase";
 import { useChatStore } from "@/stores/chatStore";
@@ -25,6 +26,8 @@ interface PresencePayload {
 // 네트워크로 수신한 값은 항상 정제 후 사용
 const toFinite = (value: unknown, fallback = 0): number =>
   typeof value === "number" && Number.isFinite(value) ? value : fallback;
+const coordinate = (value: unknown, min: number, max: number) =>
+  Math.max(min, Math.min(max, toFinite(value)));
 
 const sanitizeNickname = (value: unknown): string =>
   typeof value === "string" && value.trim().length > 0
@@ -42,6 +45,7 @@ export const useMultiplayer = (
   nickname: string | null,
   worldKey: string | null,
   myId: string | null,
+  retryKey = 0,
 ) => {
   const [remotePlayerIds, setRemotePlayerIds] = useState<string[]>([]);
   const [connectionStatus, setConnectionStatus] =
@@ -52,10 +56,12 @@ export const useMultiplayer = (
   const knownPresenceIdsRef = useRef<Set<string>>(new Set());
   const channelRef = useRef<RealtimeChannel | null>(null);
   const isChannelReadyRef = useRef(false);
+  const latestMoveRef = useRef({ x: 0, y: 0, z: 0, ry: 0, anim: PLAYER_ANIM.IDLE as string });
 
   useEffect(() => {
     let cancelled = false;
-    const canConnect = Boolean(nickname && worldKey && myId);
+    const client = supabase;
+    const canConnect = Boolean(client && nickname && worldKey && myId);
 
     playersDataRef.current.clear();
     knownPresenceIdsRef.current.clear();
@@ -66,19 +72,27 @@ export const useMultiplayer = (
       setConnectionStatus(canConnect ? "connecting" : "idle");
     });
 
-    if (!canConnect || !nickname || !worldKey || !myId) {
+    if (!client || !canConnect || !nickname || !worldKey || !myId) {
       return () => {
         cancelled = true;
       };
     }
 
     let channel: RealtimeChannel | null = null;
+    let stateTimer: ReturnType<typeof setInterval> | undefined;
+    const lastChatAt = new Map<string, number>();
+    const sendLatest = () => {
+      if (!channel || !isChannelReadyRef.current || cancelled) return;
+      void channel.send({ type: "broadcast", event: "move", payload: {
+        id: myId, nickname, ...latestMoveRef.current,
+      } });
+    };
 
     const connect = async () => {
       const {
         data: { session },
         error,
-      } = await supabase.auth.getSession();
+      } = await client.auth.getSession();
 
       if (cancelled) return;
       if (error || !session) {
@@ -86,10 +100,10 @@ export const useMultiplayer = (
         return;
       }
 
-      await supabase.realtime.setAuth(session.access_token);
+      await client.realtime.setAuth(session.access_token);
       if (cancelled) return;
 
-      channel = supabase.channel(`world:${worldKey}`, {
+      channel = client.channel(`world:${worldKey}`, {
         config: {
           private: true,
           // ack는 send()가 돌려주는 Promise로만 쓸모가 있는데 아래 세 곳 모두
@@ -125,10 +139,10 @@ export const useMultiplayer = (
               playersDataRef.current.set(key, {
                 id: key,
                 nickname: sanitizeNickname(presence.nickname),
-                x: toFinite(presence.x),
-                y: toFinite(presence.y),
-                z: toFinite(presence.z),
-                ry: toFinite(presence.ry),
+                x: coordinate(presence.x, WORLD_BOUNDS.minX, WORLD_BOUNDS.maxX),
+                y: coordinate(presence.y, 0, 8),
+                z: coordinate(presence.z, WORLD_BOUNDS.minZ, WORLD_BOUNDS.maxZ),
+                ry: toFinite(presence.ry) % (Math.PI * 2),
                 anim: sanitizeAnim(presence.anim),
                 lastUpdated: Date.now(),
               });
@@ -154,6 +168,7 @@ export const useMultiplayer = (
         })
         .on("presence", { event: "leave" }, ({ key }) => {
           knownPresenceIdsRef.current.delete(key);
+          lastChatAt.delete(key);
           playersDataRef.current.delete(key);
           useChatStore.getState().removePlayer(key);
           setRemotePlayerIds((previous) =>
@@ -173,10 +188,10 @@ export const useMultiplayer = (
           playersDataRef.current.set(payload.id, {
             id: payload.id,
             nickname: sanitizeNickname(payload.nickname),
-            x: toFinite(payload.x),
-            y: toFinite(payload.y),
-            z: toFinite(payload.z),
-            ry: toFinite(payload.ry),
+            x: coordinate(payload.x, WORLD_BOUNDS.minX, WORLD_BOUNDS.maxX),
+            y: coordinate(payload.y, 0, 8),
+            z: coordinate(payload.z, WORLD_BOUNDS.minZ, WORLD_BOUNDS.maxZ),
+            ry: toFinite(payload.ry) % (Math.PI * 2),
             anim: sanitizeAnim(payload.anim),
             lastUpdated: Date.now(),
           });
@@ -196,6 +211,9 @@ export const useMultiplayer = (
             return;
           }
 
+          const now = Date.now();
+          if (now - (lastChatAt.get(payload.id) ?? 0) < 300) return;
+          lastChatAt.set(payload.id, now);
           useChatStore.getState().addMessage({
             id: payload.id,
             nickname: sanitizeNickname(payload.nickname),
@@ -211,13 +229,15 @@ export const useMultiplayer = (
             setConnectionStatus("connected");
             await channel.track({
               nickname,
-              x: 0,
-              y: 0,
-              z: 0,
-              ry: 0,
-              anim: PLAYER_ANIM.IDLE,
+              ...latestMoveRef.current,
               online_at: new Date().toISOString(),
             });
+            if (cancelled || !isChannelReadyRef.current) return;
+            setGuestbookRevision((revision) => revision + 1);
+            sendLatest();
+            clearInterval(stateTimer);
+            // 정지 중인 상대도 늦은 입장·재연결 뒤 현재 위치를 받는다.
+            stateTimer = setInterval(sendLatest, 2000);
           } else if (
             status === "CHANNEL_ERROR" ||
             status === "TIMED_OUT" ||
@@ -225,6 +245,10 @@ export const useMultiplayer = (
           ) {
             isChannelReadyRef.current = false;
             setConnectionStatus("error");
+            clearInterval(stateTimer);
+            playersDataRef.current.clear();
+            knownPresenceIdsRef.current.clear();
+            setRemotePlayerIds([]);
           }
         });
     };
@@ -235,6 +259,7 @@ export const useMultiplayer = (
 
     return () => {
       cancelled = true;
+      clearInterval(stateTimer);
       isChannelReadyRef.current = false;
       knownPresenceIdsRef.current.clear();
 
@@ -242,13 +267,14 @@ export const useMultiplayer = (
         channelRef.current = null;
       }
       if (channel) {
-        void supabase.removeChannel(channel);
+        void client.removeChannel(channel);
       }
     };
-  }, [nickname, worldKey, myId]);
+  }, [nickname, worldKey, myId, retryKey]);
 
   const broadcastMove = useCallback(
     (state: Omit<PlayerState, "id" | "nickname" | "lastUpdated">) => {
+      latestMoveRef.current = state;
       if (
         !channelRef.current ||
         !nickname ||

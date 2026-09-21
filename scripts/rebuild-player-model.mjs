@@ -33,5 +33,6 @@ run("scripts/generate-sit-clip.mjs");
 run("scripts/generate-emote-clips.mjs");
 run("scripts/optimize-base-glb.mjs");
 run("scripts/validate-player-model.mjs");
+run("scripts/generate-player-lods.mjs");
 
 console.log("\n✅ 플레이어 모델과 전체 애니메이션 재생성 완료");

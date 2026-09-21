@@ -1,22 +1,25 @@
 "use client";
 
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import {
   OrbitControls,
   PerspectiveCamera,
   Sky,
   Stars,
   Preload,
-  AdaptiveDpr,
   AdaptiveEvents,
   Environment as EnvironmentMap,
   Lightformer,
 } from "@react-three/drei";
 import { EffectComposer, Bloom, SMAA } from "@react-three/postprocessing";
-import { ReactNode, useMemo, useRef, Suspense } from "react";
+import { ReactNode, useMemo, useRef, Suspense, useEffect } from "react";
 import * as THREE from "three";
 import { frameLerp } from "@/utils/math";
 import { useZoneStore } from "@/stores/zoneStore";
+import { WORLD_FOG, GRAPHICS_PRESETS } from "@/constants/rendering";
+
+import { useGraphicsStore } from "@/stores/graphicsStore";
+import { useGraphicsMonitor } from "@/hooks/useGraphicsMonitor";
 
 // ──────────────────────────────────────────────────
 // 낮/밤 사이클 (태양 진행도 하나로 조명 + 하늘을 함께 갱신)
@@ -25,38 +28,24 @@ interface SkyImpl {
   material: { uniforms: { sunPosition: { value: THREE.Vector3 } } };
 }
 
-// 거리 안개. 깊이를 만들되 화면을 뿌옇게 만들지는 않아야 한다.
-//
-// fogExp2의 감쇠는 1 - exp(-(density × 거리)²)라 거리에 제곱으로 붙는다.
-// 카메라를 최대(40)로 당기면 캐릭터까지가 이미 40 유닛이므로, 이 지점에서
-// 몇 %가 끼는지가 체감 화질을 좌우한다. 0.0085에서는 40 유닛에 11%가 껴서
-// 줌아웃할 때마다 화면이 뿌옇게 보였다.
-//
-//   density   20유닛   40유닛   100유닛
-//   0.0085     2.8%    10.9%     42%
-//   0.005      1.0%     3.9%     22%
-//
-// 경계를 감추는 일은 경계 숲(wilds.ts)이 직접 하므로 안개가 짙을 이유가
-// 없다. 가까이는 거의 투명하고 먼 배경만 물드는 값으로 잡는다.
-const FOG_DENSITY_DAY = 0.005;
-const FOG_DENSITY_NIGHT = 0.0065;
-
 // 그림자맵 갱신 임계값. 이보다 작은 변화는 2048 그림자맵에서 한 텍셀도
 // 움직이지 않으므로 다시 그릴 이유가 없다.
 const SHADOW_MOVE_EPS = 0.02; // 월드 유닛 / 라디안
 const SHADOW_SUN_EPS = 0.0005; // 태양 진행도(0~1)
 
 const DayNightCycle = ({ isNight }: { isNight: boolean }) => {
+  const quality = useGraphicsStore((state) => state.quality);
+  const preset = GRAPHICS_PRESETS[quality];
   const dirLightRef = useRef<THREE.DirectionalLight>(null!);
   const ambLightRef = useRef<THREE.AmbientLight>(null!);
   const skyRef = useRef<SkyImpl | null>(null);
-  const fogRef = useRef<THREE.FogExp2>(null!);
+  const fogRef = useRef<THREE.Fog>(null!);
   const sunProgress = useRef(0);
   // 그림자 카메라(±30)가 플레이어를 따라다니도록 라이트 타깃을 이동
   const lightTarget = useMemo(() => new THREE.Object3D(), []);
 
   // 그림자맵을 마지막으로 그렸을 때의 캐스터 상태
-  const shadowAnchor = useRef({ x: Infinity, z: 0, ry: 0, sun: -1 });
+  const shadowAnchor = useRef({ x: Infinity, z: 0, ry: 0, sun: -1, revision: -1, y: -1 });
 
   useFrame((state, delta) => {
     // 이 월드에서 움직이는 그림자 캐스터는 플레이어와 해뿐이고 나머지는
@@ -97,7 +86,7 @@ const DayNightCycle = ({ isNight }: { isNight: boolean }) => {
 
       // 낮에는 강한 빛, 밤에는 은은한 푸른빛
       dirLightRef.current.intensity =
-        dayIntensity * 2.8 + (1 - dayIntensity) * 0.5;
+        dayIntensity * 1.8 + (1 - dayIntensity) * 0.5;
 
       if (dayIntensity > 0.1) {
         dirLightRef.current.color.setRGB(1, 0.95, 0.86); // 따뜻한 햇살
@@ -109,7 +98,7 @@ const DayNightCycle = ({ isNight }: { isNight: boolean }) => {
     if (ambLightRef.current) {
       // 환경맵이 간접광을 담당하므로 앰비언트는 낮춰 잡는다
       ambLightRef.current.intensity =
-        dayIntensity * 0.62 + (1 - dayIntensity) * 0.25;
+        dayIntensity * 0.48 + (1 - dayIntensity) * 0.25;
       ambLightRef.current.color.setRGB(
         0.8 + dayIntensity * 0.2,
         0.85 + dayIntensity * 0.15,
@@ -124,9 +113,16 @@ const DayNightCycle = ({ isNight }: { isNight: boolean }) => {
         0.08 + dayIntensity * 0.77,
         0.16 + dayIntensity * 0.76,
       );
-      fogRef.current.density =
-        FOG_DENSITY_NIGHT +
-        (FOG_DENSITY_DAY - FOG_DENSITY_NIGHT) * dayIntensity;
+      fogRef.current.near = THREE.MathUtils.lerp(
+        WORLD_FOG.night.near,
+        WORLD_FOG.day.near,
+        dayIntensity,
+      );
+      fogRef.current.far = THREE.MathUtils.lerp(
+        WORLD_FOG.night.far,
+        WORLD_FOG.day.far,
+        dayIntensity,
+      );
     }
 
     skyRef.current?.material.uniforms.sunPosition.value.set(
@@ -140,13 +136,19 @@ const DayNightCycle = ({ isNight }: { isNight: boolean }) => {
     // 해 이동은 진행도로 잡는다. 그 외에는 직전 그림자맵을 그대로 쓴다.
     const anchor = shadowAnchor.current;
     const { playerPos, playerPose } = useZoneStore.getState();
+    const runtime = useGraphicsStore.getState().runtime;
     if (
       playerPose.emoting ||
+      state.clock.elapsedTime < runtime.animationUntil ||
+      Math.abs(runtime.playerY - anchor.y) > 0.005 ||
+      runtime.shadowRevision !== anchor.revision ||
       Math.abs(playerPos.x - anchor.x) > SHADOW_MOVE_EPS ||
       Math.abs(playerPos.z - anchor.z) > SHADOW_MOVE_EPS ||
       Math.abs(playerPos.ry - anchor.ry) > SHADOW_MOVE_EPS ||
       Math.abs(sunProgress.current - anchor.sun) > SHADOW_SUN_EPS
     ) {
+      anchor.y = runtime.playerY;
+      anchor.revision = runtime.shadowRevision;
       anchor.x = playerPos.x;
       anchor.z = playerPos.z;
       anchor.ry = playerPos.ry;
@@ -157,15 +159,20 @@ const DayNightCycle = ({ isNight }: { isNight: boolean }) => {
 
   return (
     <>
-      <fogExp2 ref={fogRef} attach="fog" args={["#c7dcea", FOG_DENSITY_DAY]} />
+      <fog
+        ref={fogRef}
+        attach="fog"
+        args={["#c7dcea", WORLD_FOG.day.near, WORLD_FOG.day.far]}
+      />
       <ambientLight ref={ambLightRef} intensity={1.0} />
       <primitive object={lightTarget} />
       <directionalLight
+        key={quality}
         ref={dirLightRef}
         position={[10, 20, 10]}
         intensity={2.5}
-        castShadow
-        shadow-mapSize={[2048, 2048]}
+        castShadow={preset.shadows}
+        shadow-mapSize={[preset.shadowMapSize, preset.shadowMapSize]}
         shadow-camera-left={-30}
         shadow-camera-right={30}
         shadow-camera-top={30}
@@ -215,7 +222,7 @@ const StylizedEnvironment = ({ isNight }: { isNight: boolean }) => (
     {/* 해 / 달 */}
     <Lightformer
       form="circle"
-      intensity={isNight ? 0.6 : 3}
+      intensity={isNight ? 0.6 : 1.7}
       color={isNight ? "#9fb6ff" : "#fff4e0"}
       position={[10, 12, 8]}
       scale={12}
@@ -223,7 +230,7 @@ const StylizedEnvironment = ({ isNight }: { isNight: boolean }) => (
     {/* 반대편 채움광 */}
     <Lightformer
       form="rect"
-      intensity={isNight ? 0.25 : 1}
+      intensity={isNight ? 0.25 : 0.7}
       color={isNight ? "#6b7bb0" : "#cfe4f5"}
       position={[-14, 8, -10]}
       scale={[20, 14, 1]}
@@ -237,14 +244,43 @@ const StylizedEnvironment = ({ isNight }: { isNight: boolean }) => (
 interface SceneProps {
   children: ReactNode;
   isNight: boolean;
+  onUnavailable?: (reason: "webgl" | "context-lost") => void;
 }
 
-export const Scene = ({ children, isNight }: SceneProps) => {
+// Canvas fallback is mounted as native DOM fallback content even with WebGL.
+// It must stay passive; renderer creation errors reach WorldErrorBoundary.
+function CanvasUnavailable() {
+  return <p className="p-6 text-center">이 기기에서 3D 화면을 열 수 없어. 다른 브라우저에서 다시 열어 줘.</p>;
+}
+
+function GraphicsRuntime({ onUnavailable }: Pick<SceneProps, "onUnavailable">) {
+  useGraphicsMonitor();
+  const getThree = useThree((state) => state.get);
+  const quality = useGraphicsStore((state) => state.quality);
+  useEffect(() => {
+    const { gl } = getThree();
+    gl.shadowMap.enabled = GRAPHICS_PRESETS[quality].shadows;
+    gl.shadowMap.needsUpdate = true;
+  }, [getThree, quality]);
+  useEffect(() => {
+    const canvas = getThree().gl.domElement;
+    const lost = (event: Event) => { event.preventDefault(); onUnavailable?.("context-lost"); };
+    canvas.addEventListener("webglcontextlost", lost);
+    return () => canvas.removeEventListener("webglcontextlost", lost);
+  }, [getThree, onUnavailable]);
+  return null;
+}
+
+export const Scene = ({ children, isNight, onUnavailable }: SceneProps) => {
+  const quality = useGraphicsStore((state) => state.quality);
+  const dpr = useGraphicsStore((state) => state.dpr);
+  const preset = GRAPHICS_PRESETS[quality];
   return (
     <Canvas
-      shadows={{ type: THREE.PCFShadowMap }}
+      shadows={preset.shadows ? { type: THREE.PCFShadowMap } : false}
+      fallback={<CanvasUnavailable />}
       onContextMenu={(e) => e.preventDefault()}
-      dpr={[1, 1.5]} // 성능을 위해 최대 dpr 제한 (High TBT 대응)
+      dpr={dpr}
       gl={{
         powerPreference: "high-performance",
         antialias: false, // 성능 최적화
@@ -252,6 +288,7 @@ export const Scene = ({ children, isNight }: SceneProps) => {
         depth: true,
       }}
     >
+      <GraphicsRuntime onUnavailable={onUnavailable} />
       <PerspectiveCamera makeDefault position={[18, 18, 18]} fov={35} />
       <OrbitControls
         makeDefault
@@ -266,30 +303,24 @@ export const Scene = ({ children, isNight }: SceneProps) => {
       <StylizedEnvironment isNight={isNight} />
       {/* count를 바꾸면 geometry가 재생성되므로 visible 토글로 처리 */}
       <group visible={isNight}>
-        <Stars radius={80} depth={50} count={4000} factor={3} fade speed={0.5} />
+        <Stars radius={80} depth={50} count={preset.stars} factor={3} fade speed={0.5} />
       </group>
 
       <Suspense fallback={null}>{children}</Suspense>
 
-      {/* multisampling 기본값 8은 화면 크기 × 8배짜리 HalfFloat 렌더 타깃을
-          잡는다(1080p·dpr 1.5에서 약 300MB). 0으로 끄면 SMAA만 남아 화면이
-          뿌옇게 물러지므로, 눈에 띄는 차이 없이 비용만 절반인 4로 둔다. */}
-      <EffectComposer multisampling={4}>
-        {/* 밤 임계값이 낮으면 장면 전체가 번져 석등·게시판 불빛이 묻힌다.
-            빛나야 할 것만 빛나도록 임계값을 올리고 강도를 낮춘다. */}
-        <Bloom
-          luminanceThreshold={isNight ? 0.45 : 0.8}
-          mipmapBlur
-          intensity={isNight ? 1.0 : 0.35}
-          radius={0.5}
-        />
-        {/* gl의 MSAA는 후처리 파이프라인에서 동작하지 않으므로 SMAA로 처리.
-            계단현상은 품질이 낮아 보이는 가장 흔한 원인이다. */}
-        <SMAA />
-      </EffectComposer>
+      {preset.bloom && (
+        <EffectComposer key={quality} multisampling={preset.multisampling}>
+          <Bloom
+            luminanceThreshold={isNight ? 0.9 : 1.15}
+            mipmapBlur
+            intensity={isNight ? 0.45 : 0.15}
+            radius={0.4}
+          />
+          <SMAA />
+        </EffectComposer>
+      )}
 
       <Preload all />
-      <AdaptiveDpr pixelated />
       <AdaptiveEvents />
     </Canvas>
   );

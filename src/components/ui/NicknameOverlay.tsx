@@ -11,170 +11,38 @@ interface Props {
   error?: string | null;
 }
 
-export const NicknameOverlay = ({
-  onJoin,
-  initialNickname = "",
-  isSubmitting = false,
-  error,
-}: Props) => {
-  const [nickname, setNickname] = useState(initialNickname);
+const NICKNAMES = ["산책하는판다", "대나무친구", "느긋한판다", "졸린밤톨", "작은발자국"];
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (
-      !isSubmitting &&
-      nickname.trim().length > 0 &&
-      nickname.trim().length <= 10
-    ) {
-      await onJoin(nickname.trim());
-    }
+export const NicknameOverlay = ({ onJoin, initialNickname = "", isSubmitting = false, error }: Props) => {
+  const [nickname, setNickname] = useState(initialNickname || NICKNAMES[0]);
+  const suggestNickname = () => {
+    const index = NICKNAMES.indexOf(nickname);
+    setNickname(NICKNAMES[(index + 1) % NICKNAMES.length]);
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="absolute inset-0 z-100 flex items-center justify-center bg-[#fdfaf6]/40 backdrop-blur-xl overflow-hidden"
-    >
-      {/* Decorative Floating Elements */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-20 left-[10%] w-32 h-32 bg-orange-200/30 rounded-full blur-3xl animate-float" />
-        <div className="absolute bottom-20 right-[15%] w-48 h-48 bg-sky-200/30 rounded-full blur-3xl animate-float-delayed" />
-        <div className="absolute top-1/2 left-[80%] w-24 h-24 bg-yellow-200/20 rounded-full blur-2xl animate-float-slow" />
-      </div>
-
-      <motion.div
-        initial={{ scale: 0.95, y: 30, opacity: 0 }}
-        animate={{ scale: 1, y: 0, opacity: 1 }}
-        transition={{ type: "spring", damping: 30, stiffness: 120 }}
-        className="w-full max-w-lg p-8 sm:p-12 glass-premium rounded-[2.5rem] sm:rounded-[3.5rem] flex flex-col items-center relative"
-      >
-        {/* Glow behind icon */}
-        <div className="absolute top-[-40px] w-48 h-48 bg-orange-400/20 rounded-full blur-[60px] pointer-events-none" />
-
-        <div className="mb-10 relative">
-          <motion.div
-            whileHover={{ rotate: [0, -10, 10, -10, 0] }}
-            transition={{ duration: 0.5 }}
-            className="w-24 h-24 sm:w-32 sm:h-32 bg-linear-to-br from-orange-50 to-orange-100/50 rounded-full flex items-center justify-center shadow-xl overflow-hidden border-4 border-white"
-          >
-            <Image
-              src="/images/red_panda_icon.png"
-              alt="Red Panda"
-              width={128}
-              height={128}
-              className="object-contain"
-            />
-          </motion.div>
-          <motion.div
-            animate={{
-              scale: [1, 1.1, 1],
-              rotate: [0, 5, -5, 0],
-            }}
-            transition={{
-              duration: 4,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-            className="absolute -top-1 -right-3 bg-yellow-400 text-[11px] font-black px-3 py-1.5 rounded-full text-orange-950 shadow-lg border-2 border-white uppercase tracking-tighter"
-          >
-            Hello!
-          </motion.div>
-        </div>
-
-        <div className="text-center mb-10">
-          <h2 className="text-2xl sm:text-4xl font-black text-sky-950 mb-3 tracking-tight">
-            레서판다 마을 입장
-          </h2>
-          <p className="text-sky-800/60 font-bold text-base sm:text-lg">
-            대나무를 모으고, 게시판에 방명록을 남겨보세요.
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="w-full flex flex-col gap-8">
-          <div className="relative group">
-            <input
-              type="text"
-              value={nickname}
-              onChange={(e) => setNickname(e.target.value)}
-              placeholder="닉네임을 입력해주세요"
-              maxLength={10}
-              autoFocus
-              disabled={isSubmitting}
-              aria-describedby={error ? "room-entry-error" : undefined}
-              className="w-full px-6 sm:px-10 py-4 sm:py-6 glass-input rounded-2xl sm:rounded-3xl text-lg sm:text-2xl font-bold text-sky-900 placeholder:text-sky-900/20 shadow-inner group-hover:bg-white/60"
-            />
-            <div className="absolute right-6 top-1/2 -translate-y-1/2 text-sky-900/30 text-sm font-black bg-white/40 px-3 py-1 rounded-full">
-              {nickname.length}/10
-            </div>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 z-100 flex items-center justify-center overflow-y-auto bg-[#fdfaf6]/40 p-4 backdrop-blur-xl">
+      <div className="glass-premium relative max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-[2.5rem] p-6 text-center sm:rounded-[3.5rem] sm:p-10">
+        <Image src="/images/red_panda_icon.png" alt="레서판다" width={96} height={96} priority className="mx-auto mb-5 rounded-full border-4 border-white bg-linear-to-br from-orange-50 to-orange-100/50 shadow-xl sm:h-28 sm:w-28" />
+        <h1 className="text-3xl font-black tracking-tight text-sky-950 sm:text-4xl">래서판다 빌리지</h1>
+        <p className="mt-3 text-sm leading-6 text-sky-900 sm:text-base">잠깐 쉬어 가는 작은 마을.<br />걸어 다니고, 대나무를 모으고, 방명록을 남겨봐.</p>
+        <form onKeyDown={(event) => {
+          if (event.key === "Enter" && (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229)) event.preventDefault();
+        }} onSubmit={async (event) => {
+          event.preventDefault();
+          if (!isSubmitting && nickname.trim().length > 0 && nickname.trim().length <= 10) await onJoin(nickname.trim());
+        }} className="mt-6 text-left">
+          <div className="mb-2 flex items-center justify-between">
+            <label htmlFor="village-nickname" className="text-sm text-sky-950">마을에서 쓸 이름</label>
+            <button type="button" disabled={isSubmitting} onClick={suggestNickname} className="min-h-11 rounded-xl px-2 text-sm text-orange-800 underline underline-offset-4 hover:bg-white/30 disabled:opacity-40">다른 이름 추천</button>
           </div>
-
-          {error ? (
-            <p
-              id="room-entry-error"
-              role="alert"
-              className="-mt-4 rounded-2xl bg-red-50/80 px-5 py-3 text-center text-sm font-bold leading-relaxed text-red-700"
-            >
-              {error}
-            </p>
-          ) : null}
-
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            type="submit"
-            disabled={nickname.trim().length === 0 || isSubmitting}
-            className={`
-              relative w-full py-4 sm:py-6 rounded-2xl sm:rounded-3xl text-lg sm:text-2xl font-black shadow-2xl transition-all duration-300 overflow-hidden
-              ${
-                nickname.trim().length > 0 && !isSubmitting
-                  ? "bg-linear-to-br from-orange-400 to-orange-500 text-white shadow-orange-200 cursor-pointer"
-                  : "bg-gray-200 text-gray-400 cursor-not-allowed"
-              }
-            `}
-          >
-            {isSubmitting ? (
-              <span className="flex items-center justify-center gap-3">
-                <motion.span
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                  className="w-7 h-7 border-4 border-white/30 border-t-white rounded-full"
-                />
-                입장하는 중...
-              </span>
-            ) : (
-              <span className="flex items-center justify-center gap-2">
-                마을로 들어가기
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={3}
-                    d="M14 5l7 7m0 0l-7 7m7-7H3"
-                  />
-                </svg>
-              </span>
-            )}
-          </motion.button>
+          <input id="village-nickname" type="text" autoComplete="nickname" value={nickname} onChange={(event) => setNickname(event.target.value)} maxLength={10} disabled={isSubmitting} aria-describedby={error ? "village-entry-error" : "nickname-hint"} className="glass-input w-full rounded-2xl px-5 py-4 text-lg text-sky-950 shadow-inner disabled:opacity-60 sm:rounded-3xl sm:text-xl" />
+          <p id="nickname-hint" className="mt-3 text-xs text-sky-900">이름은 10자까지 쓸 수 있어. 가입은 필요 없어.</p>
+          {error && <p id="village-entry-error" role="alert" className="mt-4 rounded-2xl border border-red-100/60 bg-red-50/85 p-3 text-sm leading-6 text-red-700">{error}</p>}
+          <button type="submit" disabled={!nickname.trim() || isSubmitting} className="mt-6 min-h-14 w-full rounded-2xl bg-linear-to-br from-orange-400 to-orange-500 px-4 py-4 text-lg font-bold text-white shadow-lg shadow-orange-500/25 transition-colors hover:from-orange-300 hover:to-orange-400 disabled:cursor-not-allowed disabled:opacity-40 sm:rounded-3xl">{isSubmitting ? "마을에 들어가는 중…" : "마을 산책하기"}</button>
         </form>
-
-        <div className="mt-12 flex flex-col items-center gap-4">
-          <div className="flex gap-2">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="w-1.5 h-1.5 rounded-full bg-sky-900/10" />
-            ))}
-          </div>
-          <p className="text-sky-900/30 text-xs font-black uppercase tracking-[0.3em] text-center">
-            Lessor&nbsp;Panda&nbsp;Village • &copy;nijoow
-          </p>
-        </div>
-      </motion.div>
+        <p className="mt-5 text-xs text-sky-900">1~2분이면 둘러볼 수 있어</p>
+      </div>
     </motion.div>
   );
 };

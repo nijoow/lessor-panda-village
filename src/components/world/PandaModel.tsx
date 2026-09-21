@@ -1,10 +1,12 @@
 "use client";
 
-import { useGraph, ObjectMap } from "@react-three/fiber";
-import { useGLTF, useAnimations, Billboard, Text } from "@react-three/drei";
-import { useCallback, useMemo, useRef, RefObject } from "react";
+import { useGraph, ObjectMap, useFrame } from "@react-three/fiber";
+import { useGLTF, Billboard, Text } from "@react-three/drei";
+import { useCallback, useMemo, useRef, useEffect, RefObject } from "react";
 import * as THREE from "three";
 import { SkeletonUtils } from "three-stdlib";
+import { useGraphicsStore } from "@/stores/graphicsStore";
+import { GRAPHICS_PRESETS } from "@/constants/rendering";
 import { ChatBubble } from "./ChatBubble";
 import { getNicknameColor } from "@/utils/color";
 import {
@@ -24,7 +26,7 @@ const EMOTE_URL = "/models/player/emotes.glb";
  * 판다 모델 공용 훅 (Player / RemotePlayer 공유)
  * base/walking/running GLB를 로드해 복제된 노드와 애니메이션 제어를 제공합니다.
  */
-export const usePandaModel = (groupRef: RefObject<THREE.Group>) => {
+export const usePandaModel = (groupRef: RefObject<THREE.Group>, remote = false) => {
   const { scene: baseScene } = useGLTF(BASE_URL);
   const { animations: idleAnims } = useGLTF(IDLE_URL);
   const { animations: walkAnims } = useGLTF(WALK_URL);
@@ -35,23 +37,56 @@ export const usePandaModel = (groupRef: RefObject<THREE.Group>) => {
   // 여러 캐릭터가 동일 GLB를 공유하므로 스켈레톤 단위로 복제
   const clone = useMemo(() => SkeletonUtils.clone(baseScene), [baseScene]);
   const { nodes, materials } = useGraph(clone);
+  useEffect(() => () => {
+    clone.traverse((node) => {
+      if (node instanceof THREE.SkinnedMesh) node.skeleton.dispose();
+    });
+  }, [clone]);
 
   const allAnimations = useMemo(
     () => [...idleAnims, ...walkAnims, ...runAnims, ...sitAnims, ...emoteAnims],
     [idleAnims, walkAnims, runAnims, sitAnims, emoteAnims],
   );
-  const { actions } = useAnimations(allAnimations, groupRef);
-
+  // Own the mixer tick: distant peers keep their pose between bounded updates.
+  const mixer = useMemo(() => new THREE.AnimationMixer(new THREE.Group()), []);
+  const actions = useRef<Record<string, THREE.AnimationAction>>({});
+  const pendingDelta = useRef(0);
   const currentActionRef = useRef<string>("");
+  useEffect(() => {
+    const root = groupRef.current;
+    return () => {
+      mixer.stopAllAction();
+      mixer.uncacheRoot(root);
+      actions.current = {};
+      currentActionRef.current = "";
+    };
+  }, [mixer, groupRef]);
+  useFrame((state, delta) => {
+    const group = groupRef.current;
+    if (!group) return;
+    pendingDelta.current += Math.min(delta, 0.1);
+    let interval = 0;
+    if (remote) {
+      if (!group.visible) { pendingDelta.current = 0; return; }
+      const distance = state.camera.position.distanceTo(group.position);
+      const preset = GRAPHICS_PRESETS[useGraphicsStore.getState().quality];
+      interval = 1 / (distance > 50 ? 6 : distance > 30 ? 10 : preset.remoteAnimationFps);
+    }
+    if (pendingDelta.current < interval) return;
+    mixer.update(pendingDelta.current);
+    pendingDelta.current = 0;
+  });
+
 
   // 현재 클립에서 지정 클립으로 페이드 전환 (동일 클립이면 no-op)
   // timeScaleFactor: 기준 이동 속도 대비 배율 (NPC처럼 느리게 걷는 경우)
   const playAction = useCallback(
     (name: string, fade = 0.2, timeScaleFactor = 1) => {
       if (currentActionRef.current === name) return;
-      const next = actions[name];
-      if (!next) return;
-      actions[currentActionRef.current]?.fadeOut(fade);
+      const clip = allAnimations.find((animation) => animation.name === name);
+      if (!clip || !groupRef.current) return;
+      const next = actions.current[name] ?? (actions.current[name] = mixer.clipAction(clip, groupRef.current));
+      actions.current[currentActionRef.current]?.fadeOut(fade);
       // 걷기/달리기는 발 미끄러짐 보정을 위해 가속 재생
       next.setEffectiveTimeScale(
         (PLAYER_ANIM_TIMESCALE[name as PlayerAnimType] ?? 1) * timeScaleFactor,
@@ -59,7 +94,7 @@ export const usePandaModel = (groupRef: RefObject<THREE.Group>) => {
       next.reset().fadeIn(fade).play();
       currentActionRef.current = name;
     },
-    [actions],
+    [allAnimations, groupRef, mixer],
   );
 
   const getCurrentAction = useCallback(() => currentActionRef.current, []);
@@ -74,6 +109,7 @@ interface PandaBodyProps {
   castShadow?: boolean;
   /** 부하가 적은 가짜 원형 그림자 (원격 플레이어용) */
   fakeShadow?: boolean;
+  lodGeometries?: readonly [THREE.BufferGeometry, THREE.BufferGeometry];
 }
 
 export const PandaBody = ({
@@ -81,7 +117,11 @@ export const PandaBody = ({
   materials,
   castShadow = false,
   fakeShadow = false,
+  lodGeometries,
 }: PandaBodyProps) => {
+  const meshRef = useRef<THREE.SkinnedMesh>(null!);
+  const worldPosition = useRef(new THREE.Vector3());
+  const currentLod = useRef(0);
   // GLB 그래프는 런타임에만 형상이 확정되므로 단언 대신 instanceof로 검증
   const char1 = nodes.char1;
   const srcMaterial = materials.Material_1;
@@ -103,6 +143,20 @@ export const PandaBody = ({
     });
   }, [srcMaterial]);
 
+  useEffect(() => () => material.dispose(), [material]);
+  useFrame((state) => {
+    if (!lodGeometries || !(char1 instanceof THREE.SkinnedMesh) || !meshRef.current) return;
+    meshRef.current.getWorldPosition(worldPosition.current);
+    const distance = state.camera.position.distanceTo(worldPosition.current);
+    // Separate enter/exit distances prevent geometry chatter while orbiting.
+    const previous = currentLod.current;
+    const next = distance > (previous === 2 ? 47 : 52) ? 2 : distance > (previous >= 1 ? 25 : 30) ? 1 : 0;
+    if (next !== previous) {
+      meshRef.current.geometry = next === 0 ? char1.geometry : lodGeometries[next - 1];
+      currentLod.current = next;
+    }
+  });
+
   if (!(char1 instanceof THREE.SkinnedMesh)) return null;
 
   return (
@@ -110,7 +164,9 @@ export const PandaBody = ({
       <group name="Armature" scale={0.01}>
         <primitive object={nodes.Hips} />
         <skinnedMesh
+          ref={meshRef}
           name="char1"
+          frustumCulled={false}
           geometry={char1.geometry}
           material={material}
           skeleton={char1.skeleton}

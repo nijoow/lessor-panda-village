@@ -3,24 +3,13 @@
 import { motion } from "framer-motion";
 import { useHarvestStore } from "@/stores/harvestStore";
 
-/** 우상단(사운드 토글 아래) 죽순 인벤토리 카운터 */
 export const InventoryHUD = () => {
-  const bambooCount = useHarvestStore((s) => s.bambooCount);
-
+  const bambooCount = useHarvestStore((state) => state.bambooCount);
   return (
-    <div className="absolute top-[4.5rem] right-4 z-40 pointer-events-none">
-      <motion.div
-        key={bambooCount}
-        initial={{ scale: bambooCount > 0 ? 1.25 : 1 }}
-        animate={{ scale: 1 }}
-        transition={{ type: "spring", damping: 12, stiffness: 300 }}
-        className="glass-card rounded-full px-4 py-2 border-white/25 shadow-lg flex items-center gap-2"
-      >
-        <span className="text-lg leading-none">🎋</span>
-        <span className="text-white text-sm font-bold drop-shadow tabular-nums">
-          {bambooCount}
-        </span>
-      </motion.div>
+    <div className="pointer-events-none absolute right-4 top-56 z-40 lg:top-18">
+      <motion.p key={bambooCount} initial={{ scale: bambooCount > 0 ? 1.2 : 1 }} animate={{ scale: 1 }} transition={{ type: "spring", damping: 12, stiffness: 300 }} aria-label={`모은 대나무 ${bambooCount}개`} className="glass-card flex items-center gap-2 rounded-full border-white/25 px-4 py-2 text-sm text-white shadow-lg">
+        <span aria-hidden="true">🎋</span><span className="font-bold tabular-nums drop-shadow">{bambooCount}</span>
+      </motion.p>
     </div>
   );
 };

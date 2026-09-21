@@ -13,7 +13,6 @@ import { getNicknameColor } from "@/utils/color";
  * GuestbookPanel(UI)이 담당합니다. 여기서는 "사람이 다녀갔다"가 공간
  * 안에서 보이게 하는 역할만 합니다.
  *
- * 히어로 모델로 교체하기 전의 프리미티브 버전입니다 (docs/roadmap.md).
  */
 
 const WOOD_DARK = "#6d4c36";
@@ -123,7 +122,7 @@ const Board = ({
             <mesh position={[0, 0.115, 0.012]}>
               <boxGeometry args={[0.4, 0.07, 0.012]} />
               <meshStandardMaterial
-                color={getNicknameColor(note.authorId)}
+                color={getNicknameColor(note.colorKey)}
                 roughness={0.8}
               />
             </mesh>

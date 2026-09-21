@@ -1,13 +1,22 @@
 "use client";
 
-import { memo, useMemo, useRef } from "react";
+import { memo, useCallback, useLayoutEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
+import type { RootState } from "@react-three/fiber";
 import { useGLTF, Instances, Instance, Text } from "@react-three/drei";
 import { mergeBufferGeometries } from "three-stdlib";
 import { Pond } from "./Pond";
 import { Rivers } from "./River";
+import { DistanceCulledGroup } from "./DistanceCulledGroup";
+import { useCameraOccluder } from "@/hooks/useCameraOccluder";
+import { useGraphicsStore } from "@/stores/graphicsStore";
 import { useHarvestStore } from "@/stores/harvestStore";
+import {
+  SCENERY_CULL_MARGIN,
+  SCENERY_CULL_UPDATE_DISTANCE,
+  WORLD_FOG,
+} from "@/constants/rendering";
 import {
   TREES,
   ROCKS,
@@ -219,21 +228,15 @@ const PEBBLES: TuftData[] = (() => {
 const AncientTree = ({ placement }: { placement: LandmarkTreePlacement }) => {
   const { scene } = useGLTF("/models/tree/cherry_blossom_tree.glb");
 
-  // 그림자 설정 및 최적화
-  const treeModel = useMemo(() => {
-    const clone = scene.clone();
-    clone.traverse((node) => {
-      if (node instanceof THREE.Mesh) {
-        node.castShadow = true;
-        node.receiveShadow = true;
-      }
-    });
-    return clone;
-  }, [scene]);
+  const treeModel = useCameraOccluder(
+    scene,
+    `${placement.x},${placement.y},${placement.z}:${placement.rotation}:${placement.scale}`,
+  );
 
   return (
     <primitive
       object={treeModel}
+      dispose={null}
       position={[placement.x, placement.y, placement.z]}
       scale={placement.scale}
       rotation={[0, placement.rotation, 0]}
@@ -538,6 +541,20 @@ const NODE_BASE_RADIUS = 0.1;
 const nodeScaleAt = (fraction: number) =>
   (0.118 - 0.03 * fraction) / NODE_BASE_RADIUS;
 
+const BAMBOO_CULL_BOUNDS = (() => {
+  const minX = Math.min(...BAMBOO.map((b) => b.x));
+  const maxX = Math.max(...BAMBOO.map((b) => b.x));
+  const minZ = Math.min(...BAMBOO.map((b) => b.z));
+  const maxZ = Math.max(...BAMBOO.map((b) => b.z));
+  const halfWidth = (maxX - minX) / 2;
+  const halfDepth = (maxZ - minZ) / 2;
+
+  return {
+    center: [(minX + maxX) / 2, (minZ + maxZ) / 2] as const,
+    radius: Math.hypot(halfWidth, halfDepth),
+  };
+})();
+
 // ---------- 대나무 (수확 반응형 — 수확된 줄기는 리스폰까지 숨김) ----------
 const BambooField = () => {
   const harvestedIds = useHarvestStore((s) => s.harvestedIds);
@@ -634,23 +651,374 @@ const BambooField = () => {
   );
 };
 
-// 울타리 인스턴스 상한 (기둥·가로대 각각 세그먼트당 2개)
-const FENCE_SEG_COUNT = FENCES.reduce(
-  (n, f) =>
-    n +
-    f.lines.south.length +
-    f.lines.north.length +
-    f.lines.west.length +
-    f.lines.east.length,
-  0,
-);
-
 // ---------- 나무 아키타입 분류 ----------
 const PINES = TREES.filter((t) => (t.variant ?? "pine") === "pine");
 const ROUND_TREES = TREES.filter((t) => t.variant === "round");
 const CHERRY_TREES = TREES.filter((t) => t.variant === "cherry");
 
 const TUFT_COLORS = ["#79b859", "#8bcb66", "#9ad973"];
+
+interface StaticInstanceRecord {
+  x: number;
+  z: number;
+  matrix: THREE.Matrix4;
+  color?: THREE.Color;
+}
+
+type TransformScale = number | readonly [number, number, number];
+
+const staticInstance = ({
+  position,
+  scale = 1,
+  rotation = [0, 0, 0],
+  color,
+}: {
+  position: readonly [number, number, number];
+  scale?: TransformScale;
+  rotation?: readonly [number, number, number];
+  color?: THREE.ColorRepresentation;
+}): StaticInstanceRecord => {
+  const scaleVector =
+    typeof scale === "number"
+      ? new THREE.Vector3(scale, scale, scale)
+      : new THREE.Vector3(...scale);
+  const quaternion = new THREE.Quaternion().setFromEuler(
+    new THREE.Euler(...rotation),
+  );
+
+  return {
+    x: position[0],
+    z: position[2],
+    matrix: new THREE.Matrix4().compose(
+      new THREE.Vector3(...position),
+      quaternion,
+      scaleVector,
+    ),
+    color: color === undefined ? undefined : new THREE.Color(color),
+  };
+};
+
+const getFogFar = (scene: THREE.Scene) =>
+  scene.fog instanceof THREE.Fog ? scene.fog.far : WORLD_FOG.day.far;
+
+interface CulledInstancesProps {
+  name: string;
+  records: readonly StaticInstanceRecord[];
+  geometry: THREE.BufferGeometry;
+  material: THREE.Material;
+  castShadow?: boolean;
+  receiveShadow?: boolean;
+}
+
+/**
+ * 정적 인스턴스의 행렬을 카메라 근처 레코드만 앞쪽 슬롯으로 압축한다.
+ * draw call은 타입당 하나로 유지하면서 안개 밖 정점은 GPU에 보내지 않는다.
+ */
+const CulledInstances = ({
+  name,
+  records,
+  geometry,
+  material,
+  castShadow = false,
+  receiveShadow = false,
+}: CulledInstancesProps) => {
+  const lastVisible = useRef<number[] | null>(null);
+  const meshRef = useRef<THREE.InstancedMesh>(null!);
+  const lastCameraRef = useRef({ x: Infinity, y: Infinity, z: Infinity, fogFar: -1 });
+  const { camera, scene } = useThree();
+  const lastQuaternion = useRef(new THREE.Quaternion());
+  const point = useRef(new THREE.Vector3());
+  const spheres = useMemo(() => {
+    if (!geometry.boundingSphere) geometry.computeBoundingSphere();
+    return records.map((record) => geometry.boundingSphere!.clone().applyMatrix4(record.matrix));
+  }, [geometry, records]);
+
+  const updateInstances = useCallback(
+    (state: Pick<RootState, "camera" | "scene">) => {
+      const mesh = meshRef.current;
+      if (!mesh) return;
+
+      const fogFar = getFogFar(state.scene);
+      state.camera.updateMatrixWorld();
+      const maxDepth = fogFar + SCENERY_CULL_MARGIN;
+      const visibleIndices: number[] = [];
+      records.forEach((_record, index) => {
+        const sphere = spheres[index];
+        point.current.copy(sphere.center).applyMatrix4(state.camera.matrixWorldInverse);
+        if (-point.current.z - sphere.radius <= maxDepth) visibleIndices.push(index);
+      });
+      lastQuaternion.current.copy(state.camera.quaternion);
+      lastCameraRef.current = {
+        x: state.camera.position.x,
+        y: state.camera.position.y,
+        z: state.camera.position.z,
+        fogFar,
+      };
+      // Orbiting inside the same fog range must not re-upload every static mesh
+      // or invalidate a cached shadow map when its caster list did not change.
+      const previous = lastVisible.current;
+      if (previous && previous.length === visibleIndices.length && previous.every((index, slot) => index === visibleIndices[slot])) return;
+      lastVisible.current = visibleIndices;
+      visibleIndices.forEach((index, slot) => {
+        const record = records[index];
+        mesh.setMatrixAt(slot, record.matrix);
+        if (record.color) mesh.setColorAt(slot, record.color);
+      });
+      const visibleCount = visibleIndices.length;
+      useGraphicsStore.getState().runtime.shadowRevision += 1;
+      mesh.count = visibleCount;
+      mesh.visible = visibleCount > 0;
+      mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+
+      // InstancedMesh의 기본 boundingSphere는 이전 count를 기억할 수 있다.
+      // 압축한 목록 기준으로 다시 계산해야 Three의 frustum culling도 안전하다.
+      mesh.boundingSphere = null;
+      if (visibleCount > 0) mesh.computeBoundingSphere();
+
+
+    },
+    [records, spheres],
+  );
+
+  useLayoutEffect(() => {
+    lastVisible.current = null;
+    meshRef.current.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    updateInstances({ camera, scene });
+  }, [camera, scene, updateInstances]);
+
+  useFrame((state) => {
+    const last = lastCameraRef.current;
+    const dx = state.camera.position.x - last.x;
+    const dy = state.camera.position.y - last.y;
+    const dz = state.camera.position.z - last.z;
+    const fogFar = getFogFar(state.scene);
+
+    if (
+      dx * dx + dy * dy + dz * dz <
+        SCENERY_CULL_UPDATE_DISTANCE * SCENERY_CULL_UPDATE_DISTANCE &&
+      Math.abs(fogFar - last.fogFar) < 0.5 &&
+      lastQuaternion.current.angleTo(state.camera.quaternion) < 0.01
+    ) {
+      return;
+    }
+
+    updateInstances(state);
+  });
+
+  return (
+    <instancedMesh
+      ref={meshRef}
+      name={name}
+      args={[geometry, material, records.length]}
+      castShadow={castShadow}
+      receiveShadow={receiveShadow}
+    />
+  );
+};
+
+const PINE_RECORDS = {
+  trunk: PINES.map((t, i) => {
+    const v = treeVariation(i, PINE_SEED);
+    return staticInstance({
+      position: [t.x, 1.2, t.z],
+      scale: [t.scale * v.wide, t.scale, t.scale * v.deep],
+      rotation: [0, v.spin, 0],
+    });
+  }),
+  leaf1: PINES.map((t, i) => {
+    const v = treeVariation(i, PINE_SEED);
+    return staticInstance({
+      position: [t.x, 3.2 * t.scale, t.z],
+      scale: [t.scale * v.wide, t.scale, t.scale * v.deep],
+      rotation: [0, v.spin, 0],
+    });
+  }),
+  leaf2: PINES.map((t, i) => {
+    const v = treeVariation(i, PINE_SEED);
+    return staticInstance({
+      position: [t.x, 4.7 * t.scale, t.z],
+      scale: [t.scale * v.wide, t.scale, t.scale * v.deep],
+      rotation: [0, v.spin + 0.4, 0],
+    });
+  }),
+  leaf3: PINES.map((t, i) => {
+    const v = treeVariation(i, PINE_SEED);
+    return staticInstance({
+      position: [t.x, 6 * t.scale, t.z],
+      scale: [t.scale * v.wide, t.scale, t.scale * v.deep],
+      rotation: [0, v.spin + 0.8, 0],
+    });
+  }),
+};
+
+const ROUND_TREE_RECORDS = {
+  trunk: ROUND_TREES.map((t, i) => {
+    const v = treeVariation(i, ROUND_SEED);
+    return staticInstance({
+      position: [t.x, 1.3 * t.scale, t.z],
+      scale: [t.scale * v.wide, t.scale, t.scale * v.deep],
+      rotation: [0, v.spin, 0],
+    });
+  }),
+  crown: ROUND_TREES.map((t, i) => {
+    const v = treeVariation(i, ROUND_SEED);
+    return staticInstance({
+      position: [t.x, 3.4 * t.scale, t.z],
+      scale: [t.scale * v.wide, t.scale * v.tall, t.scale * v.deep],
+      rotation: [v.tiltX, v.spin, v.tiltZ],
+    });
+  }),
+  sides: ROUND_TREES.flatMap((t, i) => {
+    const v = treeVariation(i, ROUND_SEED);
+    return [
+      staticInstance({
+        position: [
+          t.x + Math.cos(v.spin) * 0.95 * t.scale,
+          2.8 * t.scale,
+          t.z + Math.sin(v.spin) * 0.95 * t.scale,
+        ],
+        scale: [t.scale * v.wide, t.scale * v.tall, t.scale * v.deep],
+        rotation: [v.tiltX, v.spin + 2.1, 0.2 + v.tiltZ],
+      }),
+      staticInstance({
+        position: [
+          t.x - Math.cos(v.spin + 0.9) * 0.9 * t.scale,
+          3 * t.scale,
+          t.z - Math.sin(v.spin + 0.9) * 0.9 * t.scale,
+        ],
+        scale: [
+          t.scale * 0.9 * v.wide,
+          t.scale * 0.9 * v.tall,
+          t.scale * 0.9 * v.deep,
+        ],
+        rotation: [0.15 + v.tiltX, v.spin + 4.4, v.tiltZ],
+      }),
+    ];
+  }),
+};
+
+const CHERRY_TREE_RECORDS = {
+  trunk: CHERRY_TREES.map((t, i) => {
+    const v = treeVariation(i, CHERRY_SEED);
+    return staticInstance({
+      position: [t.x, 1.3 * t.scale, t.z],
+      scale: [t.scale * v.wide, t.scale, t.scale * v.deep],
+      rotation: [0, v.spin, 0],
+    });
+  }),
+  crown: CHERRY_TREES.map((t, i) => {
+    const v = treeVariation(i, CHERRY_SEED);
+    return staticInstance({
+      position: [t.x, 3.3 * t.scale, t.z],
+      scale: [
+        t.scale * 0.95 * v.wide,
+        t.scale * 0.95 * v.tall,
+        t.scale * 0.95 * v.deep,
+      ],
+      rotation: [v.tiltX, v.spin, v.tiltZ],
+    });
+  }),
+  side: CHERRY_TREES.map((t, i) => {
+    const v = treeVariation(i, CHERRY_SEED);
+    return staticInstance({
+      position: [
+        t.x + Math.cos(v.spin) * 0.85 * t.scale,
+        2.75 * t.scale,
+        t.z + Math.sin(v.spin) * 0.85 * t.scale,
+      ],
+      scale: [
+        t.scale * 0.85 * v.wide,
+        t.scale * 0.85 * v.tall,
+        t.scale * 0.85 * v.deep,
+      ],
+      rotation: [v.tiltX, v.spin + 2.6, 0.1 + v.tiltZ],
+    });
+  }),
+};
+
+const GRASS_TUFT_RECORDS = GRASS_TUFTS.map((t) =>
+  staticInstance({
+    position: [t.x, 0, t.z],
+    scale: [t.s, t.s * 1.1, t.s],
+    rotation: [0, t.rot, 0],
+    color: TUFT_COLORS[Math.floor(t.shade * TUFT_COLORS.length)],
+  }),
+);
+
+const PEBBLE_RECORDS = PEBBLES.map((p) =>
+  staticInstance({
+    position: [p.x, 0.05 * p.s, p.z],
+    scale: [p.s, p.s * 0.6, p.s],
+    rotation: [0, p.rot, 0],
+  }),
+);
+
+const FLOWER_RECORDS = {
+  stem: FLOWERS.map((f) =>
+    staticInstance({ position: [f.pos[0], 0.15, f.pos[2]] }),
+  ),
+  head: FLOWERS.map((f, i) =>
+    staticInstance({
+      position: [f.pos[0], 0.35, f.pos[2]],
+      rotation: [0, i * 1.31, 0],
+      color: f.color,
+    }),
+  ),
+  core: FLOWERS.map((f) =>
+    staticInstance({ position: [f.pos[0], 0.37, f.pos[2]] }),
+  ),
+};
+
+const FENCE_POST_RECORDS = FENCES.flatMap((f) => [
+  ...f.lines.south.flatMap((x) => [
+    staticInstance({ position: [x - 1, 0.9, f.dist] }),
+    staticInstance({ position: [x + 1, 0.9, f.dist] }),
+  ]),
+  ...f.lines.north.flatMap((x) => [
+    staticInstance({ position: [x - 1, 0.9, -f.dist] }),
+    staticInstance({ position: [x + 1, 0.9, -f.dist] }),
+  ]),
+  ...f.lines.west.flatMap((z) => [
+    staticInstance({ position: [-f.dist, 0.9, z - 1] }),
+    staticInstance({ position: [-f.dist, 0.9, z + 1] }),
+  ]),
+  ...f.lines.east.flatMap((z) => [
+    staticInstance({ position: [f.dist, 0.9, z - 1] }),
+    staticInstance({ position: [f.dist, 0.9, z + 1] }),
+  ]),
+]);
+
+const FENCE_RAIL_RECORDS = FENCES.flatMap((f) => [
+  ...f.lines.south.flatMap((x) => [
+    staticInstance({ position: [x, 1.4, f.dist] }),
+    staticInstance({ position: [x, 0.6, f.dist] }),
+  ]),
+  ...f.lines.north.flatMap((x) => [
+    staticInstance({ position: [x, 1.4, -f.dist] }),
+    staticInstance({ position: [x, 0.6, -f.dist] }),
+  ]),
+  ...f.lines.west.flatMap((z) => [
+    staticInstance({
+      position: [-f.dist, 1.4, z],
+      rotation: [0, Math.PI / 2, 0],
+    }),
+    staticInstance({
+      position: [-f.dist, 0.6, z],
+      rotation: [0, Math.PI / 2, 0],
+    }),
+  ]),
+  ...f.lines.east.flatMap((z) => [
+    staticInstance({
+      position: [f.dist, 1.4, z],
+      rotation: [0, Math.PI / 2, 0],
+    }),
+    staticInstance({
+      position: [f.dist, 0.6, z],
+      rotation: [0, Math.PI / 2, 0],
+    }),
+  ]),
+]);
 
 // ---------- 정적 배경 (낮/밤과 무관하므로 memo로 리렌더 차단) ----------
 const StaticScenery = memo(function StaticScenery() {
@@ -773,253 +1141,91 @@ const StaticScenery = memo(function StaticScenery() {
 
   return (
     <group>
-      {/* 침엽수 인스턴싱 — 층이 어긋나지 않게 기울기는 주지 않고
-          방향(spin)과 폭(wide/deep)만 흔든다. 높이는 t.scale 그대로여야
-          층 위치(3.2/4.7/6.0 × scale)와 맞는다. */}
-      <group>
-        <Instances frames={1} geometry={treeGeoms.trunk} material={treeMats.trunk} limit={PINES.length} castShadow>
-          {PINES.map((t, i) => {
-            const v = treeVariation(i, PINE_SEED);
-            return (
-              <Instance
-                key={i}
-                position={[t.x, 1.2, t.z]}
-                scale={[t.scale * v.wide, t.scale, t.scale * v.deep]}
-                rotation={[0, v.spin, 0]}
-              />
-            );
-          })}
-        </Instances>
-        <Instances frames={1} geometry={treeGeoms.leaf1} material={treeMats.leaf1} limit={PINES.length} castShadow>
-          {PINES.map((t, i) => {
-            const v = treeVariation(i, PINE_SEED);
-            return (
-              <Instance
-                key={i}
-                position={[t.x, 3.2 * t.scale, t.z]}
-                scale={[t.scale * v.wide, t.scale, t.scale * v.deep]}
-                rotation={[0, v.spin, 0]}
-              />
-            );
-          })}
-        </Instances>
-        <Instances frames={1} geometry={treeGeoms.leaf2} material={treeMats.leaf2} limit={PINES.length} castShadow>
-          {PINES.map((t, i) => {
-            const v = treeVariation(i, PINE_SEED);
-            return (
-              <Instance
-                key={i}
-                position={[t.x, 4.7 * t.scale, t.z]}
-                scale={[t.scale * v.wide, t.scale, t.scale * v.deep]}
-                rotation={[0, v.spin + 0.4, 0]}
-              />
-            );
-          })}
-        </Instances>
-        <Instances frames={1} geometry={treeGeoms.leaf3} material={treeMats.leaf3} limit={PINES.length} castShadow>
-          {PINES.map((t, i) => {
-            const v = treeVariation(i, PINE_SEED);
-            return (
-              <Instance
-                key={i}
-                position={[t.x, 6.0 * t.scale, t.z]}
-                scale={[t.scale * v.wide, t.scale, t.scale * v.deep]}
-                rotation={[0, v.spin + 0.8, 0]}
-              />
-            );
-          })}
-        </Instances>
-      </group>
+      <CulledInstances
+        name="pine-trunks"
+        records={PINE_RECORDS.trunk}
+        geometry={treeGeoms.trunk}
+        material={treeMats.trunk}
+        castShadow
+      />
+      <CulledInstances
+        name="pine-crowns-lower"
+        records={PINE_RECORDS.leaf1}
+        geometry={treeGeoms.leaf1}
+        material={treeMats.leaf1}
+        castShadow
+      />
+      <CulledInstances
+        name="pine-crowns-middle"
+        records={PINE_RECORDS.leaf2}
+        geometry={treeGeoms.leaf2}
+        material={treeMats.leaf2}
+        castShadow
+      />
+      <CulledInstances
+        name="pine-crowns-upper"
+        records={PINE_RECORDS.leaf3}
+        geometry={treeGeoms.leaf3}
+        material={treeMats.leaf3}
+        castShadow
+      />
 
-      {/* 활엽수 (둥근 수관) 인스턴싱 */}
-      <group>
-        <Instances
-          frames={1}
-          geometry={roundTreeGeoms.trunk}
-          material={roundTreeMats.trunk}
-          limit={ROUND_TREES.length}
-          castShadow
-        >
-          {ROUND_TREES.map((t, i) => {
-            const v = treeVariation(i, ROUND_SEED);
-            return (
-              <Instance
-                key={i}
-                position={[t.x, 1.3 * t.scale, t.z]}
-                scale={[t.scale * v.wide, t.scale, t.scale * v.deep]}
-                rotation={[0, v.spin, 0]}
-              />
-            );
-          })}
-        </Instances>
-        <Instances
-          frames={1}
-          geometry={roundTreeGeoms.blob}
-          material={roundTreeMats.leafGreen}
-          limit={ROUND_TREES.length}
-          castShadow
-        >
-          {ROUND_TREES.map((t, i) => {
-            const v = treeVariation(i, ROUND_SEED);
-            return (
-              <Instance
-                key={i}
-                position={[t.x, 3.4 * t.scale, t.z]}
-                // 수관은 거의 구형이라 Y 회전만으로는 차이가 안 보인다.
-                // 비균일 스케일과 기울기가 실루엣을 실제로 바꾼다.
-                scale={[
-                  t.scale * v.wide,
-                  t.scale * v.tall,
-                  t.scale * v.deep,
-                ]}
-                rotation={[v.tiltX, v.spin, v.tiltZ]}
-              />
-            );
-          })}
-        </Instances>
-        <Instances
-          frames={1}
-          geometry={roundTreeGeoms.blobSide}
-          material={roundTreeMats.leafGreenDark}
-          limit={ROUND_TREES.length * 2}
-          castShadow
-        >
-          {ROUND_TREES.map((t, i) => {
-            const v = treeVariation(i, ROUND_SEED);
-            return (
-              <Instance
-                key={`a-${i}`}
-                // 곁가지도 개체 회전을 따라 돌아야 한 그루로 읽힌다
-                position={[
-                  t.x + Math.cos(v.spin) * 0.95 * t.scale,
-                  2.8 * t.scale,
-                  t.z + Math.sin(v.spin) * 0.95 * t.scale,
-                ]}
-                scale={[t.scale * v.wide, t.scale * v.tall, t.scale * v.deep]}
-                rotation={[v.tiltX, v.spin + 2.1, 0.2 + v.tiltZ]}
-              />
-            );
-          })}
-          {ROUND_TREES.map((t, i) => {
-            const v = treeVariation(i, ROUND_SEED);
-            return (
-              <Instance
-                key={`b-${i}`}
-                position={[
-                  t.x - Math.cos(v.spin + 0.9) * 0.9 * t.scale,
-                  3.0 * t.scale,
-                  t.z - Math.sin(v.spin + 0.9) * 0.9 * t.scale,
-                ]}
-                scale={[
-                  t.scale * 0.9 * v.wide,
-                  t.scale * 0.9 * v.tall,
-                  t.scale * 0.9 * v.deep,
-                ]}
-                rotation={[0.15 + v.tiltX, v.spin + 4.4, v.tiltZ]}
-              />
-            );
-          })}
-        </Instances>
-      </group>
+      <CulledInstances
+        name="round-tree-trunks"
+        records={ROUND_TREE_RECORDS.trunk}
+        geometry={roundTreeGeoms.trunk}
+        material={roundTreeMats.trunk}
+        castShadow
+      />
+      <CulledInstances
+        name="round-tree-crowns"
+        records={ROUND_TREE_RECORDS.crown}
+        geometry={roundTreeGeoms.blob}
+        material={roundTreeMats.leafGreen}
+        castShadow
+      />
+      <CulledInstances
+        name="round-tree-side-crowns"
+        records={ROUND_TREE_RECORDS.sides}
+        geometry={roundTreeGeoms.blobSide}
+        material={roundTreeMats.leafGreenDark}
+        castShadow
+      />
 
-      {/* 벚나무 (분홍 수관) 인스턴싱 */}
-      <group>
-        <Instances
-          frames={1}
-          geometry={roundTreeGeoms.trunk}
-          material={roundTreeMats.trunk}
-          limit={CHERRY_TREES.length}
-          castShadow
-        >
-          {CHERRY_TREES.map((t, i) => {
-            const v = treeVariation(i, CHERRY_SEED);
-            return (
-              <Instance
-                key={i}
-                position={[t.x, 1.3 * t.scale, t.z]}
-                scale={[t.scale * v.wide, t.scale, t.scale * v.deep]}
-                rotation={[0, v.spin, 0]}
-              />
-            );
-          })}
-        </Instances>
-        <Instances
-          frames={1}
-          geometry={roundTreeGeoms.blob}
-          material={roundTreeMats.leafPink}
-          limit={CHERRY_TREES.length}
-          castShadow
-        >
-          {CHERRY_TREES.map((t, i) => {
-            const v = treeVariation(i, CHERRY_SEED);
-            return (
-              <Instance
-                key={i}
-                position={[t.x, 3.3 * t.scale, t.z]}
-                scale={[
-                  t.scale * 0.95 * v.wide,
-                  t.scale * 0.95 * v.tall,
-                  t.scale * 0.95 * v.deep,
-                ]}
-                rotation={[v.tiltX, v.spin, v.tiltZ]}
-              />
-            );
-          })}
-        </Instances>
-        <Instances
-          frames={1}
-          geometry={roundTreeGeoms.blobSide}
-          material={roundTreeMats.leafPinkDark}
-          limit={CHERRY_TREES.length}
-          castShadow
-        >
-          {CHERRY_TREES.map((t, i) => {
-            const v = treeVariation(i, CHERRY_SEED);
-            return (
-              <Instance
-                key={i}
-                position={[
-                  t.x + Math.cos(v.spin) * 0.85 * t.scale,
-                  2.75 * t.scale,
-                  t.z + Math.sin(v.spin) * 0.85 * t.scale,
-                ]}
-                scale={[
-                  t.scale * 0.85 * v.wide,
-                  t.scale * 0.85 * v.tall,
-                  t.scale * 0.85 * v.deep,
-                ]}
-                rotation={[v.tiltX, v.spin + 2.6, 0.1 + v.tiltZ]}
-              />
-            );
-          })}
-        </Instances>
-      </group>
+      <CulledInstances
+        name="cherry-tree-trunks"
+        records={CHERRY_TREE_RECORDS.trunk}
+        geometry={roundTreeGeoms.trunk}
+        material={roundTreeMats.trunk}
+        castShadow
+      />
+      <CulledInstances
+        name="cherry-tree-crowns"
+        records={CHERRY_TREE_RECORDS.crown}
+        geometry={roundTreeGeoms.blob}
+        material={roundTreeMats.leafPink}
+        castShadow
+      />
+      <CulledInstances
+        name="cherry-tree-side-crowns"
+        records={CHERRY_TREE_RECORDS.side}
+        geometry={roundTreeGeoms.blobSide}
+        material={roundTreeMats.leafPinkDark}
+        castShadow
+      />
 
-      {/* 풀숲 클러터 (인스턴스 색 틴트) */}
-      {/* 풀포기 — 잎 밑동이 원점이라 지면(y=0)에 그대로 얹는다 */}
-      <Instances frames={1} geometry={clutterGeoms.tuft} material={clutterMats.tuft} limit={GRASS_TUFTS.length}>
-        {GRASS_TUFTS.map((t, i) => (
-          <Instance
-            key={i}
-            position={[t.x, 0, t.z]}
-            scale={[t.s, t.s * 1.1, t.s]}
-            rotation={[0, t.rot, 0]}
-            color={TUFT_COLORS[Math.floor(t.shade * TUFT_COLORS.length)]}
-          />
-        ))}
-      </Instances>
-
-      {/* 흙길 자갈 */}
-      <Instances frames={1} geometry={clutterGeoms.pebble} material={clutterMats.pebble} limit={PEBBLES.length}>
-        {PEBBLES.map((p, i) => (
-          <Instance
-            key={i}
-            position={[p.x, 0.05 * p.s, p.z]}
-            scale={[p.s, p.s * 0.6, p.s]}
-            rotation={[0, p.rot, 0]}
-          />
-        ))}
-      </Instances>
+      <CulledInstances
+        name="grass-tufts"
+        records={GRASS_TUFT_RECORDS}
+        geometry={clutterGeoms.tuft}
+        material={clutterMats.tuft}
+      />
+      <CulledInstances
+        name="path-pebbles"
+        records={PEBBLE_RECORDS}
+        geometry={clutterGeoms.pebble}
+        material={clutterMats.pebble}
+      />
 
       <Cloud position={[12, 12, -10]} speed={0.0008} seed={0.8} />
       <Cloud position={[-18, 14, -12]} speed={0.0006} seed={2.1} />
@@ -1065,107 +1271,39 @@ const StaticScenery = memo(function StaticScenery() {
         />
       ))}
 
-      {/* 꽃 인스턴싱 (줄기 + 머리, 머리는 인스턴스별 색상) */}
-      <Instances frames={1} geometry={flowerGeoms.stem} material={flowerMats.stem} limit={FLOWERS.length}>
-        {FLOWERS.map((f, i) => (
-          <Instance key={i} position={[f.pos[0], 0.15, f.pos[2]]} />
-        ))}
-      </Instances>
-      <Instances frames={1} geometry={flowerGeoms.head} material={flowerMats.head} limit={FLOWERS.length}>
-        {FLOWERS.map((f, i) => (
-          <Instance
-            key={i}
-            position={[f.pos[0], 0.35, f.pos[2]]}
-            // 꽃마다 조금씩 다른 방향을 보게 해 도장 찍은 듯 보이지 않게 한다
-            rotation={[0, i * 1.31, 0]}
-            color={f.color}
-          />
-        ))}
-      </Instances>
-      {/* 꽃심 */}
-      <Instances frames={1} geometry={flowerGeoms.core} material={flowerMats.core} limit={FLOWERS.length}>
-        {FLOWERS.map((f, i) => (
-          <Instance key={i} position={[f.pos[0], 0.37, f.pos[2]]} />
-        ))}
-      </Instances>
+      <CulledInstances
+        name="flower-stems"
+        records={FLOWER_RECORDS.stem}
+        geometry={flowerGeoms.stem}
+        material={flowerMats.stem}
+      />
+      <CulledInstances
+        name="flower-heads"
+        records={FLOWER_RECORDS.head}
+        geometry={flowerGeoms.head}
+        material={flowerMats.head}
+      />
+      <CulledInstances
+        name="flower-cores"
+        records={FLOWER_RECORDS.core}
+        geometry={flowerGeoms.core}
+        material={flowerMats.core}
+      />
 
-      {/* 울타리 인스턴싱 (모든 존의 울타리를 한 배치로) */}
-      <group>
-        {/* 기둥 */}
-        <Instances frames={1} geometry={fenceGeoms.post} material={fenceMats.post} limit={FENCE_SEG_COUNT * 2} castShadow>
-          {FENCES.map((f, fi) => (
-            <group key={fi}>
-              {f.lines.south.map((x) => (
-                <group key={`s-post-${x}`}>
-                  <Instance position={[x - 1.0, 0.9, f.dist]} />
-                  <Instance position={[x + 1.0, 0.9, f.dist]} />
-                </group>
-              ))}
-              {f.lines.north.map((x) => (
-                <group key={`n-post-${x}`}>
-                  <Instance position={[x - 1.0, 0.9, -f.dist]} />
-                  <Instance position={[x + 1.0, 0.9, -f.dist]} />
-                </group>
-              ))}
-              {f.lines.west.map((z) => (
-                <group key={`w-post-${z}`}>
-                  <Instance position={[-f.dist, 0.9, z - 1.0]} />
-                  <Instance position={[-f.dist, 0.9, z + 1.0]} />
-                </group>
-              ))}
-              {f.lines.east.map((z) => (
-                <group key={`e-post-${z}`}>
-                  <Instance position={[f.dist, 0.9, z - 1.0]} />
-                  <Instance position={[f.dist, 0.9, z + 1.0]} />
-                </group>
-              ))}
-            </group>
-          ))}
-        </Instances>
-        {/* 가로대 */}
-        <Instances frames={1} geometry={fenceGeoms.rail} material={fenceMats.rail} limit={FENCE_SEG_COUNT * 2} castShadow>
-          {FENCES.map((f, fi) => (
-            <group key={fi}>
-              {f.lines.south.map((x) => (
-                <group key={`s-rail-${x}`}>
-                  <Instance position={[x, 1.4, f.dist]} />
-                  <Instance position={[x, 0.6, f.dist]} />
-                </group>
-              ))}
-              {f.lines.north.map((x) => (
-                <group key={`n-rail-${x}`}>
-                  <Instance position={[x, 1.4, -f.dist]} />
-                  <Instance position={[x, 0.6, -f.dist]} />
-                </group>
-              ))}
-              {f.lines.west.map((z) => (
-                <group key={`w-rail-${z}`}>
-                  <Instance
-                    position={[-f.dist, 1.4, z]}
-                    rotation={[0, Math.PI / 2, 0]}
-                  />
-                  <Instance
-                    position={[-f.dist, 0.6, z]}
-                    rotation={[0, Math.PI / 2, 0]}
-                  />
-                </group>
-              ))}
-              {f.lines.east.map((z) => (
-                <group key={`e-rail-${z}`}>
-                  <Instance
-                    position={[f.dist, 1.4, z]}
-                    rotation={[0, Math.PI / 2, 0]}
-                  />
-                  <Instance
-                    position={[f.dist, 0.6, z]}
-                    rotation={[0, Math.PI / 2, 0]}
-                  />
-                </group>
-              ))}
-            </group>
-          ))}
-        </Instances>
-      </group>
+      <CulledInstances
+        name="fence-posts"
+        records={FENCE_POST_RECORDS}
+        geometry={fenceGeoms.post}
+        material={fenceMats.post}
+        castShadow
+      />
+      <CulledInstances
+        name="fence-rails"
+        records={FENCE_RAIL_RECORDS}
+        geometry={fenceGeoms.rail}
+        material={fenceMats.rail}
+        castShadow
+      />
     </group>
   );
 });
@@ -1174,9 +1312,14 @@ const StaticScenery = memo(function StaticScenery() {
 export const Environment = ({ isNight = false }: { isNight?: boolean }) => {
   return (
     <group>
-      {/* 안개는 Scene의 fogExp2가 낮밤 진행도와 함께 관리한다 */}
+      {/* 안개는 Scene의 선형 fog가 낮밤 진행도와 함께 관리한다 */}
       <StaticScenery />
-      <BambooField />
+      <DistanceCulledGroup
+        center={BAMBOO_CULL_BOUNDS.center}
+        radius={BAMBOO_CULL_BOUNDS.radius}
+      >
+        <BambooField />
+      </DistanceCulledGroup>
 
       {/* 석등만 isNight에 반응 */}
       {LANTERNS.map((l, i) => (

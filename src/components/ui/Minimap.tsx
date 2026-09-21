@@ -12,8 +12,10 @@ import {
   BRIDGES,
   WORLD_BOUNDS,
   WORLD_SIZE,
+  NOTICE_BOARDS,
 } from "@/constants/world";
 import { useZoneStore } from "@/stores/zoneStore";
+import { useMoveTargetStore } from "@/stores/moveTargetStore";
 
 // 월드가 정사각형이 아니므로 캔버스도 같은 비율로 잡는다.
 // 두 축의 축척이 같아야 거리와 방향이 왜곡되지 않는다.
@@ -122,12 +124,28 @@ const drawBackground = () => {
     ctx.fillRect(toMapX(b.x) - 0.5, toMapZ(b.z) - 0.5, 1, 1);
   }
 
+  // 게시판은 작은 표지판 모양으로 표시한다.
+  for (const board of NOTICE_BOARDS) {
+    const x = toMapX(board.x);
+    const z = toMapZ(board.z);
+    ctx.fillStyle = "#fff7d9";
+    ctx.strokeStyle = "#744729";
+    ctx.lineWidth = 1;
+    ctx.fillRect(x - 3.5, z - 3.5, 7, 5);
+    ctx.strokeRect(x - 3.5, z - 3.5, 7, 5);
+    ctx.beginPath();
+    ctx.moveTo(x, z + 1.5);
+    ctx.lineTo(x, z + 4);
+    ctx.stroke();
+  }
   return c;
 };
 
 /** 좌상단 실시간 미니맵 — 존 데이터에서 자동 생성 */
 export const Minimap = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const requestMove = useMoveTargetStore((state) => state.requestMove);
+  const board = NOTICE_BOARDS[0];
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -136,8 +154,12 @@ export const Minimap = () => {
     const bg = drawBackground();
     const playerPos = useZoneStore.getState().playerPos;
     let raf = 0;
+    let lastFrame = -Infinity;
 
-    const render = () => {
+    const render = (time: number) => {
+      raf = requestAnimationFrame(render);
+      if (time - lastFrame < 100) return;
+      lastFrame = time;
       ctx.clearRect(0, 0, MAP_W, MAP_H);
       ctx.drawImage(bg, 0, 0);
       // 플레이어 방향 화살표
@@ -157,23 +179,36 @@ export const Minimap = () => {
       ctx.fill();
       ctx.stroke();
       ctx.restore();
-      raf = requestAnimationFrame(render);
     };
     raf = requestAnimationFrame(render);
     return () => cancelAnimationFrame(raf);
   }, []);
 
   return (
-    <div className="absolute top-4 left-4 z-40 pointer-events-none">
+    <div className="pointer-events-none absolute left-4 top-[164px] z-40 w-[126px] sm:w-[162px] lg:top-4" style={{ fontFamily: "var(--font-jua), sans-serif" }}>
       <div className="glass-card rounded-2xl p-1.5 border-white/25 shadow-xl">
         <canvas
           ref={canvasRef}
           width={MAP_W}
           height={MAP_H}
-          className="rounded-xl block"
-          style={{ width: MAP_W, height: MAP_H }}
+          role="img"
+          aria-label="마을 지도. 빨간 화살표는 내 위치, 표지판은 방명록 게시판이야."
+          className="block h-auto w-[112px] rounded-xl sm:w-[148px]"
         />
       </div>
+      {board && (
+        <button
+          type="button"
+          onClick={() => {
+            // 게시판 앞쪽, 충돌 상자 바깥이면서 상호작용 범위 안쪽.
+            const distance = board.range * 0.75;
+            requestMove(board.x + Math.sin(board.rotation) * distance, board.z + Math.cos(board.rotation) * distance);
+          }}
+          className="glass-card pointer-events-auto mt-2 min-h-11 w-full rounded-xl px-2 text-xs font-bold text-sky-950 hover:bg-white/40 focus-visible:outline-2 focus-visible:outline-orange-400"
+        >
+          게시판으로 가기 ↗
+        </button>
+      )}
     </div>
   );
 };

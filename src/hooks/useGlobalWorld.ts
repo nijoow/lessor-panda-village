@@ -1,53 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { WorldSession } from "@/types/multiplayer";
 
 export const GLOBAL_WORLD_KEY = "panda-village";
-
 const NICKNAME_STORAGE_KEY = "panda-village:nickname";
-const MAX_NICKNAME_LENGTH = 10;
-
-const getEntryErrorMessage = (error: unknown): string => {
-  const message =
-    error instanceof Error
-      ? error.message.toLowerCase()
-      : typeof error === "object" &&
-          error !== null &&
-          "message" in error &&
-          typeof error.message === "string"
-        ? error.message.toLowerCase()
-        : "";
-
-  if (
-    message.includes("anonymous sign-ins are disabled") ||
-    message.includes("anonymous_provider_disabled")
-  ) {
-    return "현재 익명 입장이 비활성화되어 있어요. Supabase의 Anonymous 로그인을 켠 뒤 다시 시도해주세요.";
-  }
-  if (
-    message.includes("nickname") ||
-    message.includes("world_profiles_nickname_length")
-  ) {
-    return "닉네임은 1~10자로 입력해주세요.";
-  }
-  if (
-    message.includes("row-level security") ||
-    message.includes("permission denied")
-  ) {
-    return "공유 월드 프로필을 저장하지 못했어요. 잠시 후 다시 시도해주세요.";
-  }
-  if (
-    message.includes("failed to fetch") ||
-    message.includes("network") ||
-    message.includes("fetch")
-  ) {
-    return "서버에 연결하지 못했어요. 인터넷 연결을 확인하고 다시 시도해주세요.";
-  }
-
-  return "공유 월드에 입장하지 못했어요. 잠시 후 다시 시도해주세요.";
-};
 
 export const useGlobalWorld = () => {
   const [worldSession, setWorldSession] = useState<WorldSession | null>(null);
@@ -55,93 +13,104 @@ export const useGlobalWorld = () => {
   const [isReady, setIsReady] = useState(false);
   const [isEntering, setIsEntering] = useState(false);
   const [entryError, setEntryError] = useState<string | null>(null);
+  const sessionRef = useRef<WorldSession | null>(null);
+  const generation = useRef(0);
+  const busy = useRef(false);
 
   useEffect(() => {
-    const storedNickname = localStorage.getItem(NICKNAME_STORAGE_KEY) ?? "";
-    const url = new URL(window.location.href);
-
-    if (url.searchParams.has("room")) {
-      url.searchParams.delete("room");
-      window.history.replaceState({}, "", url);
-    }
-
-    sessionStorage.removeItem("panda-village:pending-room-id");
-    setSavedNickname(storedNickname.slice(0, MAX_NICKNAME_LENGTH));
-    setIsReady(true);
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      try {
+        setSavedNickname((localStorage.getItem(NICKNAME_STORAGE_KEY) ?? "").slice(0, 10));
+      } catch { /* 저장소가 차단돼도 방문은 가능하다. */ }
+      setIsReady(true);
+    });
+    return () => { cancelled = true; generation.current += 1; };
   }, []);
 
-  const enterWorld = useCallback(
-    async (rawNickname: string) => {
-      if (isEntering) return;
-
-      const nickname = rawNickname.trim();
-      if (
-        nickname.length === 0 ||
-        nickname.length > MAX_NICKNAME_LENGTH
-      ) {
-        setEntryError("닉네임은 1~10자로 입력해주세요.");
-        return;
-      }
-
-      setIsEntering(true);
-      setEntryError(null);
-
-      try {
-        const {
-          data: { session: existingSession },
-          error: sessionError,
-        } = await supabase.auth.getSession();
-        let session = existingSession;
-
-        if (sessionError) throw sessionError;
-
+  const reconnect = useCallback(async () => {
+    const visitor = sessionRef.current;
+    if (!visitor || busy.current || !supabase) return;
+    const client = supabase;
+    busy.current = true;
+    setIsEntering(true);
+    const attempt = ++generation.current;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const connect = async () => {
+        const { data, error } = await client.auth.getSession();
+        if (error) throw error;
+        let session = data.session;
         if (!session) {
-          const { data, error } = await supabase.auth.signInAnonymously();
-          if (error) throw error;
-          session = data.session;
+          const auth = await client.auth.signInAnonymously();
+          if (auth.error) throw auth.error;
+          session = auth.data.session;
         }
-
-        if (!session?.user) {
-          throw new Error("authentication_required");
-        }
-
-        const { error: profileError } = await supabase
-          .from("world_profiles")
-          .upsert(
-            {
-              user_id: session.user.id,
-              nickname,
-              updated_at: new Date().toISOString(),
-            },
-            { onConflict: "user_id" },
-          );
-
-        if (profileError) throw profileError;
-
-        await supabase.realtime.setAuth(session.access_token);
-
-        localStorage.setItem(NICKNAME_STORAGE_KEY, nickname);
-        setSavedNickname(nickname);
-        setWorldSession({
-          userId: session.user.id,
-          nickname,
-          worldKey: GLOBAL_WORLD_KEY,
-        });
-      } catch (error) {
-        setEntryError(getEntryErrorMessage(error));
-      } finally {
+        if (!session || attempt !== generation.current) throw new Error("cancelled");
+        const profile = await client.from("world_profiles").upsert({
+          user_id: session.user.id,
+          nickname: visitor.nickname,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: "user_id" });
+        if (profile.error) throw profile.error;
+        await client.realtime.setAuth(session.access_token);
+        return session.user.id;
+      };
+      const userId = await Promise.race([
+        connect(),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error("timeout")), 6000);
+        }),
+      ]);
+      if (attempt !== generation.current) return;
+      const connected: WorldSession = { ...visitor, userId, mode: "online" };
+      sessionRef.current = connected;
+      setWorldSession(connected);
+    } catch {
+      if (attempt !== generation.current) return;
+      // 인증 실패가 산책을 중단시키지는 않는다.
+      const offline: WorldSession = { ...visitor, mode: "offline" };
+      sessionRef.current = offline;
+      setWorldSession(offline);
+    } finally {
+      clearTimeout(timer);
+      if (attempt === generation.current) {
+        generation.current += 1;
+        busy.current = false;
         setIsEntering(false);
       }
-    },
-    [isEntering],
-  );
+    }
+  }, []);
 
-  return {
-    worldSession,
-    savedNickname,
-    isReady,
-    isEntering,
-    entryError,
-    enterWorld,
-  };
+  const enterWorld = useCallback(async (rawNickname: string) => {
+    const nickname = rawNickname.trim();
+    if (!nickname || nickname.length > 10) {
+      setEntryError("닉네임은 1~10자로 적어줘.");
+      return;
+    }
+    if (sessionRef.current) return;
+    const local: WorldSession = {
+      userId: `local-${crypto.randomUUID()}`,
+      nickname,
+      worldKey: GLOBAL_WORLD_KEY,
+      mode: "offline",
+    };
+    sessionRef.current = local;
+    setWorldSession(local);
+    setSavedNickname(nickname);
+    setEntryError(null);
+    try { localStorage.setItem(NICKNAME_STORAGE_KEY, nickname); } catch { /* 선택적 저장 */ }
+    void reconnect();
+  }, [reconnect]);
+
+  useEffect(() => {
+    const recover = () => {
+      if (sessionRef.current?.mode === "offline") void reconnect();
+    };
+    window.addEventListener("online", recover);
+    return () => window.removeEventListener("online", recover);
+  }, [reconnect]);
+
+  return { worldSession, savedNickname, isReady, isEntering, entryError, enterWorld, reconnect };
 };

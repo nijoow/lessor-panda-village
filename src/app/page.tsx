@@ -3,10 +3,9 @@
 import {
   KeyboardControls,
   KeyboardControlsEntry,
-  useProgress,
 } from "@react-three/drei";
 import { AnimatePresence } from "framer-motion";
-import { useRef, useState, useEffect } from "react";
+import { useCallback, useRef, useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import * as THREE from "three";
 
@@ -20,10 +19,10 @@ import { useViewportHeight } from "@/hooks/useViewportHeight";
 import { useGuestbookStore } from "@/stores/guestbookStore";
 import { NOTICE_BOARDS } from "@/constants/world";
 import { audio } from "@/lib/audio";
+import { WorldErrorBoundary, WorldFallback } from "@/components/ui/WorldFallback";
+import { GraphicsSettings } from "@/components/ui/GraphicsSettings";
 
-// ─────────────────────────────────────────────
-// 다이나믹 임포트 (Lighthouse TBT & Render Blocking 최적화)
-// ─────────────────────────────────────────────
+// 3D 장면과 HUD는 클라이언트에서 불러온다.
 const Scene = dynamic(
   () => import("@/components/Scene").then((mod) => mod.Scene),
   {
@@ -83,11 +82,6 @@ const Minimap = dynamic(
   { ssr: false },
 );
 
-const SoundToggle = dynamic(
-  () => import("@/components/ui/SoundToggle").then((mod) => mod.SoundToggle),
-  { ssr: false },
-);
-
 const InventoryHUD = dynamic(
   () => import("@/components/ui/InventoryHUD").then((mod) => mod.InventoryHUD),
   { ssr: false },
@@ -104,7 +98,7 @@ const GuestbookPanel = dynamic(
   { ssr: false },
 );
 
-// 현재 흔적 장소는 마을 게시판 하나뿐이다 (docs/roadmap.md)
+// 현재 흔적 장소는 마을 게시판 하나뿐이다.
 const GUESTBOOK_PLACE_ID = NOTICE_BOARDS[0]?.placeId ?? "";
 
 const keyboardMap: KeyboardControlsEntry<Controls>[] = [
@@ -119,8 +113,6 @@ const keyboardMap: KeyboardControlsEntry<Controls>[] = [
   { name: Controls.emoteDance, keys: ["Digit2"] },
 ];
 
-// 로딩 100% 도달 후 입장 화면 표시까지의 지연 (사용자가 100%를 볼 수 있도록)
-const LOADING_COMPLETE_DELAY_MS = 1500;
 
 export default function Home() {
   const isNight = useDayNightCycle();
@@ -141,9 +133,10 @@ interface HomeContentProps {
 }
 
 const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
-  const { progress } = useProgress();
   const [isChatFocused, setIsChatFocused] = useState(false);
   const [isAssetsReady, setIsAssetsReady] = useState(false);
+  const [sceneUnavailable, setSceneUnavailable] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
   const {
     worldSession,
     savedNickname,
@@ -151,23 +144,18 @@ const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
     isEntering,
     entryError,
     enterWorld,
+    reconnect,
   } = useGlobalWorld();
 
-  useEffect(() => {
-    if (progress === 100) {
-      const timer = setTimeout(() => {
-        setIsAssetsReady(true);
-      }, LOADING_COMPLETE_DELAY_MS);
-      return () => clearTimeout(timer);
-    }
-  }, [progress]);
+  const authenticated = worldSession?.mode === "online";
+  const handleWorldReady = useCallback(() => setIsAssetsReady(true), []);
 
   // 낮밤 전환 시 앰비언스(새소리↔풀벌레) 크로스페이드
   useEffect(() => {
     audio.setNight(isNight);
   }, [isNight]);
 
-  // 멀티플레이어 훅 (Zero-Rerender 아키텍처)
+  // 멀티플레이 접속 상태와 원격 플레이어 데이터
   const {
     remotePlayerIds,
     connectionStatus,
@@ -178,8 +166,9 @@ const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
     broadcastGuestbook,
   } = useMultiplayer(
     worldSession?.nickname ?? null,
-    worldSession?.worldKey ?? null,
-    worldSession?.userId ?? null,
+    authenticated ? worldSession.worldKey : null,
+    authenticated ? worldSession.userId : null,
+    retryKey,
   );
 
   const {
@@ -187,24 +176,27 @@ const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
     remove: removeNote,
     isSubmitting: isWritingNote,
     writeError: noteError,
+    refresh, loadOlder, hasMore, isLoadingMore, mineOnly, setMineOnly,
+    visibleNotes, deleteError,
   } = useGuestbook(
     GUESTBOOK_PLACE_ID,
-    worldSession?.userId ?? null,
+    authenticated ? worldSession.userId : null,
     guestbookRevision,
     broadcastGuestbook,
+    { readOnly: !authenticated || connectionStatus === "error" },
   );
 
   // 방명록 패널이 열려 있는 동안에도 플레이어 조작을 잠근다
   const isGuestbookOpen = useGuestbookStore((state) => state.isOpen);
-  const inputLocked = isChatFocused || isGuestbookOpen;
+  const inputLocked = !isAssetsReady || isChatFocused || isGuestbookOpen || sceneUnavailable;
 
-  // 로딩과 지연 처리가 모두 끝난 후에만 닉네임 입력창이 보이도록 함
+  // 에셋 로딩 중에도 닉네임을 정할 수 있다.
   const showNicknameOverlay =
-    isAssetsReady && isWorldReady && worldSession === null;
+    isWorldReady && worldSession === null;
 
   return (
     <main className="w-full h-full relative overflow-hidden bg-[#fdfaf6]">
-      <LoadingScreen visible={!isAssetsReady} />
+      {worldSession !== null && !sceneUnavailable && <LoadingScreen ready={isAssetsReady} />}
 
       <AnimatePresence>
         {showNicknameOverlay && (
@@ -214,8 +206,7 @@ const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
             error={entryError}
             onJoin={async (name) => {
               // 사용자 제스처 컨텍스트 안에서 오디오 시작 (자동재생 정책)
-              audio.init();
-              audio.setNight(isNight);
+              try { audio.init(); audio.setNight(isNight); } catch { /* 소리 실패와 입장은 별개다. */ }
               await enterWorld(name);
             }}
           />
@@ -227,15 +218,24 @@ const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
           <ChatHUD
             onSendMessage={broadcastChat}
             onFocusChange={setIsChatFocused}
+            readOnly={!authenticated || connectionStatus !== "connected"}
           />
           <InteractionPrompt />
           <EmoteBar />
           <ZoneBanner />
           <Minimap />
-          <SoundToggle />
           <InventoryHUD />
           <GuestbookPanel
-            userId={worldSession.userId}
+            userId={authenticated ? worldSession.userId : null}
+            readOnly={!authenticated || connectionStatus === "error"}
+            onRefresh={refresh}
+            onLoadOlder={loadOlder}
+            hasMore={hasMore}
+            isLoadingMore={isLoadingMore}
+            mineOnly={mineOnly}
+            onMineOnlyChange={setMineOnly}
+            visibleNotes={visibleNotes}
+            deleteError={deleteError}
             onSubmit={submitNote}
             onDelete={removeNote}
             isSubmitting={isWritingNote}
@@ -248,13 +248,22 @@ const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
                 : 0
             }
             connectionStatus={connectionStatus}
-          />
+            offline={!authenticated}
+            isReconnecting={isEntering || connectionStatus === "connecting"}
+            onReconnect={() => {
+              if (!authenticated) void reconnect();
+              else setRetryKey((key) => key + 1);
+            }}
+          ><GraphicsSettings /></WorldHUD>
           <VillageHeader isNight={isNight} />
         </>
       )}
 
-      <Scene isNight={isNight}>
+      {sceneUnavailable && <WorldFallback onRetry={() => window.location.reload()} />}
+      <WorldErrorBoundary>
+      <Scene isNight={isNight} onUnavailable={() => setSceneUnavailable(true)}>
         <World
+          onReady={handleWorldReady}
           isNight={isNight}
           nickname={worldSession?.nickname ?? null}
           inputLocked={inputLocked}
@@ -265,6 +274,7 @@ const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
           myId={worldSession?.userId ?? ""}
         />
       </Scene>
+      </WorldErrorBoundary>
     </main>
   );
 };

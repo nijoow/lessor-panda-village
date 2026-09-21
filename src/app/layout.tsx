@@ -1,32 +1,29 @@
 import type { Metadata } from "next";
-import { Jua, Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-export const jua = Jua({
+export const jua = localFont({
+  src: "../../public/fonts/Jua-Regular.ttf",
   variable: "--font-jua",
-  subsets: ["latin"],
-  weight: ["400"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  display: "swap",
+  weight: "400",
 });
 
 export const metadata: Metadata = {
-  title: "Lessor Panda Village | 래서판다 빌리지",
+  metadataBase: new URL("https://lessor-panda-village.vercel.app"),
+  title: "래서판다 빌리지",
   description:
-    "WebGL 기반의 귀여운 래서판다들이 모여 사는 온라인 마을입니다. 다른 사람들과 함께 마을을 산책하고 이야기를 나눠보세요.",
+    "닉네임을 정하고 산책하며 다른 방문자가 남긴 쪽지를 읽는 작은 3D 마을.",
   icons: {
     icon: "/images/red_panda_icon.png",
     apple: "/images/red_panda_icon.png",
   },
   openGraph: {
-    title: "Lessor Panda Village | 래서판다 빌리지",
+    title: "래서판다 빌리지",
     description:
-      "WebGL 기반의 귀여운 래서판다들이 모여 사는 멀티플레이어 온라인 마을",
+      "브라우저에서 산책하고 쪽지를 남기는 작은 3D 마을",
     url: "https://lessor-panda-village.vercel.app",
-    siteName: "Lessor Panda Village",
+    siteName: "래서판다 빌리지",
     images: [
       {
         url: "/images/red_panda_icon.png",
@@ -46,10 +43,10 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
-      className={`${jua.variable} ${geistMono.variable} h-full antialiased`}
+      lang="ko"
+      className={`${jua.variable} h-full antialiased`}
     >
-      <body className={`${jua.className} min-h-full flex flex-col`}>
+      <body className={`min-h-full flex flex-col`}>
         {children}
       </body>
     </html>

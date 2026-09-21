@@ -14,8 +14,20 @@ import { RemotePlayer } from "@/components/world/RemotePlayer";
 import { PlayerState } from "@/types/multiplayer";
 import { HOUSES } from "@/constants/world";
 import * as THREE from "three";
+import { Suspense, useRef } from "react";
+import { useFrame } from "@react-three/fiber";
+
+// 로컬 캐릭터와 같은 Suspense 안에서 첫 렌더가 끝난 뒤 입장을 완료한다.
+const WorldReady = ({ onReady }: { onReady: () => void }) => {
+  const frames = useRef(0);
+  useFrame(() => {
+    if (++frames.current === 2) onReady();
+  });
+  return null;
+};
 
 interface WorldProps {
+  onReady: () => void;
   isNight: boolean;
   nickname: string | null;
   playerRef: React.MutableRefObject<THREE.Group>;
@@ -30,6 +42,7 @@ interface WorldProps {
 }
 
 export const World = ({
+  onReady,
   isNight,
   nickname,
   playerRef,
@@ -51,10 +64,12 @@ export const World = ({
       <PetalParticles isNight={isNight} />
       <ButterflyParticles isNight={isNight} />
 
-      {/* 다른 플레이어들 렌더링 (Zero-Rerender 최적화) */}
+      {/* 접속자 ID 목록으로 원격 플레이어 구성 */}
+      <Suspense fallback={null}>
       {remotePlayerIds.map((id) => (
         <RemotePlayer key={id} id={id} getPlayerData={getPlayerData} />
       ))}
+      </Suspense>
 
       {/* Player - 닉네임이 있을 때만 활성화 */}
       {nickname !== null ? (
@@ -66,6 +81,7 @@ export const World = ({
           inputDisabled={inputLocked}
         />
       ) : null}
+      {nickname !== null && <WorldReady onReady={onReady} />}
     </>
   );
 };

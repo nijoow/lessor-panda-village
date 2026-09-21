@@ -44,7 +44,7 @@ class VillageAudio {
   private noteIndex = 0;
   private stepToggle = false;
 
-  muted = false;
+  muted = true;
 
   /** 사용자 제스처 안에서 호출 (입장 버튼) */
   init() {
@@ -53,9 +53,12 @@ class VillageAudio {
     this.ctx = ctx;
 
     this.master = ctx.createGain();
-    this.muted =
-      typeof localStorage !== "undefined" &&
-      localStorage.getItem(MUTE_KEY) === "1";
+    try {
+      // 처음 방문하면 무음. 이전에 직접 켠 선택은 그대로 유지한다.
+      this.muted = localStorage.getItem(MUTE_KEY) !== "0";
+    } catch {
+      this.muted = true;
+    }
     this.master.gain.value = this.muted ? 0 : 0.5;
     this.master.connect(ctx.destination);
 
@@ -86,6 +89,8 @@ class VillageAudio {
   }
 
   toggleMute(): boolean {
+    this.init();
+    void this.ctx?.resume().catch(() => {});
     this.muted = !this.muted;
     if (this.master && this.ctx) {
       this.master.gain.linearRampToValueAtTime(

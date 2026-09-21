@@ -9,7 +9,9 @@ export const NOTE_COST = 1;
 export interface GuestbookNote {
   id: string;
   body: string;
-  authorId: string;
+  authorId: string | null;
+  colorKey: string;
+  createdAtCursor: string;
   nickname: string;
   /** epoch ms (서버 시각) */
   createdAt: number;
@@ -25,6 +27,8 @@ type GuestbookStatus = "idle" | "loading" | "ready" | "error";
 interface GuestbookState {
   notes: GuestbookNote[];
   status: GuestbookStatus;
+  cachedAt: number | null;
+  setCachedAt: (time: number | null) => void;
   /** 상호작용 거리 안의 게시판 인덱스 (NOTICE_BOARDS 기준, 없으면 null) */
   nearbyBoardIndex: number | null;
   /** 방명록 패널 열림 — 열려 있는 동안 플레이어 입력이 잠깁니다 */
@@ -39,6 +43,8 @@ interface GuestbookState {
 export const useGuestbookStore = create<GuestbookState>((set) => ({
   notes: [],
   status: "idle",
+  cachedAt: null,
+  setCachedAt: (cachedAt) => set({ cachedAt }),
   nearbyBoardIndex: null,
   isOpen: false,
   setNotes: (notes) => set({ notes }),

@@ -1,8 +1,7 @@
 "use client";
 
 import { useGLTF } from "@react-three/drei";
-import { useMemo } from "react";
-import * as THREE from "three";
+import { useCameraOccluder } from "@/hooks/useCameraOccluder";
 
 interface Props {
   position?: [number, number, number];
@@ -20,16 +19,7 @@ export const House = ({
   // 지오메트리만 꺼내 쓰면 GLB 노드 자체의 변환이 사라진다.
   // meshopt 양자화는 정점을 정규화 범위로 굽고 노드 스케일로 원래 크기를
   // 복원하므로, 씬을 통째로 복제해야 압축 전후 크기가 같게 유지된다.
-  const model = useMemo(() => {
-    const clone = scene.clone(true);
-    clone.traverse((node) => {
-      if (node instanceof THREE.Mesh) {
-        node.castShadow = true;
-        node.receiveShadow = true;
-      }
-    });
-    return clone;
-  }, [scene]);
+  const model = useCameraOccluder(scene, `${position.join(",")}:${rotation.join(",")}:${scale}`);
 
   return (
     <group position={position} rotation={rotation} scale={scale} dispose={null}>

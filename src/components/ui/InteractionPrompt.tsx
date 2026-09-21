@@ -31,8 +31,8 @@ export const InteractionPrompt = () => {
       ? "일어서기"
       : "벤치에 앉기"
     : boardMode
-      ? "📜 방명록 보기"
-      : "🎋 대나무 수확";
+      ? "방명록 보기"
+      : "대나무 모으기";
   const onClick = benchMode
     ? requestToggleSit
     : boardMode
@@ -40,7 +40,7 @@ export const InteractionPrompt = () => {
       : requestHarvest;
 
   return (
-    <div className="absolute inset-x-0 bottom-28 sm:bottom-36 z-40 flex justify-center pointer-events-none">
+    <div className="absolute inset-x-0 bottom-24 sm:bottom-28 z-40 flex justify-center pointer-events-none">
       <AnimatePresence>
         {visible && (
           <motion.button
@@ -50,12 +50,12 @@ export const InteractionPrompt = () => {
             exit={{ opacity: 0, y: 8, scale: 0.95 }}
             transition={{ type: "spring", damping: 20, stiffness: 200 }}
             onClick={onClick}
-            className="pointer-events-auto flex items-center gap-3 px-5 py-3 glass-card rounded-full border-white/20 shadow-xl cursor-pointer hover:bg-white/30 transition-colors"
+            className="glass-card pointer-events-auto flex min-h-11 items-center gap-3 rounded-full border-white/25 px-5 py-3 shadow-xl transition-colors hover:bg-white/30"
           >
             <span className="hidden sm:flex items-center justify-center w-7 h-7 rounded-lg bg-white/90 text-gray-800 text-sm font-black shadow">
               E
             </span>
-            <span className="text-white text-sm font-bold drop-shadow">
+            <span className="text-sm font-bold text-white drop-shadow">
               {label}
             </span>
           </motion.button>

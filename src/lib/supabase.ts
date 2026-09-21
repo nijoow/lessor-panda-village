@@ -1,12 +1,23 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    'NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY 환경 변수가 설정되지 않았습니다. .env.local을 확인하세요.',
-  );
-}
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// 설정이나 서버가 없어도 정적 월드는 열 수 있다.
+export const supabase = (() => {
+  if (!url || !key) return null;
+  try {
+    return createClient(url, key, {
+      global: {
+        fetch: (input, init) => fetch(input, {
+          ...init,
+          signal: init?.signal
+            ? AbortSignal.any([init.signal, AbortSignal.timeout(8000)])
+            : AbortSignal.timeout(8000),
+        }),
+      },
+    });
+  } catch {
+    return null;
+  }
+})();

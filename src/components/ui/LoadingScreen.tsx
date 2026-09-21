@@ -3,22 +3,36 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { useProgress } from "@react-three/drei";
 import Image from "next/image";
+import { useEffect, useState } from "react";
 
-interface Props {
-  visible: boolean;
-}
+export const LoadingScreen = ({ ready }: { ready: boolean }) => {
+  const progress = useProgress((state) => state.progress);
+  const [displayedProgress, setDisplayedProgress] = useState(0);
+  const [dismissed, setDismissed] = useState(false);
+  // LoadingManager는 새 파일 묶음이 시작될 때 비율을 다시 계산한다.
+  // 한 번의 입장에서는 표시값을 유지하고, 실제 장면 준비 후에만 완료한다.
+  const nextProgress = ready ? 100 : Math.min(99, Math.max(0, Math.round(Number.isFinite(progress) ? progress : 0)));
+  if (nextProgress > displayedProgress) setDisplayedProgress(nextProgress);
 
-export const LoadingScreen = ({ visible }: Props) => {
-  const { progress } = useProgress();
+  useEffect(() => {
+    if (!ready) return;
+    // 완료값을 한 번 그린 뒤 기존 페이드아웃으로 입장한다.
+    let secondFrame = 0;
+    const firstFrame = requestAnimationFrame(() => {
+      secondFrame = requestAnimationFrame(() => setDismissed(true));
+    });
+    return () => { cancelAnimationFrame(firstFrame); cancelAnimationFrame(secondFrame); };
+  }, [ready]);
 
   return (
     <AnimatePresence>
-      {visible && (
+      {!dismissed && (
         <motion.div
           key="loader"
           initial={{ opacity: 1 }}
           exit={{ opacity: 0, transition: { duration: 1, ease: "anticipate" } }}
-          className="fixed inset-0 z-100 flex flex-col items-center justify-center bg-[#fdfaf6]"
+          className="fixed inset-0 z-[110] flex flex-col items-center justify-center overflow-hidden bg-[#fdfaf6]"
+          style={{ fontFamily: "var(--font-jua), sans-serif" }}
         >
           {/* Animated Background Gradients */}
           <motion.div
@@ -56,7 +70,7 @@ export const LoadingScreen = ({ visible }: Props) => {
               <div className="relative z-10 w-full h-full bg-linear-to-br from-white to-orange-50 rounded-full p-4 shadow-2xl border-4 border-white overflow-hidden">
                 <Image
                   src="/images/red_panda_icon.png"
-                  alt="Loading Red Panda"
+                  alt=""
                   fill
                   className="object-contain transition-transform duration-500 hover:scale-110"
                 />
@@ -67,6 +81,7 @@ export const LoadingScreen = ({ visible }: Props) => {
             <div className="w-full text-center space-y-8">
               <div className="space-y-2">
                 <motion.h2
+                  role="status"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="text-2xl sm:text-3xl font-black text-sky-950 tracking-tight"
@@ -80,18 +95,18 @@ export const LoadingScreen = ({ visible }: Props) => {
 
               {/* Sophisticated Progress Bar */}
               <div className="relative w-full ">
-                <div className="relative w-full h-4 bg-sky-100 rounded-full overflow-hidden border-2 border-white shadow-inner">
+                <div role="progressbar" aria-label="마을 불러오기" aria-valuenow={displayedProgress} aria-valuemin={0} aria-valuemax={100} className="relative w-full h-4 bg-sky-100 rounded-full overflow-hidden border-2 border-white shadow-inner">
                   <motion.div
                     className="absolute left-0 top-0 h-full bg-linear-to-r from-orange-400 via-yellow-400 to-orange-500 shadow-[0_0_15px_rgba(251,146,60,0.5)]"
                     initial={{ width: "0%" }}
-                    animate={{ width: `${progress}%` }}
+                    animate={{ width: `${displayedProgress}%` }}
                     transition={{ duration: 0.8, ease: "easeOut" }}
                   />
                 </div>
 
                 {/* Progress Percentage Display */}
                 <motion.div className="absolute -top-8 right-0 text-orange-600 font-black text-sm">
-                  {Math.round(progress)}%
+                  {displayedProgress}%
                 </motion.div>
               </div>
 
@@ -110,7 +125,7 @@ export const LoadingScreen = ({ visible }: Props) => {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 1.5 }}
-            className="absolute bottom-10 sm:bottom-16 glass-card px-8 py-4 rounded-3xl"
+            className="absolute bottom-10 sm:bottom-16 glass-card max-w-[calc(100%-2rem)] px-8 py-4 rounded-3xl"
           >
             <p className="text-sky-900/60 text-[10px] font-black tracking-widest uppercase flex items-center gap-3">
               <span className="w-2 h-2 rounded-full bg-orange-400 animate-ping" />

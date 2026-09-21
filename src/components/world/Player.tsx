@@ -21,6 +21,7 @@ import { useInteractionStore } from "@/stores/interactionStore";
 import { useZoneStore } from "@/stores/zoneStore";
 import { useHarvestStore } from "@/stores/harvestStore";
 import { useGuestbookStore } from "@/stores/guestbookStore";
+import { useGraphicsStore } from "@/stores/graphicsStore";
 import { audio } from "@/lib/audio";
 import { usePandaModel, PandaBody, PandaNameTag } from "./PandaModel";
 
@@ -106,6 +107,8 @@ const _camRight = new THREE.Vector3();
 export const Player = forwardRef<THREE.Group, Props>(
   ({ id, nickname, onMove, inputDisabled }, ref) => {
     const groupRef = useRef<THREE.Group>(null!);
+    const quality = useGraphicsStore((state) => state.quality);
+    const lastShadowAction = useRef("");
 
     // 외부에서 groupRef를 사용할 수 있도록 노출
     useImperativeHandle(ref, () => groupRef.current);
@@ -126,14 +129,20 @@ export const Player = forwardRef<THREE.Group, Props>(
     useEffect(() => {
       if (onMove) {
         onMove({
-          x: 0,
-          y: 0,
-          z: 0,
-          ry: 0,
-          anim: PLAYER_ANIM.IDLE,
+          x: groupRef.current.position.x,
+          y: groupRef.current.position.y,
+          z: groupRef.current.position.z,
+          ry: groupRef.current.rotation.y,
+          anim: lastShadowAction.current || PLAYER_ANIM.IDLE,
         });
       }
     }, [onMove]);
+
+    useEffect(() => useHarvestStore.subscribe((state, previous) => {
+      if (state.harvestedSet !== previous.harvestedSet) {
+        useGraphicsStore.getState().runtime.shadowRevision += 1;
+      }
+    }), []);
 
     // 모델 로딩 및 애니메이션 제어 (RemotePlayer와 공유)
     const { nodes, materials, playAction, getCurrentAction } =
@@ -235,6 +244,7 @@ export const Player = forwardRef<THREE.Group, Props>(
 
     useFrame((state, delta) => {
       if (!groupRef.current) return;
+      if (inputDisabled) clearClickPath();
 
       const dt = Math.min(delta, MAX_DELTA);
 
@@ -556,6 +566,14 @@ export const Player = forwardRef<THREE.Group, Props>(
       // 제자리 이모트는 위치가 그대로라 Scene의 그림자 갱신 판단에서
       // 이동으로 잡히지 않는다. 자세는 바뀌므로 따로 알린다.
       zoneState.playerPose.emoting = emoteRef.current !== null;
+      const graphicsRuntime = useGraphicsStore.getState().runtime;
+      graphicsRuntime.playerY = groupRef.current.position.y;
+      const shadowAction = getCurrentAction();
+      if (lastShadowAction.current !== shadowAction) {
+        graphicsRuntime.shadowRevision += 1;
+        graphicsRuntime.animationUntil = state.clock.elapsedTime + 1.5;
+        lastShadowAction.current = shadowAction;
+      }
 
       // 네트워크 데이터 전송 최적화 (10fps + 변화 감지)
       lastUpdateRef.current += delta;
@@ -609,7 +627,7 @@ export const Player = forwardRef<THREE.Group, Props>(
 
     return (
       <group ref={groupRef} dispose={null}>
-        <PandaBody nodes={nodes} materials={materials} castShadow />
+        <PandaBody nodes={nodes} materials={materials} castShadow={quality !== "low"} fakeShadow={quality === "low"} />
         <PandaNameTag id={id} nickname={nickname} />
       </group>
     );

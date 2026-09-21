@@ -7,6 +7,7 @@ export type MultiplayerConnectionStatus =
   | "error";
 
 export interface WorldSession {
+  mode: "online" | "offline";
   userId: string;
   nickname: string;
   worldKey: string;

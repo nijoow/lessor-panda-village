@@ -44,7 +44,10 @@ next-env.d.ts
 # AI agent instruction files (local only)
 AGENTS.md
 CLAUDE.md
-docs/
+
+# Share the maintained project document.
+docs/*
+!docs/architecture.md
 
 # Claude Code 로컬 설정 (local only)
 .claude/
