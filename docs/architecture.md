@@ -8,6 +8,23 @@
 - 배치는 `src/constants/world`, 에셋 원본은 `assets`, 변환·검증은 `scripts`에서 관리한다. 적용된 DB 마이그레이션은 후속 파일로 변경한다.
 - 기존 유리 패널과 Jua 글꼴을 유지한다. 자동 그래픽 품질은 낮음부터 시작하며 수동 선택도 제공한다.
 
+## 상태와 변경 경계
+
+- 도메인 타입·상수는 `src/domain`에 둔다. 프레임별 플레이어·그림자 데이터는 `worldFrameState`만 변경하고, UI용 존·그래픽 설정은 각 store가 소유한다.
+- `PlayerController`는 프레임 입력에서 pose·상호작용 이벤트를 계산한다. R3F 어댑터가 store·오디오에 반영하며 카메라 추적과 전송 주기는 별도 훅이 관리한다.
+- 방명록 repository는 DB 계약, cache는 저장 형식, `GuestbookSession`은 요청 수명·페이지·필터·재시도, boardState는 게시판 projection과 캐시 갱신을 소유한다. 확인된 쓰기·삭제를 오래된 조회 결과로 되돌리지 않는다.
+- `useVillageSession`이 capability를 도출한다. 인증된 DB 쓰기와 Realtime 채팅 연결은 각각 판단한다.
+
+## Realtime 전송 계약
+
+`world:panda-village`는 presence 탐색과 방명록 재조회 알림에만 사용한다. presence key·이름·위치는 인증된 작성자 정보가 아니며, 접속 후보를 발견하는 용도로만 읽는다.
+
+이동·채팅은 비공개 `world:panda-village:player:<auth.uid()>` 채널로 보낸다. 새 RLS 정책은 인증 사용자의 자기 topic에만 INSERT를 허용하고 다른 플레이어 topic은 수신할 수 있게 한다. 수신 콜백은 구독 topic의 ID를 작성자로 사용하며 payload의 ID를 사용하지 않는다. 인증된 이동을 받기 전에는 후보를 화면·접속 인원에 추가하지 않는다. 예상 3~4인 월드에서 후보 구독은 최대 64개로 제한한다.
+
+`WorldTransport`가 인증·채널·2초 heartbeat·취소를 소유한다. 공유 탐색 채널과 자기 전송 채널이 모두 준비되어야 연결 완료다. presence sync의 전체 meta를 기준으로 퇴장 처리하므로 한 사용자의 여러 탭 중 하나가 닫혀도 나머지를 제거하지 않는다.
+
+배포 순서: `authorize_player_realtime_topics` 마이그레이션을 먼저 적용하고 클라이언트를 배포한다. 기존 공유 채널 정책은 이전 클라이언트 호환을 위해 유지하지만, 새 클라이언트는 그 채널의 이동·채팅을 수신하지 않는다. 이번 작업은 SQL 파일과 격리 검증까지이며 실제 프로젝트에는 적용하지 않았다. 이전 클라이언트와 새 클라이언트 사이의 이동·채팅은 호환되지 않으므로 배포 후 새로고침이 필요하다.
+
 ## 남은 확인
 
 - Quadro P400 2GB에서 1080p·30fps, 낮밤·대숲·여러 캐릭터 조건과 실제 내부 해상도 측정.

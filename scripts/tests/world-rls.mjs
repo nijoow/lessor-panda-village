@@ -108,7 +108,55 @@ try {
       $$;
     grant usage on schema public, auth to anon, authenticated;
     grant execute on function auth.uid() to anon, authenticated;
+    create schema realtime;
+    create table realtime.messages (id uuid default gen_random_uuid(), extension text not null);
+    alter table realtime.messages enable row level security;
+    create function realtime.topic() returns text language sql stable security invoker
+      set search_path = '' as $$ select current_setting('realtime.topic', true); $$;
+    grant usage on schema realtime to anon, authenticated;
+    grant execute on function realtime.topic() to anon, authenticated;
+    grant select, insert on realtime.messages to anon, authenticated;
   `);
+  for (const suffix of ['authorize_global_world_realtime.sql', 'authorize_player_realtime_topics.sql']) {
+    const files = migrationFiles.filter((file) => file.endsWith(`_${suffix}`));
+    assert.equal(files.length, 1);
+    await db.exec(await readFile(resolve(migrationsDirectory, files[0]), 'utf8'));
+  }
+  const withTopic = async (topic, action) => {
+    await db.query("select set_config('realtime.topic', $1, false)", [topic]);
+    try { return await action(); }
+    finally { await db.query("select set_config('realtime.topic', '', false)"); }
+  };
+  const send = (extension = 'broadcast') => db.query('insert into realtime.messages (extension) values ($1)', [extension]);
+  await test('authenticated visitors can discover the shared world using presence', async () => {
+    await withTopic('world:panda-village', () => asUser(A, () => send('presence')));
+    const result = await withTopic('world:panda-village', () => asUser(B, () => db.query('select * from realtime.messages')));
+    assert.equal(result.rows.length, 1);
+  });
+  await test('a player can publish only on its own JWT-bound topic', async () => {
+    await withTopic(`world:panda-village:player:${A}`, () => asUser(A, () => send()));
+    await rejects(() => withTopic(`world:panda-village:player:${A}`, () => asUser(B, () => send())), '42501');
+  });
+  await test('authenticated receivers can read another player topic permission probe', async () => {
+    const result = await withTopic(`world:panda-village:player:${A}`, () => asUser(B, () => db.query('select * from realtime.messages')));
+    assert.equal(result.rows.length, 1);
+    assert.equal(result.rows[0].extension, 'broadcast');
+  });
+  await test('player topics cannot publish presence or an unsupported extension', async () => {
+    for (const extension of ['presence', 'unexpected']) await rejects(() => withTopic(`world:panda-village:player:${A}`, () => asUser(A, () => send(extension))), '42501');
+  });
+  await test('unrelated world and malformed player topics deny reads and publication', async () => {
+    for (const topic of ['world:other', 'world:panda-village:player:arbitrary', `world:panda-village:player:${A}:suffix`]) {
+      await rejects(() => withTopic(topic, () => asUser(A, () => send())), '42501');
+      assert.equal((await withTopic(topic, () => asUser(A, () => db.query('select * from realtime.messages')))).rows.length, 0);
+    }
+  });
+  await test('anon cannot receive or publish on either shared or player topics', async () => {
+    for (const topic of ['world:panda-village', `world:panda-village:player:${A}`]) {
+      await rejects(() => withTopic(topic, () => asAnon(() => send())), '42501');
+      assert.equal((await withTopic(topic, () => asAnon(() => db.query('select * from realtime.messages')))).rows.length, 0);
+    }
+  });
   await db.query('insert into auth.users values ($1), ($2)', [A, B]);
   for (const file of migrations.slice(0, baseMigrationCount)) {
     await db.exec(await readFile(resolve(migrationsDirectory, file), 'utf8'));
