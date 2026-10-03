@@ -1,5 +1,7 @@
 "use client";
 
+import { textLength, truncateText } from "@/domain/text";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ensureWorldProfile } from "@/lib/worldAccess";
 import { supabase } from "@/lib/supabase";
@@ -23,11 +25,21 @@ export const useGlobalWorld = () => {
     queueMicrotask(() => {
       if (cancelled) return;
       try {
-        setSavedNickname((localStorage.getItem(NICKNAME_STORAGE_KEY) ?? "").slice(0, MAX_NICKNAME_LENGTH));
-      } catch { /* 저장소가 차단돼도 방문은 가능하다. */ }
+        setSavedNickname(
+          truncateText(
+            localStorage.getItem(NICKNAME_STORAGE_KEY) ?? "",
+            MAX_NICKNAME_LENGTH,
+          ),
+        );
+      } catch {
+        /* 저장소가 차단돼도 방문은 가능하다. */
+      }
       setIsReady(true);
     });
-    return () => { cancelled = true; generation.current += 1; };
+    return () => {
+      cancelled = true;
+      generation.current += 1;
+    };
   }, []);
 
   const reconnect = useCallback(async () => {
@@ -40,7 +52,11 @@ export const useGlobalWorld = () => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const userId = await Promise.race([
-        ensureWorldProfile(client, visitor.nickname, () => attempt === generation.current),
+        ensureWorldProfile(
+          client,
+          visitor.nickname,
+          () => attempt === generation.current,
+        ),
         new Promise<never>((_, reject) => {
           timer = setTimeout(() => reject(new Error("timeout")), 6000);
         }),
@@ -65,26 +81,33 @@ export const useGlobalWorld = () => {
     }
   }, []);
 
-  const enterWorld = useCallback(async (rawNickname: string) => {
-    const nickname = rawNickname.trim();
-    if (!nickname || nickname.length > MAX_NICKNAME_LENGTH) {
-      setEntryError("닉네임은 1~10자로 적어줘.");
-      return;
-    }
-    if (sessionRef.current) return;
-    const local: WorldSession = {
-      userId: `local-${crypto.randomUUID()}`,
-      nickname,
-      worldKey: GLOBAL_WORLD_KEY,
-      mode: "offline",
-    };
-    sessionRef.current = local;
-    setWorldSession(local);
-    setSavedNickname(nickname);
-    setEntryError(null);
-    try { localStorage.setItem(NICKNAME_STORAGE_KEY, nickname); } catch { /* 선택적 저장 */ }
-    void reconnect();
-  }, [reconnect]);
+  const enterWorld = useCallback(
+    async (rawNickname: string) => {
+      const nickname = rawNickname.trim();
+      if (!nickname || textLength(nickname) > MAX_NICKNAME_LENGTH) {
+        setEntryError("닉네임은 1~10자로 적어줘.");
+        return;
+      }
+      if (sessionRef.current) return;
+      const local: WorldSession = {
+        userId: `local-${crypto.randomUUID()}`,
+        nickname,
+        worldKey: GLOBAL_WORLD_KEY,
+        mode: "offline",
+      };
+      sessionRef.current = local;
+      setWorldSession(local);
+      setSavedNickname(nickname);
+      setEntryError(null);
+      try {
+        localStorage.setItem(NICKNAME_STORAGE_KEY, nickname);
+      } catch {
+        /* 선택적 저장 */
+      }
+      void reconnect();
+    },
+    [reconnect],
+  );
 
   useEffect(() => {
     const recover = () => {
@@ -94,5 +117,13 @@ export const useGlobalWorld = () => {
     return () => window.removeEventListener("online", recover);
   }, [reconnect]);
 
-  return { worldSession, savedNickname, isReady, isEntering, entryError, enterWorld, reconnect };
+  return {
+    worldSession,
+    savedNickname,
+    isReady,
+    isEntering,
+    entryError,
+    enterWorld,
+    reconnect,
+  };
 };

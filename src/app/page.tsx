@@ -1,9 +1,6 @@
 "use client";
 
-import {
-  KeyboardControls,
-  KeyboardControlsEntry,
-} from "@react-three/drei";
+import { KeyboardControls, KeyboardControlsEntry } from "@react-three/drei";
 import { AnimatePresence } from "framer-motion";
 import { useCallback, useState, useEffect } from "react";
 import dynamic from "next/dynamic";
@@ -15,9 +12,12 @@ import { useGuestbook } from "@/hooks/useGuestbook";
 import { useDayNightCycle } from "@/hooks/useDayNightCycle";
 import { useViewportHeight } from "@/hooks/useViewportHeight";
 import { useGuestbookStore } from "@/stores/guestbookStore";
-import { NOTICE_BOARDS } from "@/constants/world";
+import { GUESTBOOK_PLACE_ID } from "@/domain/world";
 import { audio } from "@/lib/audio";
-import { WorldErrorBoundary, WorldFallback } from "@/components/ui/WorldFallback";
+import {
+  WorldErrorBoundary,
+  WorldFallback,
+} from "@/components/ui/WorldFallback";
 import { GraphicsSettings } from "@/components/ui/GraphicsSettings";
 
 // 3D 장면과 HUD는 클라이언트에서 불러온다.
@@ -96,9 +96,6 @@ const GuestbookPanel = dynamic(
   { ssr: false },
 );
 
-// 현재 흔적 장소는 마을 게시판 하나뿐이다.
-const GUESTBOOK_PLACE_ID = NOTICE_BOARDS[0]?.placeId ?? "";
-
 const keyboardMap: KeyboardControlsEntry<Controls>[] = [
   { name: Controls.forward, keys: ["ArrowUp", "KeyW"] },
   { name: Controls.backward, keys: ["ArrowDown", "KeyS"] },
@@ -110,7 +107,6 @@ const keyboardMap: KeyboardControlsEntry<Controls>[] = [
   { name: Controls.emoteWave, keys: ["Digit1"] },
   { name: Controls.emoteDance, keys: ["Digit2"] },
 ];
-
 
 export default function Home() {
   const isNight = useDayNightCycle();
@@ -141,8 +137,13 @@ const HomeContent = ({ isNight }: HomeContentProps) => {
     enterWorld,
     reconnectWorld,
     capabilities,
-    remotePlayerIds, connectionStatus, guestbookRevision, getPlayerData,
-    broadcastMove, broadcastChat, broadcastGuestbook,
+    remotePlayerIds,
+    connectionStatus,
+    guestbookRevision,
+    getPlayerData,
+    broadcastMove,
+    broadcastChat,
+    broadcastGuestbook,
   } = useVillageSession();
 
   const { authenticated, canWriteNotes, canChat } = capabilities;
@@ -159,11 +160,17 @@ const HomeContent = ({ isNight }: HomeContentProps) => {
     remove: removeNote,
     isSubmitting: isWritingNote,
     writeError: noteError,
-    refresh, loadOlder, hasMore, isLoadingMore, mineOnly, setMineOnly,
-    visibleNotes, deleteError,
+    refresh,
+    loadOlder,
+    hasMore,
+    isLoadingMore,
+    mineOnly,
+    setMineOnly,
+    visibleNotes,
+    deleteError,
   } = useGuestbook(
     GUESTBOOK_PLACE_ID,
-    authenticated ? worldSession?.userId ?? null : null,
+    authenticated ? (worldSession?.userId ?? null) : null,
     guestbookRevision,
     broadcastGuestbook,
     { readOnly: !canWriteNotes },
@@ -171,15 +178,17 @@ const HomeContent = ({ isNight }: HomeContentProps) => {
 
   // 방명록 패널이 열려 있는 동안에도 플레이어 조작을 잠근다
   const isGuestbookOpen = useGuestbookStore((state) => state.isOpen);
-  const inputLocked = !isAssetsReady || isChatFocused || isGuestbookOpen || sceneUnavailable;
+  const inputLocked =
+    !isAssetsReady || isChatFocused || isGuestbookOpen || sceneUnavailable;
 
   // 에셋 로딩 중에도 닉네임을 정할 수 있다.
-  const showNicknameOverlay =
-    isWorldReady && worldSession === null;
+  const showNicknameOverlay = isWorldReady && worldSession === null;
 
   return (
     <main className="w-full h-full relative overflow-hidden bg-[#fdfaf6]">
-      {worldSession !== null && !sceneUnavailable && <LoadingScreen ready={isAssetsReady} />}
+      {worldSession !== null && !sceneUnavailable && (
+        <LoadingScreen ready={isAssetsReady} />
+      )}
 
       <AnimatePresence>
         {showNicknameOverlay && (
@@ -189,7 +198,12 @@ const HomeContent = ({ isNight }: HomeContentProps) => {
             error={entryError}
             onJoin={async (name) => {
               // 사용자 제스처 컨텍스트 안에서 오디오 시작 (자동재생 정책)
-              try { audio.init(); audio.setNight(isNight); } catch { /* 소리 실패와 입장은 별개다. */ }
+              try {
+                audio.init();
+                audio.setNight(isNight);
+              } catch {
+                /* 소리 실패와 입장은 별개다. */
+              }
               await enterWorld(name);
             }}
           />
@@ -226,33 +240,38 @@ const HomeContent = ({ isNight }: HomeContentProps) => {
           />
           <WorldHUD
             onlineCount={
-              connectionStatus === "connected"
-                ? remotePlayerIds.length + 1
-                : 0
+              connectionStatus === "connected" ? remotePlayerIds.length + 1 : 0
             }
             connectionStatus={connectionStatus}
             offline={!authenticated}
             isReconnecting={isEntering || connectionStatus === "connecting"}
             onReconnect={reconnectWorld}
-          ><GraphicsSettings /></WorldHUD>
+          >
+            <GraphicsSettings />
+          </WorldHUD>
           <VillageHeader isNight={isNight} />
         </>
       )}
 
-      {sceneUnavailable && <WorldFallback onRetry={() => window.location.reload()} />}
+      {sceneUnavailable && (
+        <WorldFallback onRetry={() => window.location.reload()} />
+      )}
       <WorldErrorBoundary>
-      <Scene isNight={isNight} onUnavailable={() => setSceneUnavailable(true)}>
-        <World
-          onReady={handleWorldReady}
+        <Scene
           isNight={isNight}
-          nickname={worldSession?.nickname ?? null}
-          inputLocked={inputLocked}
-          remotePlayerIds={remotePlayerIds}
-          getPlayerData={getPlayerData}
-          broadcastMove={broadcastMove}
-          myId={worldSession?.userId ?? ""}
-        />
-      </Scene>
+          onUnavailable={() => setSceneUnavailable(true)}
+        >
+          <World
+            onReady={handleWorldReady}
+            isNight={isNight}
+            nickname={worldSession?.nickname ?? null}
+            inputLocked={inputLocked}
+            remotePlayerIds={remotePlayerIds}
+            getPlayerData={getPlayerData}
+            broadcastMove={broadcastMove}
+            myId={worldSession?.userId ?? ""}
+          />
+        </Scene>
       </WorldErrorBoundary>
     </main>
   );
