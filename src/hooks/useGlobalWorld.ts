@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ensureWorldProfile } from "@/lib/worldAccess";
 import { supabase } from "@/lib/supabase";
 import { WorldSession } from "@/types/multiplayer";
 
@@ -38,27 +39,8 @@ export const useGlobalWorld = () => {
     const attempt = ++generation.current;
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      const connect = async () => {
-        const { data, error } = await client.auth.getSession();
-        if (error) throw error;
-        let session = data.session;
-        if (!session) {
-          const auth = await client.auth.signInAnonymously();
-          if (auth.error) throw auth.error;
-          session = auth.data.session;
-        }
-        if (!session || attempt !== generation.current) throw new Error("cancelled");
-        const profile = await client.from("world_profiles").upsert({
-          user_id: session.user.id,
-          nickname: visitor.nickname,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: "user_id" });
-        if (profile.error) throw profile.error;
-        await client.realtime.setAuth(session.access_token);
-        return session.user.id;
-      };
       const userId = await Promise.race([
-        connect(),
+        ensureWorldProfile(client, visitor.nickname, () => attempt === generation.current),
         new Promise<never>((_, reject) => {
           timer = setTimeout(() => reject(new Error("timeout")), 6000);
         }),

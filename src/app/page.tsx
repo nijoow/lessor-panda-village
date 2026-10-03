@@ -11,8 +11,7 @@ import * as THREE from "three";
 
 import { Controls } from "@/domain/player";
 import { VillageHeader } from "@/components/ui/VillageHeader";
-import { useMultiplayer } from "@/hooks/useMultiplayer";
-import { useGlobalWorld } from "@/hooks/useGlobalWorld";
+import { useVillageSession } from "@/hooks/useVillageSession";
 import { useGuestbook } from "@/hooks/useGuestbook";
 import { useDayNightCycle } from "@/hooks/useDayNightCycle";
 import { useViewportHeight } from "@/hooks/useViewportHeight";
@@ -136,7 +135,6 @@ const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
   const [isChatFocused, setIsChatFocused] = useState(false);
   const [isAssetsReady, setIsAssetsReady] = useState(false);
   const [sceneUnavailable, setSceneUnavailable] = useState(false);
-  const [retryKey, setRetryKey] = useState(0);
   const {
     worldSession,
     savedNickname,
@@ -144,32 +142,19 @@ const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
     isEntering,
     entryError,
     enterWorld,
-    reconnect,
-  } = useGlobalWorld();
+    reconnectWorld,
+    capabilities,
+    remotePlayerIds, connectionStatus, guestbookRevision, getPlayerData,
+    broadcastMove, broadcastChat, broadcastGuestbook,
+  } = useVillageSession();
 
-  const authenticated = worldSession?.mode === "online";
+  const { authenticated, canWriteNotes, canChat } = capabilities;
   const handleWorldReady = useCallback(() => setIsAssetsReady(true), []);
 
   // 낮밤 전환 시 앰비언스(새소리↔풀벌레) 크로스페이드
   useEffect(() => {
     audio.setNight(isNight);
   }, [isNight]);
-
-  // 멀티플레이 접속 상태와 원격 플레이어 데이터
-  const {
-    remotePlayerIds,
-    connectionStatus,
-    guestbookRevision,
-    getPlayerData,
-    broadcastMove,
-    broadcastChat,
-    broadcastGuestbook,
-  } = useMultiplayer(
-    worldSession?.nickname ?? null,
-    authenticated ? worldSession.worldKey : null,
-    authenticated ? worldSession.userId : null,
-    retryKey,
-  );
 
   const {
     submit: submitNote,
@@ -180,10 +165,10 @@ const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
     visibleNotes, deleteError,
   } = useGuestbook(
     GUESTBOOK_PLACE_ID,
-    authenticated ? worldSession.userId : null,
+    authenticated ? worldSession?.userId ?? null : null,
     guestbookRevision,
     broadcastGuestbook,
-    { readOnly: !authenticated || connectionStatus === "error" },
+    { readOnly: !canWriteNotes },
   );
 
   // 방명록 패널이 열려 있는 동안에도 플레이어 조작을 잠근다
@@ -218,7 +203,7 @@ const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
           <ChatHUD
             onSendMessage={broadcastChat}
             onFocusChange={setIsChatFocused}
-            readOnly={!authenticated || connectionStatus !== "connected"}
+            readOnly={!canChat}
           />
           <InteractionPrompt />
           <EmoteBar />
@@ -227,7 +212,7 @@ const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
           <InventoryHUD />
           <GuestbookPanel
             userId={authenticated ? worldSession.userId : null}
-            readOnly={!authenticated || connectionStatus === "error"}
+            readOnly={!canWriteNotes}
             onRefresh={refresh}
             onLoadOlder={loadOlder}
             hasMore={hasMore}
@@ -250,10 +235,7 @@ const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
             connectionStatus={connectionStatus}
             offline={!authenticated}
             isReconnecting={isEntering || connectionStatus === "connecting"}
-            onReconnect={() => {
-              if (!authenticated) void reconnect();
-              else setRetryKey((key) => key + 1);
-            }}
+            onReconnect={reconnectWorld}
           ><GraphicsSettings /></WorldHUD>
           <VillageHeader isNight={isNight} />
         </>

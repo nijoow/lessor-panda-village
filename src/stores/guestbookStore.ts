@@ -11,12 +11,11 @@ interface GuestbookState {
   notes: GuestbookNote[];
   status: GuestbookStatus;
   cachedAt: number | null;
-  setCachedAt: (time: number | null) => void;
+  applySnapshot: (notes: GuestbookNote[], status: GuestbookStatus, cachedAt: number | null) => void;
   /** 상호작용 거리 안의 게시판 인덱스 (NOTICE_BOARDS 기준, 없으면 null) */
   nearbyBoardIndex: number | null;
   /** 방명록 패널 열림 — 열려 있는 동안 플레이어 입력이 잠깁니다 */
   isOpen: boolean;
-  setNotes: (notes: GuestbookNote[]) => void;
   setStatus: (status: GuestbookStatus) => void;
   setNearbyBoard: (index: number | null) => void;
   open: () => void;
@@ -27,10 +26,9 @@ export const useGuestbookStore = create<GuestbookState>((set) => ({
   notes: [],
   status: "idle",
   cachedAt: null,
-  setCachedAt: (cachedAt) => set({ cachedAt }),
+  applySnapshot: (notes, status, cachedAt) => set({ notes, status, cachedAt }),
   nearbyBoardIndex: null,
   isOpen: false,
-  setNotes: (notes) => set({ notes }),
   setStatus: (status) =>
     set((state) => (state.status === status ? state : { status })),
   setNearbyBoard: (index) =>

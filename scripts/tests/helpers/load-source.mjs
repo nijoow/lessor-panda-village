@@ -14,7 +14,8 @@ export function loadSource(path, dependencies = {}, globals = {}, cache = new Ma
   const sourceModule = { exports: {} };
   cache.set(url.href, sourceModule);
   vm.runInNewContext(code, {
-    module: sourceModule, exports: sourceModule.exports, console, Date, AbortSignal, ...globals,
+    module: sourceModule, exports: sourceModule.exports, console, Date, AbortSignal,
+    fetch: globalThis.fetch, crypto: globalThis.crypto, setTimeout, clearTimeout, queueMicrotask, ...globals,
     require: (name) => {
       if (Object.hasOwn(dependencies, name)) return dependencies[name];
       if (name.startsWith("@/") || name.startsWith(".")) {
@@ -23,6 +24,8 @@ export function loadSource(path, dependencies = {}, globals = {}, cache = new Ma
           const target = new URL(base.href + extension);
           if (existsSync(target)) {
             const relative = fileURLToPath(target).slice(fileURLToPath(new URL("../../../", import.meta.url)).length);
+            const alias = `@/${relative.replace(/^src\//, "").replace(/\.tsx?$/, "").replace(/\/index$/, "")}`;
+            if (Object.hasOwn(dependencies, alias)) return dependencies[alias];
             return loadSource(relative, dependencies, globals, cache);
           }
         }

@@ -1,5 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { NextResponse } from "next/server";
+import { projectPublicSnapshot } from "@/lib/guestbook/codec";
 
 /** Only a restricted public RPC is called; no admin credentials or user sessions. */
 const getSnapshot = unstable_cache(async () => {
@@ -15,9 +16,7 @@ const getSnapshot = unstable_cache(async () => {
   });
   if (!response.ok) throw new Error("snapshot_unavailable");
   const raw: unknown = await response.json();
-  if (!Array.isArray(raw)) throw new Error("invalid_snapshot");
-  // Explicit projection prevents future RPC columns from expanding public output.
-  const notes = raw.slice(0, 50).map((row) => ({ id: row.id, body: row.body, created_at: row.created_at, author_nickname: row.author_nickname, author_color_index: row.author_color_index }));
+  const notes = projectPublicSnapshot(raw);
   return { notes, savedAt: Date.now() };
 }, ["panda-village-world-snapshot-v1"], { revalidate: 60 });
 

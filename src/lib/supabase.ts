@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import type { ClientDatabase } from "@/types/clientDatabase";
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -7,7 +8,7 @@ const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 export const supabase = (() => {
   if (!url || !key) return null;
   try {
-    return createClient(url, key, {
+    return createClient<ClientDatabase>(url, key, {
       global: {
         fetch: (input, init) => fetch(input, {
           ...init,

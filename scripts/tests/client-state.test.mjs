@@ -14,7 +14,7 @@ function deferred() {
   return { promise, resolve };
 }
 
-const guestbook = loadSource("src/lib/guestbook.ts");
+const guestbook = loadSource("src/lib/guestbook/codec.ts");
 const rawNote = {
   id: "11111111-1111-4111-8111-111111111111", body: "작은 마을의 쪽지",
   created_at: "2026-10-02T10:00:00Z",
@@ -39,7 +39,7 @@ function guestbookHarness(deletion = { data: [{ id: rawNote.id }], error: null }
   }) };
   const state = {
     isOpen: true, notes: [note], status: "ready", cachedAt: null,
-    setNotes(notes) { this.notes = notes; },
+    applySnapshot(notes, status, cachedAt) { Object.assign(this, { notes, status, cachedAt }); },
     setStatus(status) { this.status = status; },
     setCachedAt(time) { this.cachedAt = time; },
   };
@@ -49,6 +49,13 @@ function guestbookHarness(deletion = { data: [{ id: rawNote.id }], error: null }
   let index = 0;
   const react = {
     useCallback: (fn) => fn, useEffect: () => {},
+    useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot(),
+    useMemo(factory, dependencies) {
+      const slot = index++;
+      const previous = slots[slot];
+      if (!previous || dependencies.some((value, i) => value !== previous.dependencies[i])) slots[slot] = { dependencies, value: factory() };
+      return slots[slot].value;
+    },
     useRef: (initial) => slots[index++] ?? (slots[index - 1] = { current: initial }),
     useState(initial) {
       const slot = index++;
@@ -58,14 +65,14 @@ function guestbookHarness(deletion = { data: [{ id: rawNote.id }], error: null }
   };
   const { useGuestbook: runGuestbookHook } = loadSource("src/hooks/useGuestbook.ts", {
     react, "@/lib/supabase": { supabase },
-    "@/hooks/useGlobalWorld": { GLOBAL_WORLD_KEY: "panda-village" },
-    "@/lib/guestbook": { ...guestbook, readNoteCache: () => cached, writeNoteCache: (_place, notes) => { cached = { notes, savedAt: Date.now() }; } },
+        "@/lib/guestbook/cache": { readNoteCache: () => cached, writeNoteCache: (_place, notes) => { cached = { notes, savedAt: Date.now() }; } },
     "@/stores/guestbookStore": { useGuestbookStore: store, NOTE_COST: 1 },
     "@/stores/harvestStore": {},
   });
+  const notify = () => {};
   const render = () => {
     index = 0;
-    return runGuestbookHook("village:guestbook", rawNote.author_id, 0, () => {});
+    return runGuestbookHook("village:guestbook", rawNote.author_id, 0, notify);
   };
   return { render, reads, state, cache: () => cached };
 }

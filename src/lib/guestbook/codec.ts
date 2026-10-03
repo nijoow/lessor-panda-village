@@ -1,8 +1,25 @@
 import { MAX_NOTE_LENGTH, NOTE_PAGE_SIZE, type GuestbookNote } from "@/domain/guestbook";
 import { MAX_NICKNAME_LENGTH, UUID_PATTERN as UUID } from "@/domain/world";
-const CACHE_VERSION = 1;
-const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+import type { Database } from "@/types/database";
 
+type PublicSnapshotRow = Database["public"]["Functions"]["read_world_snapshot"]["Returns"][number];
+
+/** A checked, bounded public projection; extra RPC columns never leave the server. */
+export function projectPublicSnapshot(raw: unknown): PublicSnapshotRow[] {
+  if (!Array.isArray(raw)) throw new Error("invalid_snapshot");
+  return raw.slice(0, NOTE_PAGE_SIZE).map((value: unknown) => {
+    if (!value || typeof value !== "object") throw new Error("invalid_snapshot_row");
+    const row = value as Record<string, unknown>;
+    if (typeof row.id !== "string" || !UUID.test(row.id) || typeof row.body !== "string" ||
+        !row.body.trim() || row.body.length > MAX_NOTE_LENGTH ||
+        typeof row.created_at !== "string" || !Number.isFinite(Date.parse(row.created_at)) ||
+        typeof row.author_nickname !== "string" || !row.author_nickname.trim() || row.author_nickname.length > MAX_NICKNAME_LENGTH ||
+        typeof row.author_color_index !== "number" || !Number.isInteger(row.author_color_index) || row.author_color_index < 0 || row.author_color_index > 9) {
+      throw new Error("invalid_snapshot_row");
+    }
+    return { id: row.id, body: row.body, created_at: row.created_at, author_nickname: row.author_nickname, author_color_index: row.author_color_index };
+  });
+}
 /** Public snapshots contain a palette index, never the author's account ID. */
 export const toGuestbookNote = (raw: unknown): GuestbookNote | null => {
   if (!raw || typeof raw !== "object") return null;
@@ -18,19 +35,4 @@ export const toGuestbookNote = (raw: unknown): GuestbookNote | null => {
   const publicColorKey = typeof index === "number" && Number.isInteger(index) && index >= 0 && index <= 9 ? String.fromCharCode(100 + index) : null;
   const colorKey = typeof row.author_color_key === "string" && UUID.test(row.author_color_key) ? row.author_color_key : publicColorKey ?? authorId ?? row.id;
   return { id: row.id, body, authorId, nickname: nickname || "이름 없는 판다", colorKey, createdAt, createdAtCursor: row.created_at as string };
-};
-
-export const readNoteCache = (placeId: string): { notes: GuestbookNote[]; savedAt: number } | null => {
-  try {
-    const raw = JSON.parse(localStorage.getItem(`panda-village:notes:${placeId}`) ?? "null");
-    if (!raw || raw.version !== CACHE_VERSION || typeof raw.savedAt !== "number" || Date.now() - raw.savedAt > CACHE_TTL_MS || raw.savedAt > Date.now() || !Array.isArray(raw.notes)) return null;
-    const notes = raw.notes.slice(0, NOTE_PAGE_SIZE).map(toGuestbookNote).filter((note: GuestbookNote | null): note is GuestbookNote => note !== null);
-    return { notes, savedAt: raw.savedAt };
-  } catch { return null; }
-};
-
-export const writeNoteCache = (placeId: string, notes: GuestbookNote[], savedAt = Date.now()) => {
-  try {
-    localStorage.setItem(`panda-village:notes:${placeId}`, JSON.stringify({ version: CACHE_VERSION, savedAt, notes: notes.slice(0, NOTE_PAGE_SIZE).map((note) => ({ id: note.id, body: note.body, author_id: note.authorId, author_nickname: note.nickname, author_color_key: UUID.test(note.colorKey) ? note.colorKey : undefined, author_color_index: note.colorKey.length === 1 ? note.colorKey.charCodeAt(0) - 100 : undefined, created_at: note.createdAtCursor })) }));
-  } catch { /* Storage may be disabled or full; database remains authoritative. */ }
 };
