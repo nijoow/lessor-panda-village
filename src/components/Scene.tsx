@@ -140,7 +140,7 @@ const DayNightCycle = ({ isNight }: { isNight: boolean }) => {
     );
 
     // 캐스터가 실제로 움직인 프레임에만 그림자맵을 다시 그린다.
-    // 걷기·회전은 위치로, 제자리 이모트는 playerPose로, 낮밤 전환 중의
+    // 걷기·회전과 제자리 이모트는 player 프레임 상태로, 낮밤 전환 중의
     // 해 이동은 진행도로 잡는다. 그 외에는 직전 그림자맵을 그대로 쓴다.
     const anchor = shadowAnchor.current;
     const playerPos = worldFrameState.player;

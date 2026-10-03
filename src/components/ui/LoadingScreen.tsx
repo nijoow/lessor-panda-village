@@ -80,6 +80,7 @@ export const LoadingScreen = ({ ready }: { ready: boolean }) => {
                   src="/images/red_panda_icon.png"
                   alt=""
                   fill
+                  sizes="(min-width: 640px) 160px, 112px"
                   className="object-contain transition-transform duration-500 hover:scale-110"
                 />
               </div>

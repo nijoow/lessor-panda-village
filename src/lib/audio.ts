@@ -39,7 +39,11 @@ class VillageAudio {
   private noteIndex = 0;
   private stepToggle = false;
 
-  muted = true;
+  private currentMute = true;
+
+  get muted() {
+    return this.currentMute;
+  }
 
   /** 사용자 제스처 안에서 호출 (입장 버튼) */
   init() {
@@ -50,11 +54,11 @@ class VillageAudio {
     this.master = ctx.createGain();
     try {
       // 처음 방문하면 무음. 이전에 직접 켠 선택은 그대로 유지한다.
-      this.muted = localStorage.getItem(MUTE_KEY) !== "0";
+      this.currentMute = localStorage.getItem(MUTE_KEY) !== "0";
     } catch {
-      this.muted = true;
+      this.currentMute = true;
     }
-    this.master.gain.value = this.muted ? 0 : 0.5;
+    this.master.gain.value = this.currentMute ? 0 : 0.5;
     this.master.connect(ctx.destination);
 
     this.musicGain = ctx.createGain();
@@ -86,19 +90,19 @@ class VillageAudio {
   toggleMute(): boolean {
     this.init();
     void this.ctx?.resume().catch(() => {});
-    this.muted = !this.muted;
+    this.currentMute = !this.currentMute;
     if (this.master && this.ctx) {
       this.master.gain.linearRampToValueAtTime(
-        this.muted ? 0 : 0.5,
+        this.currentMute ? 0 : 0.5,
         this.ctx.currentTime + 0.15,
       );
     }
     try {
-      localStorage.setItem(MUTE_KEY, this.muted ? "1" : "0");
+      localStorage.setItem(MUTE_KEY, this.currentMute ? "1" : "0");
     } catch {
       /* 프라이빗 모드 등에서 실패해도 무시 */
     }
-    return this.muted;
+    return this.currentMute;
   }
 
   /** Release the page-owned context, continuous ambience and schedulers. */

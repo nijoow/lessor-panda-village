@@ -185,3 +185,42 @@ test("quality decisions discard hidden-tab time and require sustained visible sa
   }
   assert.ok(directions.includes(-1));
 });
+
+test("diagonal movement checks the combined position and cannot cut an obstacle corner", () => {
+  const blocked = (x, z) => x > 0.2 && z < -0.2;
+  const player = playerHarness({ collision: blocked });
+  player.input.delta = 0.1;
+  player.input.keys.forward = player.input.keys.right = true;
+  for (let i = 0; i < 60; i++) {
+    const frame = player.tick();
+    assert.equal(blocked(frame.pose.x, frame.pose.z), false);
+  }
+});
+
+test("the configured village board is reachable from spawn through the shared collision/path policy", () => {
+  const { BAMBOO, BENCHES, NOTICE_BOARDS } = loadSource(
+    "src/constants/world/index.ts",
+  );
+  const { checkCollision } = loadSource("src/utils/collision.ts");
+  const { findPath } = loadSource("src/utils/pathfinder.ts");
+  const player = playerHarness({
+    bamboo: BAMBOO,
+    benches: BENCHES,
+    boards: NOTICE_BOARDS,
+    collision: checkCollision,
+    findPath: (start, end) => findPath(start, end, checkCollision),
+  });
+  const board = NOTICE_BOARDS[0],
+    distance = board.range * 0.75;
+  const end = {
+    x: board.x + Math.sin(board.rotation) * distance,
+    z: board.z + Math.cos(board.rotation) * distance,
+    requestId: 1,
+  };
+  player.input.commands.move = end;
+  let frame;
+  for (let i = 0; i < 1000; i++) frame = player.tick();
+  assert.equal(frame.nearby.board, 0);
+  assert.ok(Math.hypot(frame.pose.x - end.x, frame.pose.z - end.z) < 0.2);
+  assert.equal(checkCollision(frame.pose.x, frame.pose.z, frame.pose.y), false);
+});

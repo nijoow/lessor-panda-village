@@ -219,8 +219,10 @@ export class PlayerController {
         const nextX = this.target.x + direction.x * step,
           nextZ = this.target.z + direction.z * step;
         const canX = !this.world.collision(nextX, this.target.z, this.target.y);
-        const canZ = !this.world.collision(this.target.x, nextZ, this.target.y);
         if (canX) this.target.x = nextX;
+        // Validate Z after the accepted X step: individually clear axis probes
+        // can combine into a blocked diagonal destination at an obstacle corner.
+        const canZ = !this.world.collision(this.target.x, nextZ, this.target.y);
         if (canZ) this.target.z = nextZ;
         const traveled = Math.hypot(
           canX ? direction.x * step : 0,
@@ -253,7 +255,7 @@ export class PlayerController {
     this.pose.anim = animation.anim;
     return {
       pose: this.pose as Readonly<PlayerPose>,
-      nearby: this.nearby,
+      nearby: this.nearby as Readonly<ReturnType<typeof nearbyObjects>>,
       sitting: this.seat !== null,
       emoting: this.emote !== null,
       events: this.events as readonly PlayerEvent[],
