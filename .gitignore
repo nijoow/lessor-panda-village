@@ -48,6 +48,7 @@ CLAUDE.md
 # Share the maintained project document.
 docs/*
 !docs/architecture.md
+!docs/code-review.md
 
 # Claude Code 로컬 설정 (local only)
 .claude/
