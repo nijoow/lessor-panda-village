@@ -14,7 +14,6 @@ import { RemotePlayer } from "@/components/world/RemotePlayer";
 import type { PlayerPose } from "@/domain/player";
 import { PlayerState } from "@/types/multiplayer";
 import { HOUSES } from "@/constants/world";
-import * as THREE from "three";
 import { Suspense, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 
@@ -31,7 +30,6 @@ interface WorldProps {
   onReady: () => void;
   isNight: boolean;
   nickname: string | null;
-  playerRef: React.MutableRefObject<THREE.Group>;
   /** 채팅 입력 또는 방명록 패널이 열려 있어 플레이어 조작을 막아야 하는 상태 */
   inputLocked: boolean;
   remotePlayerIds: string[];
@@ -46,7 +44,6 @@ export const World = ({
   onReady,
   isNight,
   nickname,
-  playerRef,
   inputLocked,
   remotePlayerIds,
   getPlayerData,
@@ -75,7 +72,6 @@ export const World = ({
       {/* Player - 닉네임이 있을 때만 활성화 */}
       {nickname !== null ? (
         <Player
-          ref={playerRef}
           id={myId}
           nickname={nickname}
           onMove={broadcastMove}

@@ -2,7 +2,7 @@
 
 import { useTexture } from '@react-three/drei';
 import * as THREE from 'three';
-import { useMemo, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useFrame, ThreeEvent } from '@react-three/fiber';
 import { useMoveTargetStore } from '@/stores/moveTargetStore';
 import {
@@ -186,6 +186,7 @@ export const Ground = ({ disableClick }: { disableClick?: boolean }) => {
     t.anisotropy = 16;
     return t;
   }, [grassTexture]);
+  useEffect(() => () => groundTexture.dispose(), [groundTexture]);
 
   // 색 패치 전부가 공유하는 소프트 마스크 (캔버스 1장)
   const patchMask = useMemo(() => getPatchMask(), []);

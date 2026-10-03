@@ -1,11 +1,5 @@
 import { create } from "zustand";
-
-export interface MoveRequest {
-  x: number;
-  z: number;
-  /** 같은 좌표를 연속 클릭해도 새 요청으로 인식되도록 하는 구분자 */
-  requestId: number;
-}
+import type { MoveRequest } from "@/domain/player";
 
 interface MoveTargetState {
   request: MoveRequest | null;

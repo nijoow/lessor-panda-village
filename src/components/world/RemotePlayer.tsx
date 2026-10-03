@@ -7,6 +7,7 @@ import * as THREE from "three";
 import { PlayerState } from "@/types/multiplayer";
 import { frameLerp, lerpAngle } from "@/utils/math";
 import { usePandaModel, PandaBody, PandaNameTag } from "./PandaModel";
+import { getFogFar, fogSphereVisible } from "@/lib/rendering/culling";
 
 interface Props {
   id: string;
@@ -48,11 +49,10 @@ const RemotePlayerInner = ({ id, getPlayerData }: Props) => {
       return;
     }
     depthPoint.current.set(data.x, data.y + 1.5, data.z).applyMatrix4(state.camera.matrixWorldInverse);
-    const far = state.scene.fog instanceof THREE.Fog ? state.scene.fog.far : 105;
     bounds.current.center.set(data.x, data.y + 1.5, data.z);
     viewProjection.current.multiplyMatrices(state.camera.projectionMatrix, state.camera.matrixWorldInverse);
     frustum.current.setFromProjectionMatrix(viewProjection.current);
-    groupRef.current.visible = -depthPoint.current.z < far + 5 && frustum.current.intersectsSphere(bounds.current);
+    groupRef.current.visible = fogSphereVisible(-depthPoint.current.z, bounds.current.radius, getFogFar(state.scene)) && frustum.current.intersectsSphere(bounds.current);
     if (!groupRef.current.visible) {
       // Resume at the current network pose, not the last pose seen by this camera.
       initialized.current = false;

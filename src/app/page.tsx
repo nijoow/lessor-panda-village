@@ -5,9 +5,8 @@ import {
   KeyboardControlsEntry,
 } from "@react-three/drei";
 import { AnimatePresence } from "framer-motion";
-import { useCallback, useRef, useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import dynamic from "next/dynamic";
-import * as THREE from "three";
 
 import { Controls } from "@/domain/player";
 import { VillageHeader } from "@/components/ui/VillageHeader";
@@ -115,23 +114,21 @@ const keyboardMap: KeyboardControlsEntry<Controls>[] = [
 
 export default function Home() {
   const isNight = useDayNightCycle();
-  const playerRef = useRef<THREE.Group>(null!);
 
   useViewportHeight();
 
   return (
     <KeyboardControls map={keyboardMap}>
-      <HomeContent isNight={isNight} playerRef={playerRef} />
+      <HomeContent isNight={isNight} />
     </KeyboardControls>
   );
 }
 
 interface HomeContentProps {
   isNight: boolean;
-  playerRef: React.MutableRefObject<THREE.Group>;
 }
 
-const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
+const HomeContent = ({ isNight }: HomeContentProps) => {
   const [isChatFocused, setIsChatFocused] = useState(false);
   const [isAssetsReady, setIsAssetsReady] = useState(false);
   const [sceneUnavailable, setSceneUnavailable] = useState(false);
@@ -155,6 +152,7 @@ const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
   useEffect(() => {
     audio.setNight(isNight);
   }, [isNight]);
+  useEffect(() => () => audio.dispose(), []);
 
   const {
     submit: submitNote,
@@ -249,7 +247,6 @@ const HomeContent = ({ isNight, playerRef }: HomeContentProps) => {
           isNight={isNight}
           nickname={worldSession?.nickname ?? null}
           inputLocked={inputLocked}
-          playerRef={playerRef}
           remotePlayerIds={remotePlayerIds}
           getPlayerData={getPlayerData}
           broadcastMove={broadcastMove}

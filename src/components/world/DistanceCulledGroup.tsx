@@ -7,19 +7,15 @@ import type { RootState } from "@react-three/fiber";
 import * as THREE from "three";
 import { worldFrameState } from "@/runtime/worldFrameState";
 import {
-  SCENERY_CULL_MARGIN,
   SCENERY_CULL_UPDATE_DISTANCE,
-  WORLD_FOG,
 } from "@/constants/rendering";
+import { getFogFar, fogSphereVisible } from "@/lib/rendering/culling";
 
 interface DistanceCulledGroupProps {
   center: readonly [number, number];
   radius?: number;
   children: ReactNode;
 }
-
-const getFogFar = (scene: THREE.Scene) =>
-  scene.fog instanceof THREE.Fog ? scene.fog.far : WORLD_FOG.day.far;
 
 /**
  * 실제 그룹 경계 구 전체가 view-space fog far 뒤에 있을 때만 끈다.
@@ -43,7 +39,7 @@ export const DistanceCulledGroup = ({
       state.camera.updateMatrixWorld();
       depthPoint.current.copy(bounds.current.center).applyMatrix4(state.camera.matrixWorldInverse);
       // Three's linear fog uses view-space depth, not radial ground distance.
-      const visible = -depthPoint.current.z - bounds.current.radius <= fogFar + SCENERY_CULL_MARGIN;
+      const visible = fogSphereVisible(-depthPoint.current.z, bounds.current.radius, fogFar);
       if (groupRef.current.visible !== visible) worldFrameState.invalidateShadows();
       groupRef.current.visible = visible;
       lastQuaternion.current.copy(state.camera.quaternion);

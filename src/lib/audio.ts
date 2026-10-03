@@ -106,6 +106,20 @@ class VillageAudio {
     return this.muted;
   }
 
+  /** Release the page-owned context, continuous ambience and schedulers. */
+  dispose() {
+    if (this.schedulerTimer !== null) clearInterval(this.schedulerTimer);
+    if (this.birdTimer !== null) clearInterval(this.birdTimer);
+    this.schedulerTimer = this.birdTimer = null;
+    const context = this.ctx;
+    this.ctx = null;
+    this.master = this.musicGain = this.dayGain = this.nightGain = this.sfxGain = null;
+    this.noiseBuffer = null;
+    this.noteIndex = this.nextNoteTime = 0;
+    this.stepToggle = false;
+    if (context && context.state !== "closed") void context.close().catch(() => {});
+  }
+
   // ---------- BGM ----------
   private pluck(freq: number, t: number, gain = 0.16) {
     if (!this.ctx || !this.musicGain) return;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Instances, Instance } from "@react-three/drei";
 import * as THREE from "three";
@@ -125,6 +125,11 @@ const RiverRibbon = ({ river }: { river: RiverSpec }) => {
       ...bankProps(river),
     };
   }, [river]);
+  useEffect(() => () => {
+    bedGeom.dispose();
+    waterGeom.dispose();
+    flowTex.dispose();
+  }, [bedGeom, waterGeom, flowTex]);
 
   useFrame((state, delta) => {
     // 물이 하류(폴리라인 진행 방향)로 흐르는 하이라이트
