@@ -42,15 +42,22 @@ const RemotePlayerInner = ({ id, getPlayerData }: Props) => {
   // 프레임 단위 보간 처리 (부드러운 움직임 & 최적화)
   useFrame((state, delta) => {
     const data = getPlayerData(id);
-    if (!data) { groupRef.current.visible = false; return; }
+    if (!data) {
+      groupRef.current.visible = false;
+      initialized.current = false;
+      return;
+    }
     depthPoint.current.set(data.x, data.y + 1.5, data.z).applyMatrix4(state.camera.matrixWorldInverse);
     const far = state.scene.fog instanceof THREE.Fog ? state.scene.fog.far : 105;
     bounds.current.center.set(data.x, data.y + 1.5, data.z);
     viewProjection.current.multiplyMatrices(state.camera.projectionMatrix, state.camera.matrixWorldInverse);
     frustum.current.setFromProjectionMatrix(viewProjection.current);
     groupRef.current.visible = -depthPoint.current.z < far + 5 && frustum.current.intersectsSphere(bounds.current);
-    nameTagRef.current.visible = state.camera.position.distanceToSquared(groupRef.current.position) < 55 * 55;
-    if (!groupRef.current.visible) return;
+    if (!groupRef.current.visible) {
+      // Resume at the current network pose, not the last pose seen by this camera.
+      initialized.current = false;
+      return;
+    }
 
     const dt = Math.min(delta, MAX_DELTA);
     const t = frameLerp(0.15, dt);
@@ -62,16 +69,14 @@ const RemotePlayerInner = ({ id, getPlayerData }: Props) => {
     targetPos.current.set(data.x, data.y, data.z);
     if (!initialized.current) {
       groupRef.current.position.copy(targetPos.current);
+      groupRef.current.rotation.y = data.ry;
       initialized.current = true;
-    } else groupRef.current.position.lerp(targetPos.current, t);
+    } else {
+      groupRef.current.position.lerp(targetPos.current, t);
+      groupRef.current.rotation.y = lerpAngle(groupRef.current.rotation.y, data.ry, t);
+    }
     groupRef.current.updateMatrixWorld();
-
-    // 회전 보간 - 부드러운 방향 전환 (최단 각도 계산)
-    groupRef.current.rotation.y = lerpAngle(
-      groupRef.current.rotation.y,
-      data.ry,
-      t,
-    );
+    nameTagRef.current.visible = state.camera.position.distanceToSquared(groupRef.current.position) < 55 * 55;
 
     // 애니메이션 동기화
     if (data.anim) playAction(data.anim);

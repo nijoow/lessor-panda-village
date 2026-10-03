@@ -139,7 +139,7 @@ export const Player = forwardRef<THREE.Group, Props>(
     }, [onMove]);
 
     useEffect(() => useHarvestStore.subscribe((state, previous) => {
-      if (state.harvestedSet !== previous.harvestedSet) {
+      if (state.harvestedIds !== previous.harvestedIds) {
         useGraphicsStore.getState().runtime.shadowRevision += 1;
       }
     }), []);

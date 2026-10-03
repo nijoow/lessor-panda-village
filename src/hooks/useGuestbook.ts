@@ -143,13 +143,16 @@ export const useGuestbook = (placeId: string, userId: string | null, revision: n
     try {
       const { data, error } = await supabase.from("world_traces").update({ deleted_at: new Date().toISOString() }).eq("id", noteId).eq("author_id", userId).is("deleted_at", null).select("id");
       if (error || data?.length !== 1) throw error ?? new Error("not_deleted");
+      // Reads started before the confirmed mutation must not restore the old row.
+      ++loadToken.current;
       // Keep the row visible until deletion is confirmed; failures need no rollback.
       const notes = useGuestbookStore.getState().notes.filter((note) => note.id !== noteId);
       useGuestbookStore.getState().setNotes(notes); writeNoteCache(placeId, notes);
       setVisibleNotes((previous) => previous.filter((note) => note.id !== noteId));
       notifyPeers();
+      await load();
     } catch { setDeleteError("쪽지를 지우지 못했어. 연결을 확인하고 다시 시도해봐."); }
-  }, [readOnly, userId, placeId, notifyPeers]);
+  }, [readOnly, userId, placeId, notifyPeers, load]);
 
   return { submit, remove, isSubmitting, writeError, deleteError, refresh, loadOlder, hasMore, isLoadingMore, mineOnly, setMineOnly, visibleNotes };
 };

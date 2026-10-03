@@ -15,7 +15,8 @@
     "scenery:validate": "node scripts/validate-scenery-glb.mjs",
     "world:verify": "node scripts/verify-world-access.mjs",
     "player:lods": "node scripts/generate-player-lods.mjs",
-    "test:world-db": "node scripts/tests/world-rls.mjs"
+    "test:world-db": "node scripts/tests/world-rls.mjs",
+    "test:client": "node --test scripts/tests/client-state.test.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",

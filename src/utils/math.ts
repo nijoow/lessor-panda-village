@@ -1,6 +1,8 @@
 // 최단 경로로 각도 보간 (-PI ~ PI 래핑 처리)
 export const lerpAngle = (start: number, end: number, t: number) => {
-  const diff = ((end - start + Math.PI) % (Math.PI * 2)) - Math.PI;
+  const fullTurn = Math.PI * 2;
+  // JavaScript remainder can be negative; normalize before choosing the shortest arc.
+  const diff = (((end - start + Math.PI) % fullTurn) + fullTurn) % fullTurn - Math.PI;
   return start + diff * t;
 };
 
