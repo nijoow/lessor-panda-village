@@ -19,19 +19,24 @@ export function intersectsSightSegment(
 ) {
   if (box.isEmpty() || distance < 0.1) return false;
   if (box.containsPoint(ray.origin)) return true;
-  return ray.intersectBox(box, hit) !== null &&
-    hit.distanceToSquared(ray.origin) < (distance - 0.05) ** 2;
+  return (
+    ray.intersectBox(box, hit) !== null &&
+    hit.distanceToSquared(ray.origin) < (distance - 0.05) ** 2
+  );
 }
 
 /** Only the cloned materials are mutable; cached GLTF geometry/textures stay shared. */
 export function cloneCameraOccluder(source: THREE.Group) {
   const model = source.clone(true);
-  const originals = new Map<THREE.Material, {
-    material: THREE.Material;
-    opacity: number;
-    transparent: boolean;
-    depthWrite: boolean;
-  }>();
+  const originals = new Map<
+    THREE.Material,
+    {
+      material: THREE.Material;
+      opacity: number;
+      transparent: boolean;
+      depthWrite: boolean;
+    }
+  >();
   const shadowMaterials: THREE.Material[] = [];
   const cloneMaterial = (sourceMaterial: THREE.Material) => {
     let entry = originals.get(sourceMaterial);
@@ -56,10 +61,12 @@ export function cloneCameraOccluder(source: THREE.Group) {
     object.receiveShadow = true;
     // Both supplied scenery GLBs have one opaque material. Keep their original
     // opaque shadow even while the main colour pass fades for visibility.
-    const depth = object.customDepthMaterial?.clone() ?? new THREE.MeshDepthMaterial({
-      depthPacking: THREE.RGBADepthPacking,
-      side: (Array.isArray(material) ? material[0] : material).side,
-    });
+    const depth =
+      object.customDepthMaterial?.clone() ??
+      new THREE.MeshDepthMaterial({
+        depthPacking: THREE.RGBADepthPacking,
+        side: (Array.isArray(material) ? material[0] : material).side,
+      });
     object.customDepthMaterial = depth;
     shadowMaterials.push(depth);
   });
@@ -118,11 +125,20 @@ export function useCameraOccluder(source: THREE.Group, placementKey: string) {
       runtime.checkIn = CHECK_INTERVAL;
       const player = worldFrameState.player;
       runtime.ray.origin.set(player.x, player.y + 1.4, player.z);
-      runtime.ray.direction.subVectors(state.camera.position, runtime.ray.origin);
+      runtime.ray.direction.subVectors(
+        state.camera.position,
+        runtime.ray.origin,
+      );
       const distance = runtime.ray.direction.length();
       runtime.ray.direction.normalize();
-      const possibleOcclusion = resource.model.visible &&
-        intersectsSightSegment(runtime.ray, distance, runtime.bounds, runtime.hit);
+      const possibleOcclusion =
+        resource.model.visible &&
+        intersectsSightSegment(
+          runtime.ray,
+          distance,
+          runtime.bounds,
+          runtime.hit,
+        );
       if (!possibleOcclusion) {
         runtime.targetAlpha = 1;
       } else if (lastNarrowPhaseFrame === state.clock.elapsedTime) {
@@ -136,13 +152,23 @@ export function useCameraOccluder(source: THREE.Group, placementKey: string) {
         runtime.raycaster.near = 0.05;
         runtime.raycaster.far = Math.max(0.05, distance - 0.15);
         runtime.intersections.length = 0;
-        runtime.raycaster.intersectObject(resource.model, true, runtime.intersections);
-        runtime.targetAlpha = runtime.intersections.length > 0 ? OCCLUDED_OPACITY : 1;
+        runtime.raycaster.intersectObject(
+          resource.model,
+          true,
+          runtime.intersections,
+        );
+        runtime.targetAlpha =
+          runtime.intersections.length > 0 ? OCCLUDED_OPACITY : 1;
       }
     }
     if (runtime.alpha === runtime.targetAlpha) return;
-    runtime.alpha = THREE.MathUtils.lerp(runtime.alpha, runtime.targetAlpha, 1 - Math.exp(-dt * 9));
-    if (Math.abs(runtime.alpha - runtime.targetAlpha) < 0.005) runtime.alpha = runtime.targetAlpha;
+    runtime.alpha = THREE.MathUtils.lerp(
+      runtime.alpha,
+      runtime.targetAlpha,
+      1 - Math.exp(-dt * 9),
+    );
+    if (Math.abs(runtime.alpha - runtime.targetAlpha) < 0.005)
+      runtime.alpha = runtime.targetAlpha;
     resource.setOpacity(runtime.alpha);
   });
 

@@ -86,10 +86,14 @@ export const BambooField = () => {
     [],
   );
 
-  useEffect(() => () => {
-    for (const resource of Object.values(resources)) resource.dispose();
-  }, [resources]);
-  const { stalkGeom, leafGeom, nodeGeom, stalkMat, leafMat, nodeMat } = resources;
+  useEffect(
+    () => () => {
+      for (const resource of Object.values(resources)) resource.dispose();
+    },
+    [resources],
+  );
+  const { stalkGeom, leafGeom, nodeGeom, stalkMat, leafMat, nodeMat } =
+    resources;
 
   const HIDDEN = 0.001; // 인스턴스 수를 고정한 채 스케일로만 숨김
   return (

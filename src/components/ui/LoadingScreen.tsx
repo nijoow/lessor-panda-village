@@ -11,7 +11,12 @@ export const LoadingScreen = ({ ready }: { ready: boolean }) => {
   const [dismissed, setDismissed] = useState(false);
   // LoadingManager는 새 파일 묶음이 시작될 때 비율을 다시 계산한다.
   // 한 번의 입장에서는 표시값을 유지하고, 실제 장면 준비 후에만 완료한다.
-  const nextProgress = ready ? 100 : Math.min(99, Math.max(0, Math.round(Number.isFinite(progress) ? progress : 0)));
+  const nextProgress = ready
+    ? 100
+    : Math.min(
+        99,
+        Math.max(0, Math.round(Number.isFinite(progress) ? progress : 0)),
+      );
   if (nextProgress > displayedProgress) setDisplayedProgress(nextProgress);
 
   useEffect(() => {
@@ -21,7 +26,10 @@ export const LoadingScreen = ({ ready }: { ready: boolean }) => {
     const firstFrame = requestAnimationFrame(() => {
       secondFrame = requestAnimationFrame(() => setDismissed(true));
     });
-    return () => { cancelAnimationFrame(firstFrame); cancelAnimationFrame(secondFrame); };
+    return () => {
+      cancelAnimationFrame(firstFrame);
+      cancelAnimationFrame(secondFrame);
+    };
   }, [ready]);
 
   return (
@@ -95,7 +103,14 @@ export const LoadingScreen = ({ ready }: { ready: boolean }) => {
 
               {/* Sophisticated Progress Bar */}
               <div className="relative w-full ">
-                <div role="progressbar" aria-label="마을 불러오기" aria-valuenow={displayedProgress} aria-valuemin={0} aria-valuemax={100} className="relative w-full h-4 bg-sky-100 rounded-full overflow-hidden border-2 border-white shadow-inner">
+                <div
+                  role="progressbar"
+                  aria-label="마을 불러오기"
+                  aria-valuenow={displayedProgress}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  className="relative w-full h-4 bg-sky-100 rounded-full overflow-hidden border-2 border-white shadow-inner"
+                >
                   <motion.div
                     className="absolute left-0 top-0 h-full bg-linear-to-r from-orange-400 via-yellow-400 to-orange-500 shadow-[0_0_15px_rgba(251,146,60,0.5)]"
                     initial={{ width: "0%" }}

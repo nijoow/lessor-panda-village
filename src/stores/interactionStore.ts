@@ -32,11 +32,16 @@ export const useInteractionStore = create<InteractionState>((set) => ({
       state.nearbyBenchIndex === index ? state : { nearbyBenchIndex: index },
     ),
   setSitting: (sitting) =>
-    set((state) => (state.isSitting === sitting ? state : { isSitting: sitting })),
+    set((state) =>
+      state.isSitting === sitting ? state : { isSitting: sitting },
+    ),
   requestToggleSit: () =>
     set((state) => ({ toggleSitRequestId: state.toggleSitRequestId + 1 })),
   requestEmote: (anim) =>
     set((state) => ({
-      emoteRequest: { anim, requestId: (state.emoteRequest?.requestId ?? 0) + 1 },
+      emoteRequest: {
+        anim,
+        requestId: (state.emoteRequest?.requestId ?? 0) + 1,
+      },
     })),
 }));

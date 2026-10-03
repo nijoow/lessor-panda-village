@@ -35,9 +35,7 @@ interface WorldProps {
   remotePlayerIds: string[];
   getPlayerData: (id: string) => PlayerState | undefined;
   myId: string;
-  broadcastMove: (
-    state: PlayerPose,
-  ) => void;
+  broadcastMove: (state: PlayerPose) => void;
 }
 
 export const World = ({
@@ -55,7 +53,12 @@ export const World = ({
       <Ground disableClick={inputLocked} />
       <Environment isNight={isNight} />
       {HOUSES.map((h, i) => (
-        <House key={i} position={h.position} rotation={[0, 0, 0]} scale={h.scale} />
+        <House
+          key={i}
+          position={h.position}
+          rotation={[0, 0, 0]}
+          scale={h.scale}
+        />
       ))}
       <NoticeBoards isNight={isNight} />
       <FireflyParticles isNight={isNight} />
@@ -64,9 +67,9 @@ export const World = ({
 
       {/* 접속자 ID 목록으로 원격 플레이어 구성 */}
       <Suspense fallback={null}>
-      {remotePlayerIds.map((id) => (
-        <RemotePlayer key={id} id={id} getPlayerData={getPlayerData} />
-      ))}
+        {remotePlayerIds.map((id) => (
+          <RemotePlayer key={id} id={id} getPlayerData={getPlayerData} />
+        ))}
       </Suspense>
 
       {/* Player - 닉네임이 있을 때만 활성화 */}

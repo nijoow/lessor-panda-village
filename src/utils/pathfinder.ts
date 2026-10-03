@@ -25,7 +25,11 @@ const nodeKey = (x: number, z: number) => `${x},${z}`;
  */
 export type CollisionCheck = (x: number, z: number, y?: number) => boolean;
 
-export const isPathClear = (start: Point, end: Point, isBlocked: CollisionCheck = checkCollision): boolean => {
+export const isPathClear = (
+  start: Point,
+  end: Point,
+  isBlocked: CollisionCheck = checkCollision,
+): boolean => {
   const dist = Math.sqrt((end.x - start.x) ** 2 + (end.z - start.z) ** 2);
   const steps = Math.ceil(dist / (GRID_SIZE / 2));
 
@@ -44,7 +48,11 @@ export const isPathClear = (start: Point, end: Point, isBlocked: CollisionCheck 
  * A* 길찾기 알고리즘.
  * 경로를 찾지 못하면 빈 배열을 반환합니다 (호출 측에서 이동하지 않음).
  */
-export const findPath = (start: Point, end: Point, isBlocked: CollisionCheck = checkCollision): Point[] => {
+export const findPath = (
+  start: Point,
+  end: Point,
+  isBlocked: CollisionCheck = checkCollision,
+): Point[] => {
   // 목표지점이 충돌 구역이면 이동 불가
   if (isBlocked(end.x, end.z, 0)) {
     return [];
@@ -110,8 +118,14 @@ export const findPath = (start: Point, end: Point, isBlocked: CollisionCheck = c
 
     // 상하좌우 및 대각선 이웃 확인 (8방향)
     const neighbors = [
-      { x: 0, z: 1 }, { x: 0, z: -1 }, { x: 1, z: 0 }, { x: -1, z: 0 },
-      { x: 1, z: 1 }, { x: 1, z: -1 }, { x: -1, z: 1 }, { x: -1, z: -1 },
+      { x: 0, z: 1 },
+      { x: 0, z: -1 },
+      { x: 1, z: 0 },
+      { x: -1, z: 0 },
+      { x: 1, z: 1 },
+      { x: 1, z: -1 },
+      { x: -1, z: 1 },
+      { x: -1, z: -1 },
     ];
 
     for (const move of neighbors) {
@@ -120,7 +134,11 @@ export const findPath = (start: Point, end: Point, isBlocked: CollisionCheck = c
       const key = nodeKey(nx, nz);
 
       if (closedSet.has(key)) continue;
-      if (isBlocked(nx, nz, 0) || !isPathClear(current, { x: nx, z: nz }, isBlocked)) continue;
+      if (
+        isBlocked(nx, nz, 0) ||
+        !isPathClear(current, { x: nx, z: nz }, isBlocked)
+      )
+        continue;
 
       const gScore = current.g + (move.x !== 0 && move.z !== 0 ? 1.414 : 1);
 

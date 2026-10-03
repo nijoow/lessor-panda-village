@@ -35,7 +35,11 @@ export const ZoneBanner = () => {
           y: [-14, 0, 0, -8],
           scale: [0.96, 1, 1, 0.98],
         }}
-        transition={{ duration: 2.6, times: [0, 0.12, 0.85, 1], ease: "easeOut" }}
+        transition={{
+          duration: 2.6,
+          times: [0, 0.12, 0.85, 1],
+          ease: "easeOut",
+        }}
         className="glass-card rounded-full px-6 py-2.5 border-white/25 shadow-xl"
       >
         <span className="text-white text-base sm:text-lg font-bold drop-shadow">

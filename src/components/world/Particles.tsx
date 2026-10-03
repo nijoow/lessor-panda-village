@@ -103,7 +103,9 @@ interface ParticleProps {
 
 export const PetalParticles = ({ isNight }: ParticleProps) => {
   const quality = useGraphicsStore((state) => state.quality);
-  const count = Math.ceil(PETAL_COUNT * GRAPHICS_PRESETS[quality].particleRatio);
+  const count = Math.ceil(
+    PETAL_COUNT * GRAPHICS_PRESETS[quality].particleRatio,
+  );
   const meshRef = useRef<THREE.InstancedMesh>(null!);
   const materialRef = useRef<THREE.MeshStandardMaterial>(null!);
 
@@ -149,7 +151,8 @@ export const PetalParticles = ({ isNight }: ParticleProps) => {
       const flutter = Math.sin(t * 2 + p.phase) * 0.015;
       p.position.x += (p.velocity.x + flutter) * speed;
       p.position.y += p.velocity.y * speed;
-      p.position.z += (p.velocity.z + Math.cos(t * 1.5 + p.phase) * 0.015) * speed;
+      p.position.z +=
+        (p.velocity.z + Math.cos(t * 1.5 + p.phase) * 0.015) * speed;
 
       // 회전 속도에 펄럭임 반영
       p.rotation += (p.rotationSpeed + Math.sin(t * 3) * 0.01) * speed;
@@ -221,7 +224,9 @@ const generateFireflyDataSync = (): FireflyData[] => {
 
 export const FireflyParticles = ({ isNight }: ParticleProps) => {
   const quality = useGraphicsStore((state) => state.quality);
-  const count = Math.ceil(FIREFLY_COUNT * GRAPHICS_PRESETS[quality].particleRatio);
+  const count = Math.ceil(
+    FIREFLY_COUNT * GRAPHICS_PRESETS[quality].particleRatio,
+  );
   const meshRef = useRef<THREE.InstancedMesh>(null!);
   const materialRef = useRef<THREE.MeshStandardMaterial>(null!);
   const [fireflies] = useState(() => generateFireflyDataSync());
@@ -346,7 +351,9 @@ const generateButterflyData = (): ButterflyData[] => {
 
 export const ButterflyParticles = ({ isNight }: ParticleProps) => {
   const quality = useGraphicsStore((state) => state.quality);
-  const count = Math.ceil(BUTTERFLY_COUNT * GRAPHICS_PRESETS[quality].particleRatio);
+  const count = Math.ceil(
+    BUTTERFLY_COUNT * GRAPHICS_PRESETS[quality].particleRatio,
+  );
   const meshRef = useRef<THREE.InstancedMesh>(null!);
   const materialRef = useRef<THREE.MeshStandardMaterial>(null!);
   const [butterflies] = useState(() => generateButterflyData());
@@ -403,10 +410,7 @@ export const ButterflyParticles = ({ isNight }: ParticleProps) => {
   });
 
   return (
-    <instancedMesh
-      ref={meshRef}
-      args={[undefined, undefined, BUTTERFLY_COUNT]}
-    >
+    <instancedMesh ref={meshRef} args={[undefined, undefined, BUTTERFLY_COUNT]}>
       <planeGeometry args={[1, 0.62]} />
       <meshStandardMaterial
         ref={materialRef}

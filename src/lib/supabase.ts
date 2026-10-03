@@ -10,12 +10,13 @@ export const supabase = (() => {
   try {
     return createClient<ClientDatabase>(url, key, {
       global: {
-        fetch: (input, init) => fetch(input, {
-          ...init,
-          signal: init?.signal
-            ? AbortSignal.any([init.signal, AbortSignal.timeout(8000)])
-            : AbortSignal.timeout(8000),
-        }),
+        fetch: (input, init) =>
+          fetch(input, {
+            ...init,
+            signal: init?.signal
+              ? AbortSignal.any([init.signal, AbortSignal.timeout(8000)])
+              : AbortSignal.timeout(8000),
+          }),
       },
     });
   } catch {

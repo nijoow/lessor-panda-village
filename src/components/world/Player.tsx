@@ -17,7 +17,12 @@ interface Props {
   inputDisabled?: boolean;
 }
 
-export const Player = ({ id, nickname, onMove, inputDisabled = false }: Props) => {
+export const Player = ({
+  id,
+  nickname,
+  onMove,
+  inputDisabled = false,
+}: Props) => {
   const group = useRef<Group>(null!);
   const quality = useGraphicsStore((state) => state.quality);
   const model = usePandaModel(group);
@@ -27,7 +32,12 @@ export const Player = ({ id, nickname, onMove, inputDisabled = false }: Props) =
   const shadows = GRAPHICS_PRESETS[quality].shadows;
   return (
     <group ref={group} dispose={null}>
-      <PandaBody nodes={model.nodes} materials={model.materials} castShadow={shadows} fakeShadow={!shadows} />
+      <PandaBody
+        nodes={model.nodes}
+        materials={model.materials}
+        castShadow={shadows}
+        fakeShadow={!shadows}
+      />
       <PandaNameTag id={id} nickname={nickname} />
     </group>
   );

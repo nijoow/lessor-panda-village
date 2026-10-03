@@ -98,22 +98,10 @@ BAMBOO.forEach((b, idx) => {
 });
 for (const r of COLLISION_ROCKS) insertCircle(r, 1.0);
 for (const h of COLLISION_HOUSES) {
-  insert(
-    { kind: "box", ...h, maxY: Infinity },
-    h.minX,
-    h.maxX,
-    h.minZ,
-    h.maxZ,
-  );
+  insert({ kind: "box", ...h, maxY: Infinity }, h.minX, h.maxX, h.minZ, h.maxZ);
 }
 for (const b of COLLISION_BOARDS) {
-  insert(
-    { kind: "box", ...b, maxY: Infinity },
-    b.minX,
-    b.maxX,
-    b.minZ,
-    b.maxZ,
-  );
+  insert({ kind: "box", ...b, maxY: Infinity }, b.minX, b.maxX, b.minZ, b.maxZ);
 }
 for (const b of COLLISION_BENCHES) {
   insert({ kind: "box", ...b, maxY: 0.8 }, b.minX, b.maxX, b.minZ, b.maxZ);
@@ -128,7 +116,12 @@ for (const f of COLLISION_FENCES) {
 }
 
 // 충돌 체크 함수 (y값을 추가하여 점프 시 통과 여부 결정)
-export const checkCollision = (x: number, z: number, y: number = 0, isHarvested: (index: number) => boolean = () => false) => {
+export const checkCollision = (
+  x: number,
+  z: number,
+  y: number = 0,
+  isHarvested: (index: number) => boolean = () => false,
+) => {
   // 월드 경계
   if (
     x < WORLD_BOUNDS.minX ||

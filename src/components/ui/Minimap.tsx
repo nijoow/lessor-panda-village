@@ -185,7 +185,10 @@ export const Minimap = () => {
   }, []);
 
   return (
-    <div className="pointer-events-none absolute left-4 top-[164px] z-40 w-[126px] sm:w-[162px] lg:top-4" style={{ fontFamily: "var(--font-jua), sans-serif" }}>
+    <div
+      className="pointer-events-none absolute left-4 top-[164px] z-40 w-[126px] sm:w-[162px] lg:top-4"
+      style={{ fontFamily: "var(--font-jua), sans-serif" }}
+    >
       <div className="glass-card rounded-2xl p-1.5 border-white/25 shadow-xl">
         <canvas
           ref={canvasRef}
@@ -202,7 +205,10 @@ export const Minimap = () => {
           onClick={() => {
             // 게시판 앞쪽, 충돌 상자 바깥이면서 상호작용 범위 안쪽.
             const distance = board.range * 0.75;
-            requestMove(board.x + Math.sin(board.rotation) * distance, board.z + Math.cos(board.rotation) * distance);
+            requestMove(
+              board.x + Math.sin(board.rotation) * distance,
+              board.z + Math.cos(board.rotation) * distance,
+            );
           }}
           className="glass-card pointer-events-auto mt-2 min-h-11 w-full rounded-xl px-2 text-xs font-bold text-sky-950 hover:bg-white/40 focus-visible:outline-2 focus-visible:outline-orange-400"
         >

@@ -27,7 +27,10 @@ export const VillageHeader = ({ isNight }: { isNight: boolean }) => {
 
   useEffect(() => {
     const showTimer = window.setTimeout(() => setShowStatus(true), 0);
-    const hideTimer = window.setTimeout(() => setShowStatus(false), STATUS_VISIBLE_MS);
+    const hideTimer = window.setTimeout(
+      () => setShowStatus(false),
+      STATUS_VISIBLE_MS,
+    );
     return () => {
       window.clearTimeout(showTimer);
       window.clearTimeout(hideTimer);

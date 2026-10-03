@@ -1,6 +1,12 @@
-import type { WorldSession, MultiplayerConnectionStatus } from "@/types/multiplayer";
+import type {
+  WorldSession,
+  MultiplayerConnectionStatus,
+} from "@/types/multiplayer";
 
-export function worldCapabilities(session: WorldSession | null, status: MultiplayerConnectionStatus) {
+export function worldCapabilities(
+  session: WorldSession | null,
+  status: MultiplayerConnectionStatus,
+) {
   const authenticated = session?.mode === "online";
   return {
     authenticated,

@@ -17,7 +17,10 @@ export function useVillageSession() {
     authenticated ? worldSession.userId : null,
     retryKey,
   );
-  const capabilities = worldCapabilities(worldSession, multiplayer.connectionStatus);
+  const capabilities = worldCapabilities(
+    worldSession,
+    multiplayer.connectionStatus,
+  );
   const reconnectWorld = useCallback(() => {
     if (!authenticated) void reconnect();
     else setRetryKey((key) => key + 1);

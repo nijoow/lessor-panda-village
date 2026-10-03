@@ -2,7 +2,8 @@
 export const lerpAngle = (start: number, end: number, t: number) => {
   const fullTurn = Math.PI * 2;
   // JavaScript remainder can be negative; normalize before choosing the shortest arc.
-  const diff = (((end - start + Math.PI) % fullTurn) + fullTurn) % fullTurn - Math.PI;
+  const diff =
+    ((((end - start + Math.PI) % fullTurn) + fullTurn) % fullTurn) - Math.PI;
   return start + diff * t;
 };
 

@@ -56,10 +56,7 @@ const Board = ({
   const notes = useGuestbookStore((state) => state.notes);
 
   // 최근 글이 위 칸부터 걸리도록 앞에서 잘라 쓴다
-  const pinned = useMemo(
-    () => notes.slice(0, BOARD_SLOT_COUNT),
-    [notes],
-  );
+  const pinned = useMemo(() => notes.slice(0, BOARD_SLOT_COUNT), [notes]);
 
   return (
     <group
@@ -82,12 +79,7 @@ const Board = ({
 
       {/* 판 테두리 (위/아래 가로대) */}
       {[0.72, -0.72].map((dy) => (
-        <mesh
-          key={dy}
-          position={[0, 1.35 + dy, 0.02]}
-          castShadow
-          receiveShadow
-        >
+        <mesh key={dy} position={[0, 1.35 + dy, 0.02]} castShadow receiveShadow>
           <boxGeometry args={[2.35, 0.12, 0.18]} />
           <meshStandardMaterial color={WOOD_LIGHT} roughness={0.85} />
         </mesh>

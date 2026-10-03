@@ -18,7 +18,34 @@ export type GraphicsQuality = "low" | "medium" | "high";
 export type GraphicsMode = "auto" | GraphicsQuality;
 
 export const GRAPHICS_PRESETS = {
-  low: { dpr: 1, shadowMapSize: 1024, shadows: false, bloom: false, multisampling: 0, stars: 800, particleRatio: 0.35, remoteAnimationFps: 15 },
-  medium: { dpr: 1, shadowMapSize: 1024, shadows: true, bloom: true, multisampling: 0, stars: 1800, particleRatio: 0.65, remoteAnimationFps: 24 },
-  high: { dpr: 1.5, shadowMapSize: 2048, shadows: true, bloom: true, multisampling: 2, stars: 3000, particleRatio: 1, remoteAnimationFps: 30 },
+  low: {
+    dpr: 1,
+    shadowMapSize: 1024,
+    shadows: false,
+    bloom: false,
+    multisampling: 0,
+    stars: 800,
+    particleRatio: 0.35,
+    remoteAnimationFps: 15,
+  },
+  medium: {
+    dpr: 1,
+    shadowMapSize: 1024,
+    shadows: true,
+    bloom: true,
+    multisampling: 0,
+    stars: 1800,
+    particleRatio: 0.65,
+    remoteAnimationFps: 24,
+  },
+  high: {
+    dpr: 1.5,
+    shadowMapSize: 2048,
+    shadows: true,
+    bloom: true,
+    multisampling: 2,
+    stars: 3000,
+    particleRatio: 1,
+    remoteAnimationFps: 30,
+  },
 } as const;

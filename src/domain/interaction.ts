@@ -8,7 +8,9 @@ export interface NearbyInteractions {
 export type InteractionKind = "stand" | "sit" | "guestbook" | "harvest";
 
 /** One priority policy for keyboard actions and the displayed UI action. */
-export function chooseInteraction(nearby: NearbyInteractions): InteractionKind | null {
+export function chooseInteraction(
+  nearby: NearbyInteractions,
+): InteractionKind | null {
   if (nearby.sitting) return "stand";
   if (nearby.bench !== null) return "sit";
   if (nearby.board !== null) return "guestbook";

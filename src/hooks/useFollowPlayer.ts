@@ -10,9 +10,13 @@ import { frameLerp } from "@/utils/math";
 export function useFollowPlayer(group: RefObject<Group>) {
   const offset = useRef(new Vector3());
   useFrame((state, delta) => {
-    const object = group.current, controls = state.controls;
+    const object = group.current,
+      controls = state.controls;
     if (!object || !(controls instanceof OrbitControls)) return;
-    offset.current.copy(object.position).sub(controls.target).multiplyScalar(frameLerp(0.1, Math.min(delta, PLAYER_MOTION.maxDelta)));
+    offset.current
+      .copy(object.position)
+      .sub(controls.target)
+      .multiplyScalar(frameLerp(0.1, Math.min(delta, PLAYER_MOTION.maxDelta)));
     controls.target.add(offset.current);
     state.camera.position.add(offset.current);
   });

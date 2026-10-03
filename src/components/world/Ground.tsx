@@ -1,16 +1,16 @@
 "use client";
 
-import { useTexture } from '@react-three/drei';
-import * as THREE from 'three';
-import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { useFrame, ThreeEvent } from '@react-three/fiber';
-import { useMoveTargetStore } from '@/stores/moveTargetStore';
+import { useTexture } from "@react-three/drei";
+import * as THREE from "three";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useFrame, ThreeEvent } from "@react-three/fiber";
+import { useMoveTargetStore } from "@/stores/moveTargetStore";
 import {
   GRASS_PATCHES,
   DIRT_PATCHES,
   STONE_PATHS,
   WORLD_SIZE,
-} from '@/constants/world';
+} from "@/constants/world";
 
 // 걷기 한계 바깥의 경계 숲과 그 너머 안개까지 덮는 여유.
 // 지면은 삼각형 두 장이라 넓혀도 비용이 없지만, 좁으면 숲 밑동에서
@@ -173,7 +173,7 @@ const StonePath = ({
 };
 
 export const Ground = ({ disableClick }: { disableClick?: boolean }) => {
-  const grassTexture = useTexture('/textures/ground/grass.png');
+  const grassTexture = useTexture("/textures/ground/grass.png");
   const [clickPos, setClickPos] = useState<THREE.Vector3 | null>(null);
 
   const groundTexture = useMemo(() => {
@@ -233,10 +233,7 @@ export const Ground = ({ disableClick }: { disableClick?: boolean }) => {
 
       {/* 클릭 마커 표시 (위치가 바뀔 때마다 key를 사용하여 리셋) */}
       {clickPos && (
-        <ClickMarker
-          key={`${clickPos.x}-${clickPos.z}`}
-          position={clickPos}
-        />
+        <ClickMarker key={`${clickPos.x}-${clickPos.z}`} position={clickPos} />
       )}
 
       {/* 존별 잔디 색 패치 — 알파맵으로 가장자리를 흐려 사각 경계를 지운다.

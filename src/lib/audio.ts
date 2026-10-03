@@ -16,14 +16,9 @@ const MUTE_KEY = "panda-village-muted";
 const SCALE = [196.0, 220.0, 246.9, 293.7, 329.6, 392.0, 440.0, 493.9, 587.3];
 // 8마디 × 8비트 멜로디 (시드 고정 수열, -1은 쉼표)
 const MELODY = [
-  5, -1, 6, 5, 3, -1, 2, 3,
-  5, -1, 6, 8, 7, 6, 5, -1,
-  3, -1, 5, 3, 2, -1, 0, 1,
-  2, 3, 2, -1, 1, -1, 0, -1,
-  5, -1, 6, 5, 3, -1, 2, 3,
-  7, -1, 8, 7, 6, 5, 6, -1,
-  5, 3, 2, -1, 3, 5, 6, 7,
-  5, -1, -1, -1, 2, -1, -1, -1,
+  5, -1, 6, 5, 3, -1, 2, 3, 5, -1, 6, 8, 7, 6, 5, -1, 3, -1, 5, 3, 2, -1, 0, 1,
+  2, 3, 2, -1, 1, -1, 0, -1, 5, -1, 6, 5, 3, -1, 2, 3, 7, -1, 8, 7, 6, 5, 6, -1,
+  5, 3, 2, -1, 3, 5, 6, 7, 5, -1, -1, -1, 2, -1, -1, -1,
 ];
 // 2마디마다 코드 (루트 인덱스): I - IV - V - IV
 const CHORDS = [0, 3, 4, 3];
@@ -113,11 +108,17 @@ class VillageAudio {
     this.schedulerTimer = this.birdTimer = null;
     const context = this.ctx;
     this.ctx = null;
-    this.master = this.musicGain = this.dayGain = this.nightGain = this.sfxGain = null;
+    this.master =
+      this.musicGain =
+      this.dayGain =
+      this.nightGain =
+      this.sfxGain =
+        null;
     this.noiseBuffer = null;
     this.noteIndex = this.nextNoteTime = 0;
     this.stepToggle = false;
-    if (context && context.state !== "closed") void context.close().catch(() => {});
+    if (context && context.state !== "closed")
+      void context.close().catch(() => {});
   }
 
   // ---------- BGM ----------

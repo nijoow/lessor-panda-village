@@ -21,13 +21,16 @@ export const InteractionPrompt = () => {
   const isGuestbookOpen = useGuestbookStore((s) => s.isOpen);
   const openGuestbook = useGuestbookStore((s) => s.open);
 
-  const action = chooseInteraction({ sitting: isSitting, bench: nearbyBenchIndex, board: nearbyBoardIndex, bamboo: nearbyBambooIndex });
+  const action = chooseInteraction({
+    sitting: isSitting,
+    bench: nearbyBenchIndex,
+    board: nearbyBoardIndex,
+    bamboo: nearbyBambooIndex,
+  });
   const benchMode = action === "sit" || action === "stand";
   const boardMode = action === "guestbook";
   // 패널이 열려 있는 동안에는 프롬프트를 숨긴다
-  const visible =
-    !isGuestbookOpen &&
-    action !== null;
+  const visible = !isGuestbookOpen && action !== null;
   const label = benchMode
     ? isSitting
       ? "일어서기"

@@ -24,22 +24,32 @@ interface AnimationAdapter {
 }
 
 /** Translates a domain frame result into the application's external effects. */
-export function usePlayerController(group: RefObject<Group>, disabled: boolean, animation: AnimationAdapter) {
+export function usePlayerController(
+  group: RefObject<Group>,
+  disabled: boolean,
+  animation: AnimationAdapter,
+) {
   const [, getKeys] = useKeyboardControls<Controls>();
   const controller = useRef<PlayerController | null>(null);
-  if (controller.current === null) controller.current = new PlayerController({
-    benches: BENCHES, bamboo: BAMBOO, boards: NOTICE_BOARDS,
-    isHarvested: (index) => useHarvestStore.getState().isHarvested(index),
-    collision: checkWorldCollision,
-    findPath: (start, end) => findPath(start, end, checkWorldCollision),
-  });
-  useEffect(() => () => {
-    worldFrameState.resetPlayer();
-    useInteractionStore.getState().setSitting(false);
-    useInteractionStore.getState().setNearbyBench(null);
-    useHarvestStore.getState().setNearbyBamboo(null);
-    useGuestbookStore.getState().setNearbyBoard(null);
-  }, []);
+  if (controller.current === null)
+    controller.current = new PlayerController({
+      benches: BENCHES,
+      bamboo: BAMBOO,
+      boards: NOTICE_BOARDS,
+      isHarvested: (index) => useHarvestStore.getState().isHarvested(index),
+      collision: checkWorldCollision,
+      findPath: (start, end) => findPath(start, end, checkWorldCollision),
+    });
+  useEffect(
+    () => () => {
+      worldFrameState.resetPlayer();
+      useInteractionStore.getState().setSitting(false);
+      useInteractionStore.getState().setNearbyBench(null);
+      useHarvestStore.getState().setNearbyBamboo(null);
+      useGuestbookStore.getState().setNearbyBoard(null);
+    },
+    [],
+  );
 
   useFrame((state, delta) => {
     if (!group.current || !controller.current) return;
@@ -47,8 +57,16 @@ export function usePlayerController(group: RefObject<Group>, disabled: boolean, 
     const harvest = useHarvestStore.getState();
     const guestbook = useGuestbookStore.getState();
     const frame = controller.current.step({
-      delta, camera: state.camera.position, keys: getKeys(), disabled,
-      commands: { move: useMoveTargetStore.getState().request, sit: interactions.toggleSitRequestId, harvest: harvest.harvestRequestId, emote: interactions.emoteRequest },
+      delta,
+      camera: state.camera.position,
+      keys: getKeys(),
+      disabled,
+      commands: {
+        move: useMoveTargetStore.getState().request,
+        sit: interactions.toggleSitRequestId,
+        harvest: harvest.harvestRequestId,
+        emote: interactions.emoteRequest,
+      },
     });
     const { pose } = frame;
     group.current.position.set(pose.x, pose.y, pose.z);
@@ -61,14 +79,31 @@ export function usePlayerController(group: RefObject<Group>, disabled: boolean, 
     guestbook.setNearbyBoard(frame.nearby.board);
     const zone = zoneAt(pose.x, pose.z);
     useZoneStore.getState().setZone(zone?.id ?? null, zone?.name ?? null);
-    worldFrameState.publishPlayer(pose, pose.ry, animation.getCurrentAction(), frame.emoting, state.clock.elapsedTime);
+    worldFrameState.publishPlayer(
+      pose,
+      pose.ry,
+      animation.getCurrentAction(),
+      frame.emoting,
+      state.clock.elapsedTime,
+    );
     for (const event of frame.events) {
       switch (event.kind) {
-        case "jump": audio.jump(); break;
-        case "land": audio.land(); break;
-        case "footstep": audio.footstep(event.running); break;
-        case "harvest": harvest.harvest(event.index); audio.harvestPop(); break;
-        case "guestbook": guestbook.open(); break;
+        case "jump":
+          audio.jump();
+          break;
+        case "land":
+          audio.land();
+          break;
+        case "footstep":
+          audio.footstep(event.running);
+          break;
+        case "harvest":
+          harvest.harvest(event.index);
+          audio.harvestPop();
+          break;
+        case "guestbook":
+          guestbook.open();
+          break;
       }
     }
   });

@@ -125,10 +125,7 @@ const fenceSegments = (f: FenceLayout): FenceSegment[] => {
 };
 
 // 나무·중앙 고목은 동일하게 "항상 충돌" 원기둥이므로 하나로 합쳐 판정
-export const COLLISION_TREES: CollisionCircle[] = [
-  ...TREES,
-  ...LANDMARK_TREES,
-];
+export const COLLISION_TREES: CollisionCircle[] = [...TREES, ...LANDMARK_TREES];
 export const COLLISION_ROCKS: CollisionCircle[] = ROCKS;
 // 석등·표지판은 동일한 "항상 충돌" 기둥이므로 하나로 합쳐 판정.
 // 대나무는 수확으로 사라질 수 있어 collision.ts에서 인덱스와 함께 별도 처리.

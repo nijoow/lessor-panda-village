@@ -51,7 +51,7 @@ export const createRockGeometry = () => {
     const z = pos.getZ(i);
     // 좌표 기반 결정적 흔들림 — 같은 정점은 같은 값이라 면이 갈라지지 않는다
     const n = Math.sin(x * 12.9 + y * 78.2 + z * 37.7) * 43758.5453;
-    const jitter = 1 + ((n - Math.floor(n)) - 0.5) * 0.34;
+    const jitter = 1 + (n - Math.floor(n) - 0.5) * 0.34;
     pos.setXYZ(i, x * jitter, y * jitter, z * jitter);
   }
   geom.computeVertexNormals();

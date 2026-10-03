@@ -4,10 +4,34 @@ import { memo, useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { Pond } from "../Pond";
 import { Rivers } from "../River";
-import { ROCKS, BENCHES, PONDS, LANDMARK_TREES, SIGNS, BRIDGES, RIVERS } from "@/constants/world";
+import {
+  ROCKS,
+  BENCHES,
+  PONDS,
+  LANDMARK_TREES,
+  SIGNS,
+  BRIDGES,
+  RIVERS,
+} from "@/constants/world";
 import { createGrassTuftGeometry, createFlowerHeadGeometry } from "./geometry";
-import { PINE_RECORDS, ROUND_TREE_RECORDS, CHERRY_TREE_RECORDS, GRASS_TUFT_RECORDS, PEBBLE_RECORDS, FLOWER_RECORDS, FENCE_POST_RECORDS, FENCE_RAIL_RECORDS } from "./placements";
-import { AncientTree, Bench, Rock, Cloud, Signpost, Bridge } from "./Structures";
+import {
+  PINE_RECORDS,
+  ROUND_TREE_RECORDS,
+  CHERRY_TREE_RECORDS,
+  GRASS_TUFT_RECORDS,
+  PEBBLE_RECORDS,
+  FLOWER_RECORDS,
+  FENCE_POST_RECORDS,
+  FENCE_RAIL_RECORDS,
+} from "./placements";
+import {
+  AncientTree,
+  Bench,
+  Rock,
+  Cloud,
+  Signpost,
+  Bridge,
+} from "./Structures";
 import { CulledInstances } from "./CulledInstances";
 
 // ---------- 정적 배경 (낮/밤과 무관하므로 memo로 리렌더 차단) ----------
@@ -40,38 +64,88 @@ export const StaticScenery = memo(function StaticScenery() {
         pebble: new THREE.IcosahedronGeometry(0.16, 0),
       },
       treeMats: {
-        trunk: new THREE.MeshStandardMaterial({ color: "#7a5c3a", roughness: 0.9 }),
-        leaf1: new THREE.MeshStandardMaterial({ color: "#4caf63", roughness: 0.8 }),
-        leaf2: new THREE.MeshStandardMaterial({ color: "#56cc72", roughness: 0.8 }),
-        leaf3: new THREE.MeshStandardMaterial({ color: "#69e086", roughness: 0.7 }),
+        trunk: new THREE.MeshStandardMaterial({
+          color: "#7a5c3a",
+          roughness: 0.9,
+        }),
+        leaf1: new THREE.MeshStandardMaterial({
+          color: "#4caf63",
+          roughness: 0.8,
+        }),
+        leaf2: new THREE.MeshStandardMaterial({
+          color: "#56cc72",
+          roughness: 0.8,
+        }),
+        leaf3: new THREE.MeshStandardMaterial({
+          color: "#69e086",
+          roughness: 0.7,
+        }),
       },
       flowerMats: {
         stem: new THREE.MeshStandardMaterial({ color: "#4a7a3a" }),
-        head: new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: 0.5, side: THREE.DoubleSide }),
-        core: new THREE.MeshStandardMaterial({ color: "#f6d55c", roughness: 0.6 }),
+        head: new THREE.MeshStandardMaterial({
+          color: "#ffffff",
+          roughness: 0.5,
+          side: THREE.DoubleSide,
+        }),
+        core: new THREE.MeshStandardMaterial({
+          color: "#f6d55c",
+          roughness: 0.6,
+        }),
       },
       fenceMats: {
-        post: new THREE.MeshStandardMaterial({ color: "#c8a96a", roughness: 0.9 }),
-        rail: new THREE.MeshStandardMaterial({ color: "#d4b47a", roughness: 0.9 }),
+        post: new THREE.MeshStandardMaterial({
+          color: "#c8a96a",
+          roughness: 0.9,
+        }),
+        rail: new THREE.MeshStandardMaterial({
+          color: "#d4b47a",
+          roughness: 0.9,
+        }),
       },
       roundTreeMats: {
-        trunk: new THREE.MeshStandardMaterial({ color: "#7a5c3a", roughness: 0.9 }),
-        leafGreen: new THREE.MeshStandardMaterial({ color: "#63c06e", roughness: 0.8 }),
-        leafGreenDark: new THREE.MeshStandardMaterial({ color: "#4fae5f", roughness: 0.85 }),
-        leafPink: new THREE.MeshStandardMaterial({ color: "#f2b7d5", roughness: 0.8 }),
-        leafPinkDark: new THREE.MeshStandardMaterial({ color: "#e8a2c8", roughness: 0.85 }),
+        trunk: new THREE.MeshStandardMaterial({
+          color: "#7a5c3a",
+          roughness: 0.9,
+        }),
+        leafGreen: new THREE.MeshStandardMaterial({
+          color: "#63c06e",
+          roughness: 0.8,
+        }),
+        leafGreenDark: new THREE.MeshStandardMaterial({
+          color: "#4fae5f",
+          roughness: 0.85,
+        }),
+        leafPink: new THREE.MeshStandardMaterial({
+          color: "#f2b7d5",
+          roughness: 0.8,
+        }),
+        leafPinkDark: new THREE.MeshStandardMaterial({
+          color: "#e8a2c8",
+          roughness: 0.85,
+        }),
       },
       clutterMats: {
-        tuft: new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: 0.95, side: THREE.DoubleSide }),
-        pebble: new THREE.MeshStandardMaterial({ color: "#a89f8d", roughness: 1 }),
+        tuft: new THREE.MeshStandardMaterial({
+          color: "#ffffff",
+          roughness: 0.95,
+          side: THREE.DoubleSide,
+        }),
+        pebble: new THREE.MeshStandardMaterial({
+          color: "#a89f8d",
+          roughness: 1,
+        }),
       },
     };
   }, []);
-  useEffect(() => () => {
-    for (const group of Object.values(resources)) {
-      for (const resource of Object.values(group)) resource.dispose();
-    }
-  }, [resources]);
+  useEffect(
+    () => () => {
+      for (const group of Object.values(resources)) {
+        for (const resource of Object.values(group)) resource.dispose();
+      }
+    },
+    [resources],
+  );
   const {
     treeGeoms,
     flowerGeoms,

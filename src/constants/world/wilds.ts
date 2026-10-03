@@ -73,8 +73,7 @@ const boundaryBelt = (
     const u = ((jittered % perimeter) + perimeter) % perimeter;
 
     // 벽 기준 바깥 방향 깊이 (-inset: 안쪽, +outset: 바깥쪽)
-    const depth =
-      -inset + (inset + outset) * Math.sqrt(hash01(i + 0.37, seed));
+    const depth = -inset + (inset + outset) * Math.sqrt(hash01(i + 0.37, seed));
 
     let x: number;
     let z: number;

@@ -7,68 +7,111 @@ import { setImmediate } from "node:timers/promises";
 import { loadSource } from "./helpers/load-source.mjs";
 import * as THREE from "three";
 
-
 function deferred() {
   let resolve;
-  const promise = new Promise((done) => { resolve = done; });
+  const promise = new Promise((done) => {
+    resolve = done;
+  });
   return { promise, resolve };
 }
 
 const guestbook = loadSource("src/lib/guestbook/codec.ts");
 const rawNote = {
-  id: "11111111-1111-4111-8111-111111111111", body: "작은 마을의 쪽지",
+  id: "11111111-1111-4111-8111-111111111111",
+  body: "작은 마을의 쪽지",
   created_at: "2026-10-02T10:00:00Z",
   author_id: "22222222-2222-4222-8222-222222222222",
-  author_nickname: "밤톨", author_color_key: "22222222-2222-4222-8222-222222222222",
+  author_nickname: "밤톨",
+  author_color_key: "22222222-2222-4222-8222-222222222222",
 };
 
-function guestbookHarness(deletion = { data: [{ id: rawNote.id }], error: null }) {
+function guestbookHarness(
+  deletion = { data: [{ id: rawNote.id }], error: null },
+) {
   const note = guestbook.toGuestbookNote(rawNote);
   let cached = { notes: [note], savedAt: Date.now() };
   const reads = [];
-  const query = (response) => new Proxy({}, {
-    get: (_target, name) => name === "then" ? response.then.bind(response) : () => query(response),
-  });
-  const supabase = { from: () => ({
-    select: () => {
-      const request = deferred();
-      reads.push(request);
-      return query(request.promise);
-    },
-    update: () => query(Promise.resolve(deletion)),
-  }) };
+  const query = (response) =>
+    new Proxy(
+      {},
+      {
+        get: (_target, name) =>
+          name === "then"
+            ? response.then.bind(response)
+            : () => query(response),
+      },
+    );
+  const supabase = {
+    from: () => ({
+      select: () => {
+        const request = deferred();
+        reads.push(request);
+        return query(request.promise);
+      },
+      update: () => query(Promise.resolve(deletion)),
+    }),
+  };
   const state = {
-    isOpen: true, notes: [note], status: "ready", cachedAt: null,
-    applySnapshot(notes, status, cachedAt) { Object.assign(this, { notes, status, cachedAt }); },
-    setStatus(status) { this.status = status; },
-    setCachedAt(time) { this.cachedAt = time; },
+    isOpen: true,
+    notes: [note],
+    status: "ready",
+    cachedAt: null,
+    applySnapshot(notes, status, cachedAt) {
+      Object.assign(this, { notes, status, cachedAt });
+    },
+    setStatus(status) {
+      this.status = status;
+    },
+    setCachedAt(time) {
+      this.cachedAt = time;
+    },
   };
   const store = (selector) => selector(state);
   store.getState = () => state;
   const slots = [];
   let index = 0;
   const react = {
-    useCallback: (fn) => fn, useEffect: () => {},
+    useCallback: (fn) => fn,
+    useEffect: () => {},
     useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot(),
     useMemo(factory, dependencies) {
       const slot = index++;
       const previous = slots[slot];
-      if (!previous || dependencies.some((value, i) => value !== previous.dependencies[i])) slots[slot] = { dependencies, value: factory() };
+      if (
+        !previous ||
+        dependencies.some((value, i) => value !== previous.dependencies[i])
+      )
+        slots[slot] = { dependencies, value: factory() };
       return slots[slot].value;
     },
-    useRef: (initial) => slots[index++] ?? (slots[index - 1] = { current: initial }),
+    useRef: (initial) =>
+      slots[index++] ?? (slots[index - 1] = { current: initial }),
     useState(initial) {
       const slot = index++;
       if (!(slot in slots)) slots[slot] = initial;
-      return [slots[slot], (next) => { slots[slot] = typeof next === "function" ? next(slots[slot]) : next; }];
+      return [
+        slots[slot],
+        (next) => {
+          slots[slot] = typeof next === "function" ? next(slots[slot]) : next;
+        },
+      ];
     },
   };
-  const { useGuestbook: runGuestbookHook } = loadSource("src/hooks/useGuestbook.ts", {
-    react, "@/lib/supabase": { supabase },
-        "@/lib/guestbook/cache": { readNoteCache: () => cached, writeNoteCache: (_place, notes) => { cached = { notes, savedAt: Date.now() }; } },
-    "@/stores/guestbookStore": { useGuestbookStore: store, NOTE_COST: 1 },
-    "@/stores/harvestStore": {},
-  });
+  const { useGuestbook: runGuestbookHook } = loadSource(
+    "src/hooks/useGuestbook.ts",
+    {
+      react,
+      "@/lib/supabase": { supabase },
+      "@/lib/guestbook/cache": {
+        readNoteCache: () => cached,
+        writeNoteCache: (_place, notes) => {
+          cached = { notes, savedAt: Date.now() };
+        },
+      },
+      "@/stores/guestbookStore": { useGuestbookStore: store, NOTE_COST: 1 },
+      "@/stores/harvestStore": {},
+    },
+  );
   const notify = () => {};
   const render = () => {
     index = 0;
@@ -77,14 +120,21 @@ function guestbookHarness(deletion = { data: [{ id: rawNote.id }], error: null }
   return { render, reads, state, cache: () => cached };
 }
 
-for (const lateResult of [{ data: [rawNote], error: null }, { data: null, error: { message: "offline" } }]) {
+for (const lateResult of [
+  { data: [rawNote], error: null },
+  { data: null, error: { message: "offline" } },
+]) {
   test(`confirmed deletion survives an older ${lateResult.error ? "failed" : "successful"} read`, async () => {
     const harness = guestbookHarness();
     const hook = harness.render();
     const oldRead = hook.refresh();
     const removal = hook.remove(rawNote.id);
     await setImmediate();
-    assert.equal(harness.reads.length, 2, "deletion starts a fresh authoritative read");
+    assert.equal(
+      harness.reads.length,
+      2,
+      "deletion starts a fresh authoritative read",
+    );
     harness.reads[1].resolve({ data: [], error: null });
     await removal;
     harness.reads[0].resolve(lateResult);
@@ -98,7 +148,10 @@ for (const lateResult of [{ data: [rawNote], error: null }, { data: null, error:
 }
 
 test("failed deletion keeps the note and allows the pending read to complete", async () => {
-  const harness = guestbookHarness({ data: [], error: { message: "permission denied" } });
+  const harness = guestbookHarness({
+    data: [],
+    error: { message: "permission denied" },
+  });
   const hook = harness.render();
   const reading = hook.refresh();
   await hook.remove(rawNote.id);
@@ -126,15 +179,24 @@ function remotePlayerHarness() {
   const frames = [];
   const { RemotePlayer } = loadSource("src/components/world/RemotePlayer.tsx", {
     three: THREE,
-    react: { useMemo: (fn) => fn(), useRef: (value) => ({ current: value }), memo: (fn) => fn, useState: (value) => [value, () => {}] },
+    react: {
+      useMemo: (fn) => fn(),
+      useRef: (value) => ({ current: value }),
+      memo: (fn) => fn,
+      useState: (value) => [value, () => {}],
+    },
     "@react-three/drei": { useGLTF: () => ({ nodes: {} }) },
     "@react-three/fiber": { useFrame: (fn) => frames.push(fn) },
     "@/utils/math": loadSource("src/utils/math.ts"),
-    "./PandaModel": { usePandaModel: () => ({ nodes: {}, materials: {}, playAction() {} }), PandaBody() {}, PandaNameTag() {} },
+    "./PandaModel": {
+      usePandaModel: () => ({ nodes: {}, materials: {}, playAction() {} }),
+      PandaBody() {},
+      PandaNameTag() {},
+    },
   });
   let data = { x: -5, y: 0, z: 0, ry: 0, anim: "idle", nickname: "밤톨" };
   const tree = RemotePlayer({ id: "peer", getPlayerData: () => data });
-  const group = tree.props.ref.current = new THREE.Group();
+  const group = (tree.props.ref.current = new THREE.Group());
   tree.props.children[1].props.ref.current = new THREE.Group();
   const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 200);
   camera.position.set(0, 10, 20);
@@ -142,7 +204,14 @@ function remotePlayerHarness() {
   camera.updateMatrixWorld();
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog("white", 52, 105);
-  return { group, frame: () => frames[0]({ camera, scene }, 1 / 60), setData: (next) => { data = next; }, pose: () => data };
+  return {
+    group,
+    frame: () => frames[0]({ camera, scene }, 1 / 60),
+    setData: (next) => {
+      data = next;
+    },
+    pose: () => data,
+  };
 }
 
 test("peer reappears at its latest position and rotation after offscreen movement", () => {
@@ -179,7 +248,11 @@ test("missing peer data resets the pose before visibility resumes", () => {
 });
 
 const { lerpAngle } = loadSource("src/utils/math.ts");
-for (const [start, end, expected] of [[3, -3, Math.PI], [-3, 3, -Math.PI], [Math.PI * 4, 0.2, Math.PI * 4 + 0.1]]) {
+for (const [start, end, expected] of [
+  [3, -3, Math.PI],
+  [-3, 3, -Math.PI],
+  [Math.PI * 4, 0.2, Math.PI * 4 + 0.1],
+]) {
   test(`angle interpolation takes the shortest arc from ${start} to ${end}`, () => {
     assert.ok(Math.abs(lerpAngle(start, end, 0.5) - expected) < 1e-10);
   });
@@ -187,16 +260,25 @@ for (const [start, end, expected] of [[3, -3, Math.PI], [-3, 3, -Math.PI], [Math
 
 test("harvesting and respawning bamboo both invalidate cached shadows", () => {
   const respawns = [];
-  const { useHarvestStore } = loadSource("src/stores/harvestStore.ts", {}, {
-    setTimeout: (callback) => { respawns.push(callback); },
-  });
+  const { useHarvestStore } = loadSource(
+    "src/stores/harvestStore.ts",
+    {},
+    {
+      setTimeout: (callback) => {
+        respawns.push(callback);
+      },
+    },
+  );
   const effects = [];
   const { worldFrameState } = loadSource("src/runtime/worldFrameState.ts");
-  const { useWorldShadowSignals: runShadowSignals } = loadSource("src/hooks/useWorldShadowSignals.ts", {
-    react: { useEffect: (fn) => effects.push(fn) },
-    "@/stores/harvestStore": { useHarvestStore },
-    "@/runtime/worldFrameState": { worldFrameState },
-  });
+  const { useWorldShadowSignals: runShadowSignals } = loadSource(
+    "src/hooks/useWorldShadowSignals.ts",
+    {
+      react: { useEffect: (fn) => effects.push(fn) },
+      "@/stores/harvestStore": { useHarvestStore },
+      "@/runtime/worldFrameState": { worldFrameState },
+    },
+  );
   runShadowSignals();
   const cleanups = effects.map((effect) => effect());
   try {

@@ -11,7 +11,11 @@ interface GuestbookState {
   notes: GuestbookNote[];
   status: GuestbookStatus;
   cachedAt: number | null;
-  applySnapshot: (notes: GuestbookNote[], status: GuestbookStatus, cachedAt: number | null) => void;
+  applySnapshot: (
+    notes: GuestbookNote[],
+    status: GuestbookStatus,
+    cachedAt: number | null,
+  ) => void;
   /** 상호작용 거리 안의 게시판 인덱스 (NOTICE_BOARDS 기준, 없으면 null) */
   nearbyBoardIndex: number | null;
   /** 방명록 패널 열림 — 열려 있는 동안 플레이어 입력이 잠깁니다 */

@@ -125,11 +125,14 @@ const RiverRibbon = ({ river }: { river: RiverSpec }) => {
       ...bankProps(river),
     };
   }, [river]);
-  useEffect(() => () => {
-    bedGeom.dispose();
-    waterGeom.dispose();
-    flowTex.dispose();
-  }, [bedGeom, waterGeom, flowTex]);
+  useEffect(
+    () => () => {
+      bedGeom.dispose();
+      waterGeom.dispose();
+      flowTex.dispose();
+    },
+    [bedGeom, waterGeom, flowTex],
+  );
 
   useFrame((state, delta) => {
     // 물이 하류(폴리라인 진행 방향)로 흐르는 하이라이트

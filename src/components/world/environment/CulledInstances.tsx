@@ -32,13 +32,20 @@ export const CulledInstances = ({
 }: CulledInstancesProps) => {
   const lastVisible = useRef<number[] | null>(null);
   const meshRef = useRef<THREE.InstancedMesh>(null!);
-  const lastCameraRef = useRef({ x: Infinity, y: Infinity, z: Infinity, fogFar: -1 });
+  const lastCameraRef = useRef({
+    x: Infinity,
+    y: Infinity,
+    z: Infinity,
+    fogFar: -1,
+  });
   const { camera, scene } = useThree();
   const lastQuaternion = useRef(new THREE.Quaternion());
   const point = useRef(new THREE.Vector3());
   const spheres = useMemo(() => {
     if (!geometry.boundingSphere) geometry.computeBoundingSphere();
-    return records.map((record) => geometry.boundingSphere!.clone().applyMatrix4(record.matrix));
+    return records.map((record) =>
+      geometry.boundingSphere!.clone().applyMatrix4(record.matrix),
+    );
   }, [geometry, records]);
 
   const updateInstances = useCallback(
@@ -51,8 +58,11 @@ export const CulledInstances = ({
       const visibleIndices: number[] = [];
       records.forEach((_record, index) => {
         const sphere = spheres[index];
-        point.current.copy(sphere.center).applyMatrix4(state.camera.matrixWorldInverse);
-        if (fogSphereVisible(-point.current.z, sphere.radius, fogFar)) visibleIndices.push(index);
+        point.current
+          .copy(sphere.center)
+          .applyMatrix4(state.camera.matrixWorldInverse);
+        if (fogSphereVisible(-point.current.z, sphere.radius, fogFar))
+          visibleIndices.push(index);
       });
       lastQuaternion.current.copy(state.camera.quaternion);
       lastCameraRef.current = {
@@ -64,7 +74,12 @@ export const CulledInstances = ({
       // Orbiting inside the same fog range must not re-upload every static mesh
       // or invalidate a cached shadow map when its caster list did not change.
       const previous = lastVisible.current;
-      if (previous && previous.length === visibleIndices.length && previous.every((index, slot) => index === visibleIndices[slot])) return;
+      if (
+        previous &&
+        previous.length === visibleIndices.length &&
+        previous.every((index, slot) => index === visibleIndices[slot])
+      )
+        return;
       lastVisible.current = visibleIndices;
       visibleIndices.forEach((index, slot) => {
         const record = records[index];
@@ -82,8 +97,6 @@ export const CulledInstances = ({
       // 압축한 목록 기준으로 다시 계산해야 Three의 frustum culling도 안전하다.
       mesh.boundingSphere = null;
       if (visibleCount > 0) mesh.computeBoundingSphere();
-
-
     },
     [records, spheres],
   );

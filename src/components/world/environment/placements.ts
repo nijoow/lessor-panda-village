@@ -1,4 +1,12 @@
-import { TREES, FLOWERS, FENCES, GRASS_PATCHES, DIRT_PATCHES, COLLISION_PONDS, COLLISION_HOUSES } from "@/constants/world";
+import {
+  TREES,
+  FLOWERS,
+  FENCES,
+  GRASS_PATCHES,
+  DIRT_PATCHES,
+  COLLISION_PONDS,
+  COLLISION_HOUSES,
+} from "@/constants/world";
 import { staticInstance } from "./instanceData";
 
 // ---------- 그라운드 클러터 (풀숲·자갈) — 결정적 산개 ----------

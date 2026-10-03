@@ -1,7 +1,11 @@
 "use client";
 
 import { create } from "zustand";
-import { GRAPHICS_PRESETS, type GraphicsMode, type GraphicsQuality } from "@/constants/rendering";
+import {
+  GRAPHICS_PRESETS,
+  type GraphicsMode,
+  type GraphicsQuality,
+} from "@/constants/rendering";
 
 export interface GraphicsMetrics {
   frameMs: number;
@@ -30,11 +34,26 @@ export const useGraphicsStore = create<GraphicsState>((set, get) => ({
   mode: "auto",
   quality: "low",
   dpr: 1,
-  metrics: { frameMs: 0, p95FrameMs: 0, fps: 0, samples: 0, drawCalls: 0, triangles: 0, geometries: 0, textures: 0, width: 0, height: 0 },
+  metrics: {
+    frameMs: 0,
+    p95FrameMs: 0,
+    fps: 0,
+    samples: 0,
+    drawCalls: 0,
+    triangles: 0,
+    geometries: 0,
+    textures: 0,
+    width: 0,
+    height: 0,
+  },
   setMode: (mode) => {
     const quality = mode === "auto" ? "low" : mode;
     set({ mode, quality, dpr: GRAPHICS_PRESETS[quality].dpr });
-    try { localStorage.setItem("panda-graphics-v1", mode); } catch { /* Private browsing may disable storage. */ }
+    try {
+      localStorage.setItem("panda-graphics-v1", mode);
+    } catch {
+      /* Private browsing may disable storage. */
+    }
   },
   setAutomaticQuality: (quality, dpr = GRAPHICS_PRESETS[quality].dpr) => {
     if (get().mode === "auto") set({ quality, dpr });

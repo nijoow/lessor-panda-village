@@ -20,13 +20,17 @@ export function useGraphicsMonitor() {
       if (["auto", "low", "medium", "high"].includes(stored ?? "")) {
         useGraphicsStore.getState().setMode(stored as GraphicsMode);
       }
-    } catch { /* Storage is optional. */ }
+    } catch {
+      /* Storage is optional. */
+    }
     // Read-only diagnostics for repeatable browser captures, hidden from the HUD.
     const diagnostics = () => {
       const { mode, quality, dpr, metrics } = useGraphicsStore.getState();
       return { mode, quality, dpr, ...metrics };
     };
-    const target = window as Window & { __PANDA_GRAPHICS__?: typeof diagnostics };
+    const target = window as Window & {
+      __PANDA_GRAPHICS__?: typeof diagnostics;
+    };
     target.__PANDA_GRAPHICS__ = diagnostics;
     const onVisibility = () => monitor.current.reset();
     document.addEventListener("visibilitychange", onVisibility);
@@ -36,21 +40,36 @@ export function useGraphicsMonitor() {
     };
   }, []);
 
-  useEffect(() => { monitor.current.reset(5); }, [mode, quality, dpr]);
+  useEffect(() => {
+    monitor.current.reset(5);
+  }, [mode, quality, dpr]);
   useEffect(() => {
     // Keep counters across all scene/composer passes until the next frame.
     const { gl } = getThree();
     gl.info.autoReset = false;
-    return () => { gl.info.autoReset = true; };
+    return () => {
+      gl.info.autoReset = true;
+    };
   }, [getThree]);
 
   useFrame((state, delta) => {
-    const sample = monitor.current.sample(delta, document.visibilityState === "visible");
+    const sample = monitor.current.sample(
+      delta,
+      document.visibilityState === "visible",
+    );
     const store = useGraphicsStore.getState();
     if (sample) {
       const { direction, ...timings } = sample;
       const buffer = state.gl.domElement;
-      store.reportMetrics({ ...timings, drawCalls: state.gl.info.render.calls, triangles: state.gl.info.render.triangles, geometries: state.gl.info.memory.geometries, textures: state.gl.info.memory.textures, width: buffer.width, height: buffer.height });
+      store.reportMetrics({
+        ...timings,
+        drawCalls: state.gl.info.render.calls,
+        triangles: state.gl.info.render.triangles,
+        geometries: state.gl.info.memory.geometries,
+        textures: state.gl.info.memory.textures,
+        width: buffer.width,
+        height: buffer.height,
+      });
       if (direction < 0) {
         if (store.quality === "high") store.setAutomaticQuality("medium");
         else if (store.quality === "medium") store.setAutomaticQuality("low");

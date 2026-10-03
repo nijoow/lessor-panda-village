@@ -42,7 +42,9 @@ export const useHarvestStore = create<HarvestState>((set, get) => {
     harvestRequestId: 0,
     setNearbyBamboo: (index) =>
       set((state) =>
-        state.nearbyBambooIndex === index ? state : { nearbyBambooIndex: index },
+        state.nearbyBambooIndex === index
+          ? state
+          : { nearbyBambooIndex: index },
       ),
     requestHarvest: () =>
       set((state) => ({ harvestRequestId: state.harvestRequestId + 1 })),
@@ -59,12 +61,16 @@ export const useHarvestStore = create<HarvestState>((set, get) => {
       setTimeout(() => {
         const state = get();
         harvested.delete(index);
-        set({ harvestedIds: state.harvestedIds.filter((i) => i !== index), revision: state.revision + 1 });
+        set({
+          harvestedIds: state.harvestedIds.filter((i) => i !== index),
+          revision: state.revision + 1,
+        });
       }, BAMBOO_RESPAWN_MS);
     },
     spendBamboo: (amount) => {
       const { bambooCount } = get();
-      if (!Number.isInteger(amount) || amount <= 0 || bambooCount < amount) return false;
+      if (!Number.isInteger(amount) || amount <= 0 || bambooCount < amount)
+        return false;
       set({ bambooCount: bambooCount - amount });
       return true;
     },

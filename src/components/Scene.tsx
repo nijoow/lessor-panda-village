@@ -46,7 +46,14 @@ const DayNightCycle = ({ isNight }: { isNight: boolean }) => {
   const lightTarget = useMemo(() => new THREE.Object3D(), []);
 
   // 그림자맵을 마지막으로 그렸을 때의 캐스터 상태
-  const shadowAnchor = useRef({ x: Infinity, z: 0, ry: 0, sun: -1, revision: -1, y: -1 });
+  const shadowAnchor = useRef({
+    x: Infinity,
+    z: 0,
+    ry: 0,
+    sun: -1,
+    revision: -1,
+    y: -1,
+  });
 
   useFrame((state, delta) => {
     // 이 월드에서 움직이는 그림자 캐스터는 플레이어와 해뿐이고 나머지는
@@ -251,7 +258,11 @@ interface SceneProps {
 // Canvas fallback is mounted as native DOM fallback content even with WebGL.
 // It must stay passive; renderer creation errors reach WorldErrorBoundary.
 function CanvasUnavailable() {
-  return <p className="p-6 text-center">이 기기에서 3D 화면을 열 수 없어. 다른 브라우저에서 다시 열어 줘.</p>;
+  return (
+    <p className="p-6 text-center">
+      이 기기에서 3D 화면을 열 수 없어. 다른 브라우저에서 다시 열어 줘.
+    </p>
+  );
 }
 
 function GraphicsRuntime({ onUnavailable }: Pick<SceneProps, "onUnavailable">) {
@@ -266,7 +277,10 @@ function GraphicsRuntime({ onUnavailable }: Pick<SceneProps, "onUnavailable">) {
   }, [getThree, quality]);
   useEffect(() => {
     const canvas = getThree().gl.domElement;
-    const lost = (event: Event) => { event.preventDefault(); onUnavailable?.("context-lost"); };
+    const lost = (event: Event) => {
+      event.preventDefault();
+      onUnavailable?.("context-lost");
+    };
     canvas.addEventListener("webglcontextlost", lost);
     return () => canvas.removeEventListener("webglcontextlost", lost);
   }, [getThree, onUnavailable]);
@@ -305,7 +319,14 @@ export const Scene = ({ children, isNight, onUnavailable }: SceneProps) => {
       <StylizedEnvironment isNight={isNight} />
       {/* count를 바꾸면 geometry가 재생성되므로 visible 토글로 처리 */}
       <group visible={isNight}>
-        <Stars radius={80} depth={50} count={preset.stars} factor={3} fade speed={0.5} />
+        <Stars
+          radius={80}
+          depth={50}
+          count={preset.stars}
+          factor={3}
+          fade
+          speed={0.5}
+        />
       </group>
 
       <Suspense fallback={null}>{children}</Suspense>

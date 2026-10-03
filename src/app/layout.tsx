@@ -20,8 +20,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "래서판다 빌리지",
-    description:
-      "브라우저에서 산책하고 쪽지를 남기는 작은 3D 마을",
+    description: "브라우저에서 산책하고 쪽지를 남기는 작은 3D 마을",
     url: "https://lessor-panda-village.vercel.app",
     siteName: "래서판다 빌리지",
     images: [
@@ -42,13 +41,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="ko"
-      className={`${jua.variable} h-full antialiased`}
-    >
-      <body className={`min-h-full flex flex-col`}>
-        {children}
-      </body>
+    <html lang="ko" className={`${jua.variable} h-full antialiased`}>
+      <body className={`min-h-full flex flex-col`}>{children}</body>
     </html>
   );
 }

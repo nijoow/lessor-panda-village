@@ -6,9 +6,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import type { RootState } from "@react-three/fiber";
 import * as THREE from "three";
 import { worldFrameState } from "@/runtime/worldFrameState";
-import {
-  SCENERY_CULL_UPDATE_DISTANCE,
-} from "@/constants/rendering";
+import { SCENERY_CULL_UPDATE_DISTANCE } from "@/constants/rendering";
 import { getFogFar, fogSphereVisible } from "@/lib/rendering/culling";
 
 interface DistanceCulledGroupProps {
@@ -27,9 +25,16 @@ export const DistanceCulledGroup = ({
   children,
 }: DistanceCulledGroupProps) => {
   const groupRef = useRef<THREE.Group>(null!);
-  const lastCameraRef = useRef({ x: Infinity, y: Infinity, z: Infinity, fogFar: -1 });
+  const lastCameraRef = useRef({
+    x: Infinity,
+    y: Infinity,
+    z: Infinity,
+    fogFar: -1,
+  });
   const lastQuaternion = useRef(new THREE.Quaternion());
-  const bounds = useRef(new THREE.Sphere(new THREE.Vector3(center[0], 0, center[1]), radius));
+  const bounds = useRef(
+    new THREE.Sphere(new THREE.Vector3(center[0], 0, center[1]), radius),
+  );
   const depthPoint = useRef(new THREE.Vector3());
   const { camera, scene } = useThree();
 
@@ -37,10 +42,17 @@ export const DistanceCulledGroup = ({
     (state: Pick<RootState, "camera" | "scene">) => {
       const fogFar = getFogFar(state.scene);
       state.camera.updateMatrixWorld();
-      depthPoint.current.copy(bounds.current.center).applyMatrix4(state.camera.matrixWorldInverse);
+      depthPoint.current
+        .copy(bounds.current.center)
+        .applyMatrix4(state.camera.matrixWorldInverse);
       // Three's linear fog uses view-space depth, not radial ground distance.
-      const visible = fogSphereVisible(-depthPoint.current.z, bounds.current.radius, fogFar);
-      if (groupRef.current.visible !== visible) worldFrameState.invalidateShadows();
+      const visible = fogSphereVisible(
+        -depthPoint.current.z,
+        bounds.current.radius,
+        fogFar,
+      );
+      if (groupRef.current.visible !== visible)
+        worldFrameState.invalidateShadows();
       groupRef.current.visible = visible;
       lastQuaternion.current.copy(state.camera.quaternion);
       lastCameraRef.current = {

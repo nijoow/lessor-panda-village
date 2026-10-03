@@ -17,24 +17,34 @@ export class FrameQualityMonitor {
       this.reset();
       return null;
     }
-    if (this.warmup > 0) { this.warmup -= delta; return null; }
+    if (this.warmup > 0) {
+      this.warmup -= delta;
+      return null;
+    }
     this.elapsed += delta;
     this.samples.push(delta * 1000);
     if (this.elapsed < 1) return null;
     const elapsed = this.elapsed;
     const samples = this.samples;
-    const frameMs = elapsed * 1000 / samples.length;
+    const frameMs = (elapsed * 1000) / samples.length;
     const sorted = [...samples].sort((a, b) => a - b);
-    const p95FrameMs = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))];
+    const p95FrameMs =
+      sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))];
     const slow = frameMs > 36 || p95FrameMs > 48;
     const fast = frameMs < 22 && p95FrameMs < 28;
     this.slowSeconds = slow ? this.slowSeconds + elapsed : 0;
     this.fastSeconds = fast ? this.fastSeconds + elapsed : 0;
-    const direction = this.slowSeconds >= 3 ? -1 : this.fastSeconds >= 30 ? 1 : 0;
+    const direction =
+      this.slowSeconds >= 3 ? -1 : this.fastSeconds >= 30 ? 1 : 0;
     this.elapsed = 0;
     this.samples = [];
     if (direction !== 0) this.reset(5);
-    return { frameMs, p95FrameMs, fps: 1000 / frameMs, samples: samples.length, direction };
+    return {
+      frameMs,
+      p95FrameMs,
+      fps: 1000 / frameMs,
+      samples: samples.length,
+      direction,
+    };
   }
 }
-
