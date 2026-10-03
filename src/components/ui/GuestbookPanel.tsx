@@ -2,8 +2,9 @@
 
 import { textLength, truncateText } from "@/domain/text";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { getNicknameColor } from "@/utils/color";
 import {
   MAX_NOTE_LENGTH,
@@ -33,8 +34,6 @@ interface Props {
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
-const FOCUSABLE =
-  'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])';
 const focusStyle =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orange-200";
 
@@ -71,69 +70,9 @@ export const GuestbookPanel = ({
   const status = useGuestbookStore((state) => state.status);
   const bambooCount = useHarvestStore((state) => state.bambooCount);
   const [draft, setDraft] = useState("");
-  const dialogRef = useRef<HTMLDivElement>(null);
+  const setDialog = useDialogFocus(isOpen, close);
   const titleId = useId();
   const countId = useId();
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const previousFocus =
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null;
-    const dialog = dialogRef.current;
-    if (!dialog) return;
-    const focusables = () =>
-      Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-        (element) => element.getClientRects().length > 0,
-      );
-    const focusFirst = () =>
-      (focusables()[0] ?? dialog).focus({ preventScroll: true });
-    const frame = requestAnimationFrame(focusFirst);
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopPropagation();
-        close();
-      } else if (event.key === "Tab") {
-        const items = focusables();
-        const first = items[0];
-        const last = items.at(-1);
-        const active = document.activeElement;
-        if (!first || !last) {
-          event.preventDefault();
-          dialog.focus();
-          return;
-        }
-        if (
-          event.shiftKey &&
-          (active === first || active === dialog || !dialog.contains(active))
-        ) {
-          event.preventDefault();
-          last.focus();
-        } else if (
-          !event.shiftKey &&
-          (active === last || !dialog.contains(active))
-        ) {
-          event.preventDefault();
-          first.focus();
-        }
-      }
-    };
-    const keepFocusInside = (event: FocusEvent) => {
-      if (event.target instanceof Node && !dialog.contains(event.target))
-        focusFirst();
-    };
-    document.addEventListener("keydown", handleKeyDown, true);
-    document.addEventListener("focusin", keepFocusInside);
-    return () => {
-      cancelAnimationFrame(frame);
-      document.removeEventListener("keydown", handleKeyDown, true);
-      document.removeEventListener("focusin", keepFocusInside);
-      if (previousFocus?.isConnected)
-        previousFocus.focus({ preventScroll: true });
-    };
-  }, [isOpen, close]);
 
   const trimmed = draft.trim();
   const canAfford = bambooCount >= NOTE_COST;
@@ -161,7 +100,7 @@ export const GuestbookPanel = ({
           onClick={close}
         >
           <motion.div
-            ref={dialogRef}
+            ref={setDialog}
             role="dialog"
             aria-modal="true"
             aria-labelledby={titleId}
