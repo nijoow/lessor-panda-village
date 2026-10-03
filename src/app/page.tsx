@@ -9,7 +9,7 @@ import { useCallback, useRef, useState, useEffect } from "react";
 import dynamic from "next/dynamic";
 import * as THREE from "three";
 
-import { Controls } from "@/components/world/Player";
+import { Controls } from "@/domain/player";
 import { VillageHeader } from "@/components/ui/VillageHeader";
 import { useMultiplayer } from "@/hooks/useMultiplayer";
 import { useGlobalWorld } from "@/hooks/useGlobalWorld";

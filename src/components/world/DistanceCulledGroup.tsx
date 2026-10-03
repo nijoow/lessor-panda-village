@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import type { RootState } from "@react-three/fiber";
 import * as THREE from "three";
-import { useGraphicsStore } from "@/stores/graphicsStore";
+import { worldFrameState } from "@/runtime/worldFrameState";
 import {
   SCENERY_CULL_MARGIN,
   SCENERY_CULL_UPDATE_DISTANCE,
@@ -44,7 +44,7 @@ export const DistanceCulledGroup = ({
       depthPoint.current.copy(bounds.current.center).applyMatrix4(state.camera.matrixWorldInverse);
       // Three's linear fog uses view-space depth, not radial ground distance.
       const visible = -depthPoint.current.z - bounds.current.radius <= fogFar + SCENERY_CULL_MARGIN;
-      if (groupRef.current.visible !== visible) useGraphicsStore.getState().runtime.shadowRevision += 1;
+      if (groupRef.current.visible !== visible) worldFrameState.invalidateShadows();
       groupRef.current.visible = visible;
       lastQuaternion.current.copy(state.camera.quaternion);
       lastCameraRef.current = {

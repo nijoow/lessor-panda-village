@@ -14,7 +14,7 @@ import {
   WORLD_SIZE,
   NOTICE_BOARDS,
 } from "@/constants/world";
-import { useZoneStore } from "@/stores/zoneStore";
+import { worldFrameState } from "@/runtime/worldFrameState";
 import { useMoveTargetStore } from "@/stores/moveTargetStore";
 
 // 월드가 정사각형이 아니므로 캔버스도 같은 비율로 잡는다.
@@ -152,7 +152,7 @@ export const Minimap = () => {
     if (!canvas) return;
     const ctx = canvas.getContext("2d")!;
     const bg = drawBackground();
-    const playerPos = useZoneStore.getState().playerPos;
+    const playerPos = worldFrameState.player;
     let raf = 0;
     let lastFrame = -Infinity;
 

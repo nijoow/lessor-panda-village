@@ -10,7 +10,8 @@ import { Pond } from "./Pond";
 import { Rivers } from "./River";
 import { DistanceCulledGroup } from "./DistanceCulledGroup";
 import { useCameraOccluder } from "@/hooks/useCameraOccluder";
-import { useGraphicsStore } from "@/stores/graphicsStore";
+import { BENCH_SPEC } from "@/constants/world/objects";
+import { worldFrameState } from "@/runtime/worldFrameState";
 import { useHarvestStore } from "@/stores/harvestStore";
 import {
   SCENERY_CULL_MARGIN,
@@ -256,12 +257,12 @@ const Bench = ({
     <group position={position} rotation={[0, rotation, 0]}>
       {/* 앉는 판 */}
       <mesh castShadow position={[0, 0.45, 0]}>
-        <boxGeometry args={[2.2, 0.1, 0.8]} />
+        <boxGeometry args={[BENCH_SPEC.width, 0.1, BENCH_SPEC.depth]} />
         <meshStandardMaterial color="#8d6e63" />
       </mesh>
       {/* 등받이 */}
       <mesh castShadow position={[0, 0.9, -0.35]} rotation={[-0.2, 0, 0]}>
-        <boxGeometry args={[2.2, 0.8, 0.1]} />
+        <boxGeometry args={[BENCH_SPEC.width, 0.8, 0.1]} />
         <meshStandardMaterial color="#8d6e63" />
       </mesh>
       {/* 다리 4개 */}
@@ -765,7 +766,7 @@ const CulledInstances = ({
         if (record.color) mesh.setColorAt(slot, record.color);
       });
       const visibleCount = visibleIndices.length;
-      useGraphicsStore.getState().runtime.shadowRevision += 1;
+      worldFrameState.invalidateShadows();
       mesh.count = visibleCount;
       mesh.visible = visibleCount > 0;
       mesh.instanceMatrix.needsUpdate = true;

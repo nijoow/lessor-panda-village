@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { WorldSession } from "@/types/multiplayer";
 
-export const GLOBAL_WORLD_KEY = "panda-village";
+import { GLOBAL_WORLD_KEY, MAX_NICKNAME_LENGTH } from "@/domain/world";
 const NICKNAME_STORAGE_KEY = "panda-village:nickname";
 
 export const useGlobalWorld = () => {
@@ -22,7 +22,7 @@ export const useGlobalWorld = () => {
     queueMicrotask(() => {
       if (cancelled) return;
       try {
-        setSavedNickname((localStorage.getItem(NICKNAME_STORAGE_KEY) ?? "").slice(0, 10));
+        setSavedNickname((localStorage.getItem(NICKNAME_STORAGE_KEY) ?? "").slice(0, MAX_NICKNAME_LENGTH));
       } catch { /* 저장소가 차단돼도 방문은 가능하다. */ }
       setIsReady(true);
     });
@@ -85,7 +85,7 @@ export const useGlobalWorld = () => {
 
   const enterWorld = useCallback(async (rawNickname: string) => {
     const nickname = rawNickname.trim();
-    if (!nickname || nickname.length > 10) {
+    if (!nickname || nickname.length > MAX_NICKNAME_LENGTH) {
       setEntryError("닉네임은 1~10자로 적어줘.");
       return;
     }

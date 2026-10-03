@@ -11,9 +11,14 @@ import {
 } from "react";
 import * as THREE from "three";
 import { OrbitControls as OrbitControlsImpl } from "three-stdlib";
-import { PLAYER_ANIM } from "@/constants/playerAnimations";
+import { Controls, type PlayerPose } from "@/domain/player";
+import { chooseInteraction } from "@/domain/interaction";
+import { worldFrameState } from "@/runtime/worldFrameState";
+import { BENCH_SPEC } from "@/constants/world/objects";
+import { GRAPHICS_PRESETS } from "@/constants/rendering";
+import { PLAYER_ANIM, type EmoteAnim } from "@/constants/playerAnimations";
 import { BAMBOO, BENCHES, NOTICE_BOARDS, zoneAt } from "@/constants/world";
-import { checkCollision } from "@/utils/collision";
+import { checkWorldCollision as checkCollision } from "@/lib/worldCollision";
 import { findPath, Point } from "@/utils/pathfinder";
 import { frameLerp, lerpAngle } from "@/utils/math";
 import { useMoveTargetStore } from "@/stores/moveTargetStore";
@@ -28,26 +33,8 @@ import { usePandaModel, PandaBody, PandaNameTag } from "./PandaModel";
 interface Props {
   id: string;
   nickname: string;
-  onMove?: (state: {
-    x: number;
-    y: number;
-    z: number;
-    ry: number;
-    anim: string;
-  }) => void;
+  onMove?: (state: PlayerPose) => void;
   inputDisabled?: boolean;
-}
-
-export enum Controls {
-  forward = "forward",
-  backward = "backward",
-  left = "left",
-  right = "right",
-  run = "run",
-  jump = "jump",
-  interact = "interact",
-  emoteWave = "emoteWave",
-  emoteDance = "emoteDance",
 }
 
 // 방향키는 "화면에서 보이는 방향"을 따른다.
@@ -67,11 +54,11 @@ const JUMP_FORCE = 8.4; // units/s
 const MAX_DELTA = 0.1; // 탭 전환 등 비정상적으로 큰 delta 클램프
 
 // 벤치 앉기 상수
-const SIT_RANGE = 2.2; // 벤치 중심 기준 상호작용 가능 거리
+const SIT_RANGE = BENCH_SPEC.interactionRange; // 벤치 중심 기준 상호작용 가능 거리
 const HARVEST_RANGE = 1.9; // 대나무 수확 가능 거리
-const SEAT_SLOT_OFFSET = 0.55; // 좌석 2칸의 벤치 긴 축 방향 오프셋
-const SIT_GROUP_Y = 0.04; // 앉기 클립의 엉덩이 높이에 맞춘 그룹 y 보정
-const STAND_OFFSET = 0.9; // 일어설 때 벤치 앞으로 내려서는 거리 (충돌 박스 밖)
+const SEAT_SLOT_OFFSET = BENCH_SPEC.seatOffset; // 좌석 2칸의 벤치 긴 축 방향 오프셋
+const SIT_GROUP_Y = BENCH_SPEC.groupY; // 앉기 클립의 엉덩이 높이에 맞춘 그룹 y 보정
+const STAND_OFFSET = BENCH_SPEC.standOffset; // 일어설 때 벤치 앞으로 내려서는 거리 (충돌 박스 밖)
 
 interface Seat {
   x: number;
@@ -108,7 +95,6 @@ export const Player = forwardRef<THREE.Group, Props>(
   ({ id, nickname, onMove, inputDisabled }, ref) => {
     const groupRef = useRef<THREE.Group>(null!);
     const quality = useGraphicsStore((state) => state.quality);
-    const lastShadowAction = useRef("");
 
     // 외부에서 groupRef를 사용할 수 있도록 노출
     useImperativeHandle(ref, () => groupRef.current);
@@ -117,12 +103,12 @@ export const Player = forwardRef<THREE.Group, Props>(
 
     // 네트워크 전송 최적화를 위한 타이머 및 상태 캐시
     const lastUpdateRef = useRef(0);
-    const lastSentStateRef = useRef({
+    const lastSentStateRef = useRef<PlayerPose>({
       x: 0,
       y: 0,
       z: 0,
       ry: 0,
-      anim: "",
+      anim: PLAYER_ANIM.IDLE,
     });
 
     // 초기 위치 브로드캐스트
@@ -133,16 +119,10 @@ export const Player = forwardRef<THREE.Group, Props>(
           y: groupRef.current.position.y,
           z: groupRef.current.position.z,
           ry: groupRef.current.rotation.y,
-          anim: lastShadowAction.current || PLAYER_ANIM.IDLE,
+          anim: PLAYER_ANIM.IDLE,
         });
       }
     }, [onMove]);
-
-    useEffect(() => useHarvestStore.subscribe((state, previous) => {
-      if (state.harvestedIds !== previous.harvestedIds) {
-        useGraphicsStore.getState().runtime.shadowRevision += 1;
-      }
-    }), []);
 
     // 모델 로딩 및 애니메이션 제어 (RemotePlayer와 공유)
     const { nodes, materials, playAction, getCurrentAction } =
@@ -178,7 +158,7 @@ export const Player = forwardRef<THREE.Group, Props>(
     const lastHarvestRequestIdRef = useRef(0);
 
     // 이모트 상태 (이동·점프·앉기 등 다른 행동 시 해제)
-    const emoteRef = useRef<string | null>(null);
+    const emoteRef = useRef<EmoteAnim | null>(null);
     const prevEmoteKeysRef = useRef({ wave: false, dance: false });
     const lastEmoteRequestIdRef = useRef(0);
 
@@ -212,10 +192,11 @@ export const Player = forwardRef<THREE.Group, Props>(
     const lastHandledRequestId = useRef(0);
 
     useEffect(() => {
-      if (!moveRequest || inputDisabled) return;
+      if (!moveRequest) return;
       // 입력 잠금 해제 시 과거 요청이 재실행되지 않도록 처리한 요청은 스킵
       if (moveRequest.requestId === lastHandledRequestId.current) return;
       lastHandledRequestId.current = moveRequest.requestId;
+      if (inputDisabled) return;
 
       // 앉은 상태에서 우클릭 이동 시 먼저 일어선 지점에서 길찾기 시작
       standUp();
@@ -230,7 +211,7 @@ export const Player = forwardRef<THREE.Group, Props>(
       const computedPath = findPath(start, {
         x: moveRequest.x,
         z: moveRequest.z,
-      });
+      }, checkCollision);
       if (computedPath.length > 0) {
         pathRef.current = computedPath;
         pathIndexRef.current = 0;
@@ -288,7 +269,7 @@ export const Player = forwardRef<THREE.Group, Props>(
       const dancePressed = emoteDance && !prevEmoteKeysRef.current.dance;
       prevEmoteKeysRef.current.wave = emoteWave;
       prevEmoteKeysRef.current.dance = emoteDance;
-      let requestedEmote: string | null = wavePressed
+      let requestedEmote: EmoteAnim | null = wavePressed
         ? PLAYER_ANIM.WAVE
         : dancePressed
           ? PLAYER_ANIM.DANCE
@@ -348,7 +329,7 @@ export const Player = forwardRef<THREE.Group, Props>(
         let nearBamboo: number | null = null;
         let bestBambooSq = HARVEST_RANGE * HARVEST_RANGE;
         for (let i = 0; i < BAMBOO.length; i++) {
-          if (harvestState.harvestedSet.has(i)) continue;
+          if (harvestState.isHarvested(i)) continue;
           const distSq =
             (BAMBOO[i].x - targetPosition.current.x) ** 2 +
             (BAMBOO[i].z - targetPosition.current.z) ** 2;
@@ -361,19 +342,17 @@ export const Player = forwardRef<THREE.Group, Props>(
         const harvestButtonRequested =
           harvestState.harvestRequestId !== lastHarvestRequestIdRef.current;
         lastHarvestRequestIdRef.current = harvestState.harvestRequestId;
-        const harvestRequested =
-          !inputDisabled &&
-          nearBamboo !== null &&
-          (harvestButtonRequested ||
-            (toggleRequested && nearby === null && nearBoard === null));
+        const activeInteraction = chooseInteraction({ sitting: false, bench: nearby, board: nearBoard, bamboo: nearBamboo });
+        const action = !inputDisabled && (toggleRequested || (harvestButtonRequested && activeInteraction === "harvest"))
+          ? activeInteraction : null;
 
-        if (toggleRequested && nearby !== null) {
+        if (action === "sit" && nearby !== null) {
           sitDown(nearby);
-        } else if (toggleRequested && nearBoard !== null) {
+        } else if (action === "guestbook") {
           // 패널이 열리면 page.tsx가 입력을 잠그므로 여기서 더 할 일은 없다
           guestbook.open();
           clearClickPath();
-        } else if (harvestRequested && nearBamboo !== null) {
+        } else if (action === "harvest" && nearBamboo !== null) {
           // 수확: 카운트 증가 + 폴짝 점프 + 팝 사운드
           harvestState.harvest(nearBamboo);
           audio.harvestPop();
@@ -560,20 +539,10 @@ export const Player = forwardRef<THREE.Group, Props>(
       const zoneState = useZoneStore.getState();
       const zone = zoneAt(targetPosition.current.x, targetPosition.current.z);
       zoneState.setZone(zone?.id ?? null, zone?.name ?? null);
-      zoneState.playerPos.x = groupRef.current.position.x;
-      zoneState.playerPos.z = groupRef.current.position.z;
-      zoneState.playerPos.ry = groupRef.current.rotation.y;
-      // 제자리 이모트는 위치가 그대로라 Scene의 그림자 갱신 판단에서
-      // 이동으로 잡히지 않는다. 자세는 바뀌므로 따로 알린다.
-      zoneState.playerPose.emoting = emoteRef.current !== null;
-      const graphicsRuntime = useGraphicsStore.getState().runtime;
-      graphicsRuntime.playerY = groupRef.current.position.y;
-      const shadowAction = getCurrentAction();
-      if (lastShadowAction.current !== shadowAction) {
-        graphicsRuntime.shadowRevision += 1;
-        graphicsRuntime.animationUntil = state.clock.elapsedTime + 1.5;
-        lastShadowAction.current = shadowAction;
-      }
+      worldFrameState.publishPlayer(
+        groupRef.current.position, groupRef.current.rotation.y,
+        getCurrentAction(), emoteRef.current !== null, state.clock.elapsedTime,
+      );
 
       // 네트워크 데이터 전송 최적화 (10fps + 변화 감지)
       lastUpdateRef.current += delta;
@@ -627,7 +596,7 @@ export const Player = forwardRef<THREE.Group, Props>(
 
     return (
       <group ref={groupRef} dispose={null}>
-        <PandaBody nodes={nodes} materials={materials} castShadow={quality !== "low"} fakeShadow={quality === "low"} />
+        <PandaBody nodes={nodes} materials={materials} castShadow={GRAPHICS_PRESETS[quality].shadows} fakeShadow={!GRAPHICS_PRESETS[quality].shadows} />
         <PandaNameTag id={id} nickname={nickname} />
       </group>
     );

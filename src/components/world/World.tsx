@@ -11,6 +11,7 @@ import {
 } from "@/components/world/Particles";
 import { Player } from "@/components/world/Player";
 import { RemotePlayer } from "@/components/world/RemotePlayer";
+import type { PlayerPose } from "@/domain/player";
 import { PlayerState } from "@/types/multiplayer";
 import { HOUSES } from "@/constants/world";
 import * as THREE from "three";
@@ -37,7 +38,7 @@ interface WorldProps {
   getPlayerData: (id: string) => PlayerState | undefined;
   myId: string;
   broadcastMove: (
-    state: Omit<PlayerState, "id" | "nickname" | "lastUpdated">,
+    state: PlayerPose,
   ) => void;
 }
 

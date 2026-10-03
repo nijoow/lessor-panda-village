@@ -1,5 +1,7 @@
 "use client";
 
+import { MAX_NICKNAME_LENGTH } from "@/domain/world";
+
 import { useState } from "react";
 import { motion } from "framer-motion";
 import Image from "next/image";
@@ -30,13 +32,13 @@ export const NicknameOverlay = ({ onJoin, initialNickname = "", isSubmitting = f
           if (event.key === "Enter" && (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229)) event.preventDefault();
         }} onSubmit={async (event) => {
           event.preventDefault();
-          if (!isSubmitting && nickname.trim().length > 0 && nickname.trim().length <= 10) await onJoin(nickname.trim());
+          if (!isSubmitting && nickname.trim().length > 0 && nickname.trim().length <= MAX_NICKNAME_LENGTH) await onJoin(nickname.trim());
         }} className="mt-6 text-left">
           <div className="mb-2 flex items-center justify-between">
             <label htmlFor="village-nickname" className="text-sm text-sky-950">마을에서 쓸 이름</label>
             <button type="button" disabled={isSubmitting} onClick={suggestNickname} className="min-h-11 rounded-xl px-2 text-sm text-orange-800 underline underline-offset-4 hover:bg-white/30 disabled:opacity-40">다른 이름 추천</button>
           </div>
-          <input id="village-nickname" type="text" autoComplete="nickname" value={nickname} onChange={(event) => setNickname(event.target.value)} maxLength={10} disabled={isSubmitting} aria-describedby={error ? "village-entry-error" : "nickname-hint"} className="glass-input w-full rounded-2xl px-5 py-4 text-lg text-sky-950 shadow-inner disabled:opacity-60 sm:rounded-3xl sm:text-xl" />
+          <input id="village-nickname" type="text" autoComplete="nickname" value={nickname} onChange={(event) => setNickname(event.target.value)} maxLength={MAX_NICKNAME_LENGTH} disabled={isSubmitting} aria-describedby={error ? "village-entry-error" : "nickname-hint"} className="glass-input w-full rounded-2xl px-5 py-4 text-lg text-sky-950 shadow-inner disabled:opacity-60 sm:rounded-3xl sm:text-xl" />
           <p id="nickname-hint" className="mt-3 text-xs text-sky-900">이름은 10자까지 쓸 수 있어. 가입은 필요 없어.</p>
           {error && <p id="village-entry-error" role="alert" className="mt-4 rounded-2xl border border-red-100/60 bg-red-50/85 p-3 text-sm leading-6 text-red-700">{error}</p>}
           <button type="submit" disabled={!nickname.trim() || isSubmitting} className="mt-6 min-h-14 w-full rounded-2xl bg-linear-to-br from-orange-400 to-orange-500 px-4 py-4 text-lg font-bold text-white shadow-lg shadow-orange-500/25 transition-colors hover:from-orange-300 hover:to-orange-400 disabled:cursor-not-allowed disabled:opacity-40 sm:rounded-3xl">{isSubmitting ? "마을에 들어가는 중…" : "마을 산책하기"}</button>

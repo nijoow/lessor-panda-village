@@ -1,5 +1,7 @@
 "use client";
 
+import { MAX_CHAT_LENGTH } from "@/domain/world";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getNicknameColor } from "@/utils/color";
 import { useChatStore } from "@/stores/chatStore";
@@ -114,7 +116,7 @@ export const ChatHUD = ({ onSendMessage, onFocusChange, readOnly = false }: Prop
               onCompositionStart={() => { composingRef.current = true; }}
               onCompositionEnd={() => { composingRef.current = false; }}
               placeholder={readOnly ? "연결되면 대화할 수 있어" : "인사를 건네봐"}
-              maxLength={100}
+              maxLength={MAX_CHAT_LENGTH}
               readOnly={readOnly}
               className="min-w-0 flex-1 rounded-lg border-none bg-transparent px-2 py-3.5 text-base font-bold text-white placeholder:text-white/40 sm:px-0 sm:text-lg"
             />

@@ -2,28 +2,11 @@
  * React hooks and frame scheduling are controlled here, not browser-rendered.
  */
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
-import vm from "node:vm";
 import { test } from "node:test";
 import { setImmediate } from "node:timers/promises";
-import ts from "typescript";
+import { loadSource } from "./helpers/load-source.mjs";
 import * as THREE from "three";
 
-function loadSource(path, dependencies = {}, globals = {}) {
-  const url = new URL(`../../${path}`, import.meta.url);
-  const require = createRequire(url);
-  const code = ts.transpileModule(readFileSync(url, "utf8"), {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
-  }).outputText;
-  const sourceModule = { exports: {} };
-  vm.runInNewContext(code, {
-    module: sourceModule, exports: sourceModule.exports, console, Date, AbortSignal, ...globals,
-    require: (name) => Object.hasOwn(dependencies, name) ? dependencies[name] : require(name),
-  }, { filename: fileURLToPath(url) });
-  return sourceModule.exports;
-}
 
 function deferred() {
   let resolve;
@@ -201,31 +184,19 @@ test("harvesting and respawning bamboo both invalidate cached shadows", () => {
     setTimeout: (callback) => { respawns.push(callback); },
   });
   const effects = [];
-  const graphics = { quality: "high", runtime: { shadowRevision: 0 } };
-  const useGraphicsStore = (selector) => selector(graphics);
-  useGraphicsStore.getState = () => graphics;
-  const { Player } = loadSource("src/components/world/Player.tsx", {
-    react: { useRef: (value) => ({ current: value }), useCallback: (fn) => fn, forwardRef: (fn) => fn, useImperativeHandle() {}, useEffect: (fn) => effects.push(fn) },
-    three: THREE,
-    "@react-three/fiber": { useFrame() {} },
-    "@react-three/drei": { useKeyboardControls: () => [null, () => ({})] },
-    "@/constants/playerAnimations": { PLAYER_ANIM: { IDLE: "idle" } },
-    "@/constants/world": { BENCHES: [], BAMBOO: [], NOTICE_BOARDS: [] },
-    "@/utils/collision": {}, "@/utils/pathfinder": {},
-    "@/utils/math": loadSource("src/utils/math.ts"),
-    "@/stores/moveTargetStore": { useMoveTargetStore: (selector) => selector({ request: null }) },
-    "@/stores/interactionStore": {}, "@/stores/zoneStore": {}, "@/stores/guestbookStore": {},
-    "@/stores/harvestStore": { useHarvestStore }, "@/stores/graphicsStore": { useGraphicsStore },
-    "@/lib/audio": {},
-    "./PandaModel": { usePandaModel: () => ({ nodes: {}, materials: {}, playAction() {}, getCurrentAction() {} }), PandaBody() {}, PandaNameTag() {} },
+  const { worldFrameState } = loadSource("src/runtime/worldFrameState.ts");
+  const { useWorldShadowSignals: runShadowSignals } = loadSource("src/hooks/useWorldShadowSignals.ts", {
+    react: { useEffect: (fn) => effects.push(fn) },
+    "@/stores/harvestStore": { useHarvestStore },
+    "@/runtime/worldFrameState": { worldFrameState },
   });
-  Player({ id: "local", nickname: "밤톨" }, null);
+  runShadowSignals();
   const cleanups = effects.map((effect) => effect());
   try {
     useHarvestStore.getState().harvest(0);
-    assert.equal(graphics.runtime.shadowRevision, 1);
+    assert.equal(worldFrameState.shadows.revision, 1);
     respawns[0]();
-    assert.equal(graphics.runtime.shadowRevision, 2);
+    assert.equal(worldFrameState.shadows.revision, 2);
   } finally {
     for (const cleanup of cleanups) cleanup?.();
   }

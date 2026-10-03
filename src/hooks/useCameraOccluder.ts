@@ -3,8 +3,7 @@
 import { useLayoutEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { useGraphicsStore } from "@/stores/graphicsStore";
-import { useZoneStore } from "@/stores/zoneStore";
+import { worldFrameState } from "@/runtime/worldFrameState";
 
 const CHECK_INTERVAL = 0.2;
 // Spread large-model tests across frames even when several checks become due.
@@ -117,9 +116,8 @@ export function useCameraOccluder(source: THREE.Group, placementKey: string) {
     runtime.checkIn -= delta;
     if (runtime.checkIn <= 0) {
       runtime.checkIn = CHECK_INTERVAL;
-      const { playerPos } = useZoneStore.getState();
-      const { playerY } = useGraphicsStore.getState().runtime;
-      runtime.ray.origin.set(playerPos.x, playerY + 1.4, playerPos.z);
+      const player = worldFrameState.player;
+      runtime.ray.origin.set(player.x, player.y + 1.4, player.z);
       runtime.ray.direction.subVectors(state.camera.position, runtime.ray.origin);
       const distance = runtime.ray.direction.length();
       runtime.ray.direction.normalize();

@@ -23,7 +23,9 @@ const nodeKey = (x: number, z: number) => `${x},${z}`;
 /**
  * 두 점 사이에 장애물이 있는지 확인 (경로 단순화용)
  */
-export const isPathClear = (start: Point, end: Point): boolean => {
+export type CollisionCheck = (x: number, z: number, y?: number) => boolean;
+
+export const isPathClear = (start: Point, end: Point, isBlocked: CollisionCheck = checkCollision): boolean => {
   const dist = Math.sqrt((end.x - start.x) ** 2 + (end.z - start.z) ** 2);
   const steps = Math.ceil(dist / (GRID_SIZE / 2));
 
@@ -31,7 +33,7 @@ export const isPathClear = (start: Point, end: Point): boolean => {
     const t = i / steps;
     const checkX = start.x + (end.x - start.x) * t;
     const checkZ = start.z + (end.z - start.z) * t;
-    if (checkCollision(checkX, checkZ, 0)) {
+    if (isBlocked(checkX, checkZ, 0)) {
       return false;
     }
   }
@@ -42,14 +44,14 @@ export const isPathClear = (start: Point, end: Point): boolean => {
  * A* 길찾기 알고리즘.
  * 경로를 찾지 못하면 빈 배열을 반환합니다 (호출 측에서 이동하지 않음).
  */
-export const findPath = (start: Point, end: Point): Point[] => {
+export const findPath = (start: Point, end: Point, isBlocked: CollisionCheck = checkCollision): Point[] => {
   // 목표지점이 충돌 구역이면 이동 불가
-  if (checkCollision(end.x, end.z, 0)) {
+  if (isBlocked(end.x, end.z, 0)) {
     return [];
   }
 
   // 직선 경로가 뚫려 있으면 바로 반환
-  if (isPathClear(start, end)) {
+  if (isPathClear(start, end, isBlocked)) {
     return [end];
   }
 
@@ -89,7 +91,7 @@ export const findPath = (start: Point, end: Point): Point[] => {
     const distToEnd = Math.sqrt(
       (current.x - end.x) ** 2 + (current.z - end.z) ** 2,
     );
-    if (distToEnd < GRID_SIZE) {
+    if (distToEnd < GRID_SIZE && isPathClear(current, end, isBlocked)) {
       const path: Point[] = [];
       let temp: Node | null = current;
       while (temp) {
@@ -99,7 +101,7 @@ export const findPath = (start: Point, end: Point): Point[] => {
       path.reverse();
       path.push(end); // 정확한 최종 목적지 추가
 
-      return simplifyPath(path);
+      return simplifyPath(path, isBlocked);
     }
 
     openSet.splice(currentIndex, 1);
@@ -118,7 +120,7 @@ export const findPath = (start: Point, end: Point): Point[] => {
       const key = nodeKey(nx, nz);
 
       if (closedSet.has(key)) continue;
-      if (checkCollision(nx, nz, 0)) continue;
+      if (isBlocked(nx, nz, 0) || !isPathClear(current, { x: nx, z: nz }, isBlocked)) continue;
 
       const gScore = current.g + (move.x !== 0 && move.z !== 0 ? 1.414 : 1);
 
@@ -152,14 +154,14 @@ export const findPath = (start: Point, end: Point): Point[] => {
  * 경로 단순화 (String Pulling)
  * 직선으로 갈 수 있는 중간 노드들을 제거하여 부드럽게 만듦
  */
-const simplifyPath = (path: Point[]): Point[] => {
+const simplifyPath = (path: Point[], isBlocked: CollisionCheck): Point[] => {
   if (path.length <= 2) return path;
 
   const simplified: Point[] = [path[0]];
   let currentBase = path[0];
 
   for (let i = 2; i < path.length; i++) {
-    if (!isPathClear(currentBase, path[i])) {
+    if (!isPathClear(currentBase, path[i], isBlocked)) {
       simplified.push(path[i - 1]);
       currentBase = path[i - 1];
     }

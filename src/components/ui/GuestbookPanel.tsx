@@ -3,8 +3,8 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { getNicknameColor } from "@/utils/color";
-import { MAX_NOTE_LENGTH } from "@/hooks/useGuestbook";
-import { GuestbookNote, NOTE_COST, useGuestbookStore } from "@/stores/guestbookStore";
+import { MAX_NOTE_LENGTH, NOTE_COST, type GuestbookNote } from "@/domain/guestbook";
+import { useGuestbookStore } from "@/stores/guestbookStore";
 import { useHarvestStore } from "@/stores/harvestStore";
 
 interface Props {

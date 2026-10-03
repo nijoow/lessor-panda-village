@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { RealtimeChannel } from "@supabase/supabase-js";
 import { WORLD_BOUNDS } from "@/constants/world";
-import { PLAYER_ANIM } from "@/constants/playerAnimations";
+import { PLAYER_ANIM, type PlayerAnimType } from "@/constants/playerAnimations";
 import { supabase } from "@/lib/supabase";
 import { useChatStore } from "@/stores/chatStore";
 import {
@@ -9,8 +9,8 @@ import {
   PlayerState,
 } from "@/types/multiplayer";
 
-export const MAX_CHAT_LENGTH = 100;
-export const MAX_NICKNAME_LENGTH = 10;
+import { MAX_CHAT_LENGTH, MAX_NICKNAME_LENGTH } from "@/domain/world";
+import type { PlayerPose } from "@/domain/player";
 
 // presence로 공유되는 데이터 형상 (수신 값은 신뢰할 수 없으므로 optional)
 interface PresencePayload {
@@ -36,9 +36,9 @@ const sanitizeNickname = (value: unknown): string =>
 
 const VALID_ANIMS = new Set<string>(Object.values(PLAYER_ANIM));
 
-const sanitizeAnim = (value: unknown): string =>
+const sanitizeAnim = (value: unknown): PlayerAnimType =>
   typeof value === "string" && VALID_ANIMS.has(value)
-    ? value
+    ? value as PlayerAnimType
     : PLAYER_ANIM.IDLE;
 
 export const useMultiplayer = (
@@ -56,7 +56,7 @@ export const useMultiplayer = (
   const knownPresenceIdsRef = useRef<Set<string>>(new Set());
   const channelRef = useRef<RealtimeChannel | null>(null);
   const isChannelReadyRef = useRef(false);
-  const latestMoveRef = useRef({ x: 0, y: 0, z: 0, ry: 0, anim: PLAYER_ANIM.IDLE as string });
+  const latestMoveRef = useRef<PlayerPose>({ x: 0, y: 0, z: 0, ry: 0, anim: PLAYER_ANIM.IDLE });
 
   useEffect(() => {
     let cancelled = false;
@@ -273,7 +273,7 @@ export const useMultiplayer = (
   }, [nickname, worldKey, myId, retryKey]);
 
   const broadcastMove = useCallback(
-    (state: Omit<PlayerState, "id" | "nickname" | "lastUpdated">) => {
+    (state: PlayerPose) => {
       latestMoveRef.current = state;
       if (
         !channelRef.current ||

@@ -10,7 +10,6 @@ import {
   BAMBOO,
   WORLD_BOUNDS,
 } from "@/constants/world";
-import { useHarvestStore } from "@/stores/harvestStore";
 
 /**
  * 공간 해시 그리드 기반 충돌 판정.
@@ -29,7 +28,7 @@ const FENCE_THICKNESS = 0.4;
 
 type Shape =
   | { kind: "circle"; x: number; z: number; r2: number; maxY: number }
-  // 수확으로 일시 제거되는 대나무 (idx로 harvestedSet 조회)
+  // 수확으로 일시 제거되는 대나무 (idx로 isHarvested 조회)
   | { kind: "bamboo"; x: number; z: number; r2: number; idx: number }
   | {
       kind: "box";
@@ -129,7 +128,7 @@ for (const f of COLLISION_FENCES) {
 }
 
 // 충돌 체크 함수 (y값을 추가하여 점프 시 통과 여부 결정)
-export const checkCollision = (x: number, z: number, y: number = 0) => {
+export const checkCollision = (x: number, z: number, y: number = 0, isHarvested: (index: number) => boolean = () => false) => {
   // 월드 경계
   if (
     x < WORLD_BOUNDS.minX ||
@@ -142,10 +141,9 @@ export const checkCollision = (x: number, z: number, y: number = 0) => {
   const shapes = grid.get(keyOf(cellOf(x), cellOf(z)));
   if (!shapes) return false;
 
-  const harvested = useHarvestStore.getState().harvestedSet;
   for (const s of shapes) {
     if (s.kind === "bamboo") {
-      if (harvested.has(s.idx)) continue;
+      if (isHarvested(s.idx)) continue;
       const dx = x - s.x;
       const dz = z - s.z;
       if (dx * dx + dz * dz < s.r2) return true;

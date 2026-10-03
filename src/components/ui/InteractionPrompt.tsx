@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useInteractionStore } from "@/stores/interactionStore";
 import { useHarvestStore } from "@/stores/harvestStore";
 import { useGuestbookStore } from "@/stores/guestbookStore";
+import { chooseInteraction } from "@/domain/interaction";
 
 /**
  * 상호작용 가능 오브젝트 근처에서 표시되는 안내 프롬프트.
@@ -20,12 +21,13 @@ export const InteractionPrompt = () => {
   const isGuestbookOpen = useGuestbookStore((s) => s.isOpen);
   const openGuestbook = useGuestbookStore((s) => s.open);
 
-  const benchMode = isSitting || nearbyBenchIndex !== null;
-  const boardMode = !benchMode && nearbyBoardIndex !== null;
+  const action = chooseInteraction({ sitting: isSitting, bench: nearbyBenchIndex, board: nearbyBoardIndex, bamboo: nearbyBambooIndex });
+  const benchMode = action === "sit" || action === "stand";
+  const boardMode = action === "guestbook";
   // 패널이 열려 있는 동안에는 프롬프트를 숨긴다
   const visible =
     !isGuestbookOpen &&
-    (benchMode || boardMode || nearbyBambooIndex !== null);
+    action !== null;
   const label = benchMode
     ? isSitting
       ? "일어서기"

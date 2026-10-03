@@ -3,7 +3,8 @@
 import { memo, useMemo } from "react";
 import { Text } from "@react-three/drei";
 import { NOTICE_BOARDS, NoticeBoardPlacement } from "@/constants/world";
-import { BOARD_SLOT_COUNT, useGuestbookStore } from "@/stores/guestbookStore";
+import { useGuestbookStore } from "@/stores/guestbookStore";
+import { BOARD_SLOT_COUNT } from "@/domain/guestbook";
 import { getNicknameColor } from "@/utils/color";
 
 /**

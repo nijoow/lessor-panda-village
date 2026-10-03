@@ -1,10 +1,7 @@
-import type { GuestbookNote } from "@/stores/guestbookStore";
-
-export const MAX_NOTE_LENGTH = 80;
-export const NOTE_PAGE_SIZE = 50;
+import { MAX_NOTE_LENGTH, NOTE_PAGE_SIZE, type GuestbookNote } from "@/domain/guestbook";
+import { MAX_NICKNAME_LENGTH, UUID_PATTERN as UUID } from "@/domain/world";
 const CACHE_VERSION = 1;
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Public snapshots contain a palette index, never the author's account ID. */
 export const toGuestbookNote = (raw: unknown): GuestbookNote | null => {
@@ -15,7 +12,7 @@ export const toGuestbookNote = (raw: unknown): GuestbookNote | null => {
   const createdAt = typeof row.created_at === "string" ? Date.parse(row.created_at) : NaN;
   if (!body || body.length > MAX_NOTE_LENGTH || !Number.isFinite(createdAt)) return null;
   const authorId = typeof row.author_id === "string" && UUID.test(row.author_id) ? row.author_id : null;
-  const nickname = typeof row.author_nickname === "string" ? row.author_nickname.trim().slice(0, 10) : "";
+  const nickname = typeof row.author_nickname === "string" ? row.author_nickname.trim().slice(0, MAX_NICKNAME_LENGTH) : "";
   const index = row.author_color_index;
   // 'd' ... 'm' have char codes 100 ... 109, mapping to palette indexes 0 ... 9.
   const publicColorKey = typeof index === "number" && Number.isInteger(index) && index >= 0 && index <= 9 ? String.fromCharCode(100 + index) : null;

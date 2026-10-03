@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
-import { useZoneStore } from "@/stores/zoneStore";
+import { worldFrameState } from "@/runtime/worldFrameState";
 
 const STATUS_VISIBLE_MS = 5000;
 
@@ -13,7 +13,7 @@ export const VillageHeader = ({ isNight }: { isNight: boolean }) => {
   const [showStatus, setShowStatus] = useState(false);
 
   useEffect(() => {
-    const position = useZoneStore.getState().playerPos;
+    const position = worldFrameState.player;
     const startX = position.x;
     const startZ = position.z;
     const timer = window.setInterval(() => {

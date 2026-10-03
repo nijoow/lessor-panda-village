@@ -15,7 +15,8 @@ import { EffectComposer, Bloom, SMAA } from "@react-three/postprocessing";
 import { ReactNode, useMemo, useRef, Suspense, useEffect } from "react";
 import * as THREE from "three";
 import { frameLerp } from "@/utils/math";
-import { useZoneStore } from "@/stores/zoneStore";
+import { worldFrameState } from "@/runtime/worldFrameState";
+import { useWorldShadowSignals } from "@/hooks/useWorldShadowSignals";
 import { WORLD_FOG, GRAPHICS_PRESETS } from "@/constants/rendering";
 
 import { useGraphicsStore } from "@/stores/graphicsStore";
@@ -72,7 +73,7 @@ const DayNightCycle = ({ isNight }: { isNight: boolean }) => {
     const dayIntensity = Math.max(0, sunY);
 
     if (dirLightRef.current) {
-      const p = useZoneStore.getState().playerPos;
+      const p = worldFrameState.player;
       dirLightRef.current.position.set(
         p.x + sunX * 30,
         Math.max(sunY * 30, 8),
@@ -135,20 +136,20 @@ const DayNightCycle = ({ isNight }: { isNight: boolean }) => {
     // 걷기·회전은 위치로, 제자리 이모트는 playerPose로, 낮밤 전환 중의
     // 해 이동은 진행도로 잡는다. 그 외에는 직전 그림자맵을 그대로 쓴다.
     const anchor = shadowAnchor.current;
-    const { playerPos, playerPose } = useZoneStore.getState();
-    const runtime = useGraphicsStore.getState().runtime;
+    const playerPos = worldFrameState.player;
+    const runtime = worldFrameState.shadows;
     if (
-      playerPose.emoting ||
+      playerPos.emoting ||
       state.clock.elapsedTime < runtime.animationUntil ||
-      Math.abs(runtime.playerY - anchor.y) > 0.005 ||
-      runtime.shadowRevision !== anchor.revision ||
+      Math.abs(playerPos.y - anchor.y) > 0.005 ||
+      runtime.revision !== anchor.revision ||
       Math.abs(playerPos.x - anchor.x) > SHADOW_MOVE_EPS ||
       Math.abs(playerPos.z - anchor.z) > SHADOW_MOVE_EPS ||
       Math.abs(playerPos.ry - anchor.ry) > SHADOW_MOVE_EPS ||
       Math.abs(sunProgress.current - anchor.sun) > SHADOW_SUN_EPS
     ) {
-      anchor.y = runtime.playerY;
-      anchor.revision = runtime.shadowRevision;
+      anchor.y = playerPos.y;
+      anchor.revision = runtime.revision;
       anchor.x = playerPos.x;
       anchor.z = playerPos.z;
       anchor.ry = playerPos.ry;
@@ -255,6 +256,7 @@ function CanvasUnavailable() {
 
 function GraphicsRuntime({ onUnavailable }: Pick<SceneProps, "onUnavailable">) {
   useGraphicsMonitor();
+  useWorldShadowSignals();
   const getThree = useThree((state) => state.get);
   const quality = useGraphicsStore((state) => state.quality);
   useEffect(() => {

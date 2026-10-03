@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { GLOBAL_WORLD_KEY } from "@/hooks/useGlobalWorld";
-import { MAX_NOTE_LENGTH, NOTE_PAGE_SIZE, readNoteCache, toGuestbookNote, writeNoteCache } from "@/lib/guestbook";
-import { GuestbookNote, NOTE_COST, useGuestbookStore } from "@/stores/guestbookStore";
+import { GLOBAL_WORLD_KEY } from "@/domain/world";
+import { readNoteCache, toGuestbookNote, writeNoteCache } from "@/lib/guestbook";
+import { MAX_NOTE_LENGTH, NOTE_PAGE_SIZE, NOTE_COST, type GuestbookNote } from "@/domain/guestbook";
+import { useGuestbookStore } from "@/stores/guestbookStore";
 import { useHarvestStore } from "@/stores/harvestStore";
-export { MAX_NOTE_LENGTH } from "@/lib/guestbook";
 const FIELDS = "id,body,created_at,author_id,author_nickname,author_color_key";
 
 const writeMessage = (error: unknown): string => {

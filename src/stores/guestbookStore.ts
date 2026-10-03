@@ -1,23 +1,6 @@
 import { create } from "zustand";
 
-/** 게시판에 물리적으로 걸리는 쪽지 수 (나머지는 패널 목록에서만 보인다) */
-export const BOARD_SLOT_COUNT = 12;
-
-/** 쪽지 한 장의 죽순 가격 */
-export const NOTE_COST = 1;
-
-export interface GuestbookNote {
-  id: string;
-  body: string;
-  authorId: string | null;
-  colorKey: string;
-  createdAtCursor: string;
-  nickname: string;
-  /** epoch ms (서버 시각) */
-  createdAt: number;
-}
-
-type GuestbookStatus = "idle" | "loading" | "ready" | "error";
+import type { GuestbookNote, GuestbookStatus } from "@/domain/guestbook";
 
 /**
  * 방명록 상태.

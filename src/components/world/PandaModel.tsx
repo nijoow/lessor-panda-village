@@ -10,6 +10,7 @@ import { GRAPHICS_PRESETS } from "@/constants/rendering";
 import { ChatBubble } from "./ChatBubble";
 import { getNicknameColor } from "@/utils/color";
 import {
+  PLAYER_ANIM,
   PLAYER_ANIM_TIMESCALE,
   PlayerAnimType,
 } from "@/constants/playerAnimations";
@@ -51,14 +52,14 @@ export const usePandaModel = (groupRef: RefObject<THREE.Group>, remote = false) 
   const mixer = useMemo(() => new THREE.AnimationMixer(new THREE.Group()), []);
   const actions = useRef<Record<string, THREE.AnimationAction>>({});
   const pendingDelta = useRef(0);
-  const currentActionRef = useRef<string>("");
+  const currentActionRef = useRef<PlayerAnimType | null>(null);
   useEffect(() => {
     const root = groupRef.current;
     return () => {
       mixer.stopAllAction();
       mixer.uncacheRoot(root);
       actions.current = {};
-      currentActionRef.current = "";
+      currentActionRef.current = null;
     };
   }, [mixer, groupRef]);
   useFrame((state, delta) => {
@@ -81,12 +82,12 @@ export const usePandaModel = (groupRef: RefObject<THREE.Group>, remote = false) 
   // 현재 클립에서 지정 클립으로 페이드 전환 (동일 클립이면 no-op)
   // timeScaleFactor: 기준 이동 속도 대비 배율 (NPC처럼 느리게 걷는 경우)
   const playAction = useCallback(
-    (name: string, fade = 0.2, timeScaleFactor = 1) => {
+    (name: PlayerAnimType, fade = 0.2, timeScaleFactor = 1) => {
       if (currentActionRef.current === name) return;
       const clip = allAnimations.find((animation) => animation.name === name);
       if (!clip || !groupRef.current) return;
       const next = actions.current[name] ?? (actions.current[name] = mixer.clipAction(clip, groupRef.current));
-      actions.current[currentActionRef.current]?.fadeOut(fade);
+      if (currentActionRef.current) actions.current[currentActionRef.current]?.fadeOut(fade);
       // 걷기/달리기는 발 미끄러짐 보정을 위해 가속 재생
       next.setEffectiveTimeScale(
         (PLAYER_ANIM_TIMESCALE[name as PlayerAnimType] ?? 1) * timeScaleFactor,
@@ -97,7 +98,7 @@ export const usePandaModel = (groupRef: RefObject<THREE.Group>, remote = false) 
     [allAnimations, groupRef, mixer],
   );
 
-  const getCurrentAction = useCallback(() => currentActionRef.current, []);
+  const getCurrentAction = useCallback(() => currentActionRef.current ?? PLAYER_ANIM.IDLE, []);
 
   return { nodes, materials, playAction, getCurrentAction };
 };

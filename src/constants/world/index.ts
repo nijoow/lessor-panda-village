@@ -11,6 +11,7 @@ import {
   FenceLayout,
   ZoneLayout,
 } from "./types";
+import { BENCH_SPEC } from "./objects";
 import { VILLAGE } from "./village";
 import { SOUTH_FIELD } from "./southField";
 import { BAMBOO_GROVE } from "./bambooGrove";
@@ -89,8 +90,8 @@ export const STONE_PATHS = ZONES.flatMap((z) => z.stonePaths ?? []);
 // ---------- 충돌 판정용 파생 데이터 (collision.ts에서 사용) ----------
 // 좌석 2.2 x 0.8 크기 기준, ±90° 회전 시 긴 축이 z 방향
 const benchBox = ({ x, z, rotation }: BenchPlacement): CollisionBox => {
-  const halfW = 1.1;
-  const halfD = 0.4;
+  const halfW = BENCH_SPEC.width / 2;
+  const halfD = BENCH_SPEC.depth / 2;
   const rotated = Math.abs(Math.abs(rotation) - Math.PI / 2) < 0.01;
   return rotated
     ? { minX: x - halfD, maxX: x + halfD, minZ: z - halfW, maxZ: z + halfW }

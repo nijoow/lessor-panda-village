@@ -2,6 +2,7 @@ import { useRef, useMemo, useState, useEffect } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { useGraphicsStore } from "@/stores/graphicsStore";
+import { VILLAGE } from "@/constants/world/village";
 import { GRAPHICS_PRESETS } from "@/constants/rendering";
 import { frameLerp } from "@/utils/math";
 
@@ -12,7 +13,7 @@ const getRandomPos = (spread: number) => (Math.random() - 0.5) * spread;
 
 const PETAL_COUNT = 240;
 const PETAL_SPREAD = 28;
-const TREE_CENTER = { x: -6, z: 5 };
+const TREE_CENTER = VILLAGE.landmarkTrees?.[0] ?? { x: 0, z: 0 };
 const CONCENTRATION_RADIUS = 7;
 const PETAL_COLORS = [
   new THREE.Color("#ffb3c6"),
@@ -297,7 +298,7 @@ const BUTTERFLY_COUNT = 20;
 
 // 존별로 흩어 두어 어느 구역에 있어도 한두 마리가 보인다
 const BUTTERFLY_ANCHORS = [
-  { x: -6, z: 5 }, // 마을 고목
+  TREE_CENTER, // 마을 고목
   { x: 6, z: 8 }, // 마을 광장
   { x: 2, z: 28 }, // 남쪽 들판
   { x: 33, z: 31 }, // 대숲 공터
