@@ -1,5 +1,7 @@
 "use client";
 
+import assets from "@/constants/assets.json";
+
 import { useGLTF } from "@react-three/drei";
 import { useCameraOccluder } from "@/hooks/useCameraOccluder";
 
@@ -14,12 +16,15 @@ export const House = ({
   rotation = [0, 0, 0],
   scale = 1,
 }: Props) => {
-  const { scene } = useGLTF("/models/house/panda_house.glb");
+  const { scene } = useGLTF(assets.scenery.house.url);
 
   // 지오메트리만 꺼내 쓰면 GLB 노드 자체의 변환이 사라진다.
   // meshopt 양자화는 정점을 정규화 범위로 굽고 노드 스케일로 원래 크기를
   // 복원하므로, 씬을 통째로 복제해야 압축 전후 크기가 같게 유지된다.
-  const model = useCameraOccluder(scene, `${position.join(",")}:${rotation.join(",")}:${scale}`);
+  const model = useCameraOccluder(
+    scene,
+    `${position.join(",")}:${rotation.join(",")}:${scale}`,
+  );
 
   return (
     <group position={position} rotation={rotation} scale={scale} dispose={null}>
@@ -28,4 +33,4 @@ export const House = ({
   );
 };
 
-useGLTF.preload("/models/house/panda_house.glb");
+useGLTF.preload(assets.scenery.house.url);

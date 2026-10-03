@@ -1,17 +1,27 @@
 "use client";
 
+import assets from "@/constants/assets.json";
+
 import { useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
 import { useGLTF, Text } from "@react-three/drei";
 import { useCameraOccluder } from "@/hooks/useCameraOccluder";
 import { BENCH_SPEC } from "@/constants/world/objects";
-import { BridgePlacement, LandmarkTreePlacement, SignPlacement } from "@/constants/world";
+import {
+  BridgePlacement,
+  LandmarkTreePlacement,
+  SignPlacement,
+} from "@/constants/world";
 import { createRockGeometry } from "./geometry";
 
 // ---------- 거대 고목 (Ancient Tree - 제공된 GLB 모델) ----------
-export const AncientTree = ({ placement }: { placement: LandmarkTreePlacement }) => {
-  const { scene } = useGLTF("/models/tree/cherry_blossom_tree.glb");
+export const AncientTree = ({
+  placement,
+}: {
+  placement: LandmarkTreePlacement;
+}) => {
+  const { scene } = useGLTF(assets.scenery.tree.url);
 
   const treeModel = useCameraOccluder(
     scene,
@@ -77,7 +87,11 @@ interface RockProps {
   rotation?: number;
 }
 
-export const Rock = ({ position, scale = [2, 1.4, 2], rotation = 0 }: RockProps) => {
+export const Rock = ({
+  position,
+  scale = [2, 1.4, 2],
+  rotation = 0,
+}: RockProps) => {
   return (
     <mesh
       castShadow
@@ -173,7 +187,8 @@ export const Bridge = ({ bridge }: { bridge: BridgePlacement }) => {
     >
       {/* 상판 널빤지 (길이 방향 = x축) */}
       {Array.from({ length: plankCount }, (_, i) => {
-        const px = -bridge.length / 2 + (i + 0.5) * (bridge.length / plankCount);
+        const px =
+          -bridge.length / 2 + (i + 0.5) * (bridge.length / plankCount);
         return (
           <mesh key={i} castShadow receiveShadow position={[px, 0.18, 0]}>
             <boxGeometry args={[0.52, 0.1, bridge.width]} />
@@ -299,4 +314,4 @@ export const Lantern = ({
   );
 };
 
-useGLTF.preload("/models/tree/cherry_blossom_tree.glb");
+useGLTF.preload(assets.scenery.tree.url);

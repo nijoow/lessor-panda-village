@@ -1,3 +1,4 @@
+import { playerPath } from "./lib/assets.mjs";
 /**
  * base.glb의 스켈레톤에 네이티브로 맞는 "sit" 애니메이션 클립 GLB를 생성합니다.
  * 방식 설명은 scripts/lib/clip-gen.mjs 참고.
@@ -17,7 +18,7 @@ import {
   Z,
 } from "./lib/clip-gen.mjs";
 
-const OUT_PATH = "public/models/player/sitting.glb";
+const OUT_PATH = playerPath("sitting");
 
 // ---------- 앉기 포즈 (월드 프레임 델타, 캐릭터는 +Z를 바라봄) ----------
 // 월드 X축 음수 회전 = 해당 부위가 앞(+Z)으로 접힘
@@ -64,7 +65,7 @@ const breathDelta = (boneName, phase) => {
   }
 };
 
-const rig = loadRig("public/models/player/base.glb");
+const rig = loadRig(playerPath("base"));
 
 const clip = solveClip(rig, {
   name: "sit",

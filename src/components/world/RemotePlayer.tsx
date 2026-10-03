@@ -1,5 +1,7 @@
 "use client";
 
+import assets from "@/constants/assets.json";
+
 import { useGLTF } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import { useMemo, useRef, memo, useState } from "react";
@@ -17,13 +19,14 @@ interface Props {
 const MAX_DELTA = 0.1;
 
 const RemotePlayerInner = ({ id, getPlayerData }: Props) => {
-  const medium = useGLTF("/models/player/lod-medium.glb");
-  const far = useGLTF("/models/player/lod-far.glb");
+  const medium = useGLTF(assets.player.urls.lodMedium);
+  const far = useGLTF(assets.player.urls.lodFar);
   const lodGeometries = useMemo(() => {
-    const midMesh = medium.nodes.char1;
+    const midMesh = medium.nodes[assets.player.meshNode];
     const farMesh = far.nodes.char1;
     return midMesh instanceof THREE.Mesh && farMesh instanceof THREE.Mesh
-      ? [midMesh.geometry, farMesh.geometry] as const : undefined;
+      ? ([midMesh.geometry, farMesh.geometry] as const)
+      : undefined;
   }, [medium.nodes, far.nodes]);
   const groupRef = useRef<THREE.Group>(null!);
   // 닉네임은 useState로 관리 (변경 빈도가 매우 낮으므로 안전)
@@ -48,11 +51,21 @@ const RemotePlayerInner = ({ id, getPlayerData }: Props) => {
       initialized.current = false;
       return;
     }
-    depthPoint.current.set(data.x, data.y + 1.5, data.z).applyMatrix4(state.camera.matrixWorldInverse);
+    depthPoint.current
+      .set(data.x, data.y + 1.5, data.z)
+      .applyMatrix4(state.camera.matrixWorldInverse);
     bounds.current.center.set(data.x, data.y + 1.5, data.z);
-    viewProjection.current.multiplyMatrices(state.camera.projectionMatrix, state.camera.matrixWorldInverse);
+    viewProjection.current.multiplyMatrices(
+      state.camera.projectionMatrix,
+      state.camera.matrixWorldInverse,
+    );
     frustum.current.setFromProjectionMatrix(viewProjection.current);
-    groupRef.current.visible = fogSphereVisible(-depthPoint.current.z, bounds.current.radius, getFogFar(state.scene)) && frustum.current.intersectsSphere(bounds.current);
+    groupRef.current.visible =
+      fogSphereVisible(
+        -depthPoint.current.z,
+        bounds.current.radius,
+        getFogFar(state.scene),
+      ) && frustum.current.intersectsSphere(bounds.current);
     if (!groupRef.current.visible) {
       // Resume at the current network pose, not the last pose seen by this camera.
       initialized.current = false;
@@ -73,10 +86,16 @@ const RemotePlayerInner = ({ id, getPlayerData }: Props) => {
       initialized.current = true;
     } else {
       groupRef.current.position.lerp(targetPos.current, t);
-      groupRef.current.rotation.y = lerpAngle(groupRef.current.rotation.y, data.ry, t);
+      groupRef.current.rotation.y = lerpAngle(
+        groupRef.current.rotation.y,
+        data.ry,
+        t,
+      );
     }
     groupRef.current.updateMatrixWorld();
-    nameTagRef.current.visible = state.camera.position.distanceToSquared(groupRef.current.position) < 55 * 55;
+    nameTagRef.current.visible =
+      state.camera.position.distanceToSquared(groupRef.current.position) <
+      55 * 55;
 
     // 애니메이션 동기화
     if (data.anim) playAction(data.anim);
@@ -84,8 +103,15 @@ const RemotePlayerInner = ({ id, getPlayerData }: Props) => {
 
   return (
     <group ref={groupRef} dispose={null}>
-      <PandaBody nodes={nodes} materials={materials} fakeShadow lodGeometries={lodGeometries} />
-      <group ref={nameTagRef}><PandaNameTag id={id} nickname={nickname} /></group>
+      <PandaBody
+        nodes={nodes}
+        materials={materials}
+        fakeShadow
+        lodGeometries={lodGeometries}
+      />
+      <group ref={nameTagRef}>
+        <PandaNameTag id={id} nickname={nickname} />
+      </group>
     </group>
   );
 };

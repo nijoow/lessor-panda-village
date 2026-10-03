@@ -1,3 +1,4 @@
+import { playerPath } from "./lib/assets.mjs";
 /**
  * 숨쉬기 idle 애니메이션 클립 GLB를 생성합니다.
  *
@@ -23,10 +24,10 @@ import {
   Z,
 } from "./lib/clip-gen.mjs";
 
-const OUT_PATH = "public/models/player/idle.glb";
+const OUT_PATH = playerPath("idle");
 const TWO_PI = Math.PI * 2;
 
-const rig = loadRig("public/models/player/base.glb");
+const rig = loadRig(playerPath("base"));
 
 // 4초 루프: 호흡 2회(2초/회) + 고개 스웨이 1회
 const idleClip = solveClip(rig, {

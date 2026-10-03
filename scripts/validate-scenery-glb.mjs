@@ -20,10 +20,7 @@
  * 사용: pnpm scenery:validate
  */
 import { readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+import { manifest, sourcePath, assetPath } from "./lib/assets.mjs";
 
 // ---------- 브라우저 API 최소 흉내 ----------
 // three의 WebP 지원 감지는 1x1 이미지를 로드해 height === 1인지 본다.
@@ -54,16 +51,7 @@ globalThis.URL.revokeObjectURL = () => {};
 
 const { GLTFLoader, MeshoptDecoder } = await import("three-stdlib");
 
-const TARGETS = [
-  {
-    source: "assets/scenery/source/panda_house.glb",
-    output: "public/models/house/panda_house.glb",
-  },
-  {
-    source: "assets/scenery/source/cherry_blossom_tree.glb",
-    output: "public/models/tree/cherry_blossom_tree.glb",
-  },
-];
+const TARGETS = Object.values(manifest.scenery);
 
 // 양자화는 위치를 정규화 범위로 굽고 노드 스케일로 되돌리므로
 // 부동소수 오차가 남는다. 모델 크기 대비 이 정도는 허용한다.
@@ -103,7 +91,9 @@ const measure = async (path) => {
     meshes++;
     vertices += node.geometry.attributes.position.count;
     node.geometry.computeBoundingBox();
-    const box = node.geometry.boundingBox.clone().applyMatrix4(node.matrixWorld);
+    const box = node.geometry.boundingBox
+      .clone()
+      .applyMatrix4(node.matrixWorld);
     for (let i = 0; i < 3; i++) {
       min[i] = Math.min(min[i], box.min.getComponent(i));
       max[i] = Math.max(max[i], box.max.getComponent(i));
@@ -117,11 +107,11 @@ const fmt = (v) => v.map((n) => n.toFixed(3)).join(", ");
 
 let failed = 0;
 
-for (const { source, output } of TARGETS) {
+for (const { source, url: output } of TARGETS) {
   const name = output.split("/").pop();
   try {
-    const before = await measure(join(ROOT, source));
-    const after = await measure(join(ROOT, output));
+    const before = await measure(sourcePath(source));
+    const after = await measure(assetPath(output));
 
     const problems = [];
 

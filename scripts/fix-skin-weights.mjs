@@ -19,9 +19,19 @@
  *
  * 사용법: node scripts/fix-skin-weights.mjs
  */
-import fs from "node:fs";
+import {
+  readGlb,
+  packedAccessorRange,
+  assertLegacySkin,
+  assertSkinWeights,
+  writeFileAtomic,
+} from "./lib/glb.mjs";
 
-const GLB_PATH = "public/models/player/base.glb";
+const GLB_PATH = process.argv[2];
+if (!GLB_PATH)
+  throw new Error(
+    "Usage: node scripts/fix-skin-weights.mjs <uncompressed-legacy-source.glb>",
+  );
 
 const ARM_CHAIN = new Set([
   "LeftShoulder",
@@ -40,24 +50,13 @@ const TAPER_START_HEAD_W = 0.25; // 여기서부터 선형 테이퍼 시작
 const FULL_PURGE_Y = 1.65; // 이 높이(m) 위에는 팔 살점이 없음 — 전부 제거
 const TAPER_START_Y = 1.45; // 여기서부터 선형 테이퍼 시작
 
-const glb = fs.readFileSync(GLB_PATH);
-const jsonLen = glb.readUInt32LE(12);
-const json = JSON.parse(glb.slice(20, 20 + jsonLen).toString());
-const binStart = 20 + jsonLen + 8;
+const document = readGlb(GLB_PATH);
+const { glb, json } = document;
 
-const accessorRange = (i) => {
-  const acc = json.accessors[i];
-  const bv = json.bufferViews[acc.bufferView];
-  const n = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4 }[acc.type];
-  return {
-    offset: binStart + (bv.byteOffset ?? 0) + (acc.byteOffset ?? 0),
-    count: acc.count,
-    n,
-    componentType: acc.componentType,
-  };
-};
+const accessorRange = (i) => packedAccessorRange(document, i);
 
 const mesh = json.meshes[0].primitives[0];
+assertLegacySkin(document, mesh);
 const jRange = accessorRange(mesh.attributes.JOINTS_0);
 const wRange = accessorRange(mesh.attributes.WEIGHTS_0);
 const pRange = accessorRange(mesh.attributes.POSITION);
@@ -68,9 +67,21 @@ const jointNames = json.skins[0].joints.map((j) => json.nodes[j].name);
 const vertexCount = wRange.count;
 
 // glb Buffer 위를 직접 읽고 쓰는 뷰 (제자리 패치)
-const joints = new Uint8Array(glb.buffer, glb.byteOffset + jRange.offset, vertexCount * 4);
-const weights = new Float32Array(glb.buffer, glb.byteOffset + wRange.offset, vertexCount * 4);
-const positions = new Float32Array(glb.buffer, glb.byteOffset + pRange.offset, vertexCount * 3);
+const joints = new Uint8Array(
+  glb.buffer,
+  glb.byteOffset + jRange.offset,
+  vertexCount * 4,
+);
+const weights = new Float32Array(
+  glb.buffer,
+  glb.byteOffset + wRange.offset,
+  vertexCount * 4,
+);
+const positions = new Float32Array(
+  glb.buffer,
+  glb.byteOffset + pRange.offset,
+  vertexCount * 3,
+);
 
 let touched = 0;
 let purgedWeight = 0;
@@ -131,10 +142,10 @@ for (let v = 0; v < vertexCount; v++) {
   purgedWeight += removed;
 }
 
-fs.writeFileSync(GLB_PATH, glb);
-
 console.log(`정점 ${vertexCount}개 중 ${touched}개 수정`);
-console.log(`제거된 팔 가중치 총량: ${purgedWeight.toFixed(1)}, 수정 전 최대 팔 가중치: ${maxArmBefore.toFixed(3)}`);
+console.log(
+  `제거된 팔 가중치 총량: ${purgedWeight.toFixed(1)}, 수정 전 최대 팔 가중치: ${maxArmBefore.toFixed(3)}`,
+);
 
 // ── 사후 검증: 완전 제거 대상 정점의 잔여 팔 가중치 + 가중치 합 정규화 ──
 let residualMax = 0;
@@ -158,3 +169,6 @@ if (residualCount > 0)
     `완전 제거 대상 ${residualCount}개 정점에 팔 가중치 잔존 (최대 ${residualMax})`,
   );
 console.log("✅ 완전 제거 정점 잔여 0 + 가중치 합 정규화 검증 통과");
+
+assertSkinWeights(document, mesh, json.skins[0].joints.length);
+writeFileAtomic(GLB_PATH, glb);

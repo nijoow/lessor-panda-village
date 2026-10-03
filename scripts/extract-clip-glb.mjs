@@ -13,18 +13,18 @@
  * 예:     node scripts/extract-clip-glb.mjs public/models/player/walking.glb \
  *             public/models/player/walking.glb   (제자리 교체 가능)
  */
-import fs from "node:fs";
+import { readGlb, accessorInfo, writeGlb } from "./lib/glb.mjs";
 
 const [srcPath, outPath] = process.argv.slice(2);
 if (!srcPath || !outPath) {
-  console.error("사용법: node scripts/extract-clip-glb.mjs <입력.glb> <출력.glb>");
+  console.error(
+    "사용법: node scripts/extract-clip-glb.mjs <입력.glb> <출력.glb>",
+  );
   process.exit(1);
 }
 
-const glb = fs.readFileSync(srcPath);
-const jsonLen = glb.readUInt32LE(12);
-const json = JSON.parse(glb.slice(20, 20 + jsonLen).toString());
-const binStart = 20 + jsonLen + 8;
+const document = readGlb(srcPath);
+const { json, bin } = document;
 
 // ---------- Armature 서브트리에서 본 노드 수집 (메시 노드 제외) ----------
 const srcNodes = json.nodes;
@@ -62,16 +62,23 @@ let binOffset = 0;
 
 const copyAccessor = (srcAccIdx) => {
   const acc = json.accessors[srcAccIdx];
-  const bv = json.bufferViews[acc.bufferView];
-  const compBytes = { 5120: 1, 5121: 1, 5122: 2, 5123: 2, 5125: 4, 5126: 4 }[
-    acc.componentType
-  ];
-  const n = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT4: 16 }[acc.type];
-  const byteLen = acc.count * n * compBytes;
-  const start = binStart + (bv.byteOffset ?? 0) + (acc.byteOffset ?? 0);
-  const data = glb.slice(start, start + byteLen);
+  const info = accessorInfo(document, srcAccIdx);
+  const size = info.elementBytes * info.elementCount;
+  const byteLen = acc.count * size;
+  const data = Buffer.alloc(byteLen);
+  for (let i = 0; i < acc.count; i++)
+    bin.copy(
+      data,
+      i * size,
+      info.offset + i * info.stride,
+      info.offset + i * info.stride + size,
+    );
 
-  outBufferViews.push({ buffer: 0, byteOffset: binOffset, byteLength: byteLen });
+  outBufferViews.push({
+    buffer: 0,
+    byteOffset: binOffset,
+    byteLength: byteLen,
+  });
   binParts.push(data);
   binOffset += (byteLen + 3) & ~3; // 4바이트 정렬
   if (byteLen % 4) binParts.push(Buffer.alloc(4 - (byteLen % 4)));
@@ -131,26 +138,7 @@ const gltf = {
   accessors: outAccessors,
 };
 
-const jsonBuf = Buffer.from(JSON.stringify(gltf));
-const jsonPad = (4 - (jsonBuf.length % 4)) % 4;
-const jsonChunk = Buffer.concat([jsonBuf, Buffer.alloc(jsonPad, 0x20)]);
-const binChunk = Buffer.concat(binParts);
-
-const header = Buffer.alloc(12);
-header.writeUInt32LE(0x46546c67, 0); // glTF magic
-header.writeUInt32LE(2, 4);
-header.writeUInt32LE(12 + 8 + jsonChunk.length + 8 + binChunk.length, 8);
-const jsonHeader = Buffer.alloc(8);
-jsonHeader.writeUInt32LE(jsonChunk.length, 0);
-jsonHeader.writeUInt32LE(0x4e4f534a, 4); // JSON
-const binHeader = Buffer.alloc(8);
-binHeader.writeUInt32LE(binChunk.length, 0);
-binHeader.writeUInt32LE(0x004e4942, 4); // BIN
-
-fs.writeFileSync(
-  outPath,
-  Buffer.concat([header, jsonHeader, jsonChunk, binHeader, binChunk]),
-);
+writeGlb(outPath, { json: gltf, bin: Buffer.concat(binParts) });
 
 console.log(
   `${srcPath} → ${outPath}: 본 ${outNodes.length}개, ` +

@@ -13,9 +13,19 @@
  *
  * 사용법: node scripts/fix-face-weights.mjs   (비압축 base.glb 전제)
  */
-import fs from "node:fs";
+import {
+  readGlb,
+  packedAccessorRange,
+  assertLegacySkin,
+  assertSkinWeights,
+  writeFileAtomic,
+} from "./lib/glb.mjs";
 
-const GLB_PATH = "public/models/player/base.glb";
+const GLB_PATH = process.argv[2];
+if (!GLB_PATH)
+  throw new Error(
+    "Usage: node scripts/fix-face-weights.mjs <uncompressed-legacy-source.glb>",
+  );
 
 const ARM_CHAIN = new Set([
   "LeftShoulder",
@@ -32,22 +42,13 @@ const HEAD_W_THRESHOLD = 0.05;
 const FACE_Z = 0.5;
 const FACE_Y = 1.15;
 
-const glb = fs.readFileSync(GLB_PATH);
-const jsonLen = glb.readUInt32LE(12);
-const json = JSON.parse(glb.slice(20, 20 + jsonLen).toString());
-const binStart = 20 + jsonLen + 8;
+const document = readGlb(GLB_PATH);
+const { glb, json } = document;
 
-const accessorRange = (i) => {
-  const acc = json.accessors[i];
-  const bv = json.bufferViews[acc.bufferView];
-  return {
-    offset: binStart + (bv.byteOffset ?? 0) + (acc.byteOffset ?? 0),
-    count: acc.count,
-    componentType: acc.componentType,
-  };
-};
+const accessorRange = (i) => packedAccessorRange(document, i);
 
 const prim = json.meshes[0].primitives[0];
+assertLegacySkin(document, prim);
 const jR = accessorRange(prim.attributes.JOINTS_0);
 const wR = accessorRange(prim.attributes.WEIGHTS_0);
 const pR = accessorRange(prim.attributes.POSITION);
@@ -55,9 +56,21 @@ if (wR.componentType !== 5126) throw new Error("WEIGHTS_0가 float이 아님");
 
 const jointNames = json.skins[0].joints.map((j) => json.nodes[j].name);
 const vCount = wR.count;
-const joints = new Uint8Array(glb.buffer, glb.byteOffset + jR.offset, vCount * 4);
-const weights = new Float32Array(glb.buffer, glb.byteOffset + wR.offset, vCount * 4);
-const positions = new Float32Array(glb.buffer, glb.byteOffset + pR.offset, vCount * 3);
+const joints = new Uint8Array(
+  glb.buffer,
+  glb.byteOffset + jR.offset,
+  vCount * 4,
+);
+const weights = new Float32Array(
+  glb.buffer,
+  glb.byteOffset + wR.offset,
+  vCount * 4,
+);
+const positions = new Float32Array(
+  glb.buffer,
+  glb.byteOffset + pR.offset,
+  vCount * 3,
+);
 
 let purged = 0;
 for (let v = 0; v < vCount; v++) {
@@ -94,12 +107,13 @@ for (let v = 0; v < vCount; v++) {
   purged++;
 }
 
-fs.writeFileSync(GLB_PATH, glb);
 console.log(`얼굴/머리 경계 정점 ${purged}개에서 어깨·팔 가중치 제거`);
 
 // 검증: 조건 대상에 팔 체인 잔존 없음 + 합 정규화
 for (let v = 0; v < vCount; v++) {
-  let wHead = 0, wArm = 0, sum = 0;
+  let wHead = 0,
+    wArm = 0,
+    sum = 0;
   for (let k = 0; k < 4; k++) {
     const w = weights[v * 4 + k];
     sum += w;
@@ -115,3 +129,6 @@ for (let v = 0; v < vCount; v++) {
     throw new Error(`정점 ${v}에 팔 체인 잔존 (wArm ${wArm})`);
 }
 console.log("✅ 얼굴 어깨 격리 + 가중치 정규화 검증 통과");
+
+assertSkinWeights(document, prim, json.skins[0].joints.length);
+writeFileAtomic(GLB_PATH, glb);

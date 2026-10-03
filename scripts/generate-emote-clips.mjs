@@ -1,3 +1,4 @@
+import { playerPath } from "./lib/assets.mjs";
 /**
  * 이모트(wave 인사, dance 춤) 애니메이션 클립 GLB를 생성합니다.
  * 방식 설명은 scripts/lib/clip-gen.mjs 참고.
@@ -17,10 +18,10 @@ import {
   Z,
 } from "./lib/clip-gen.mjs";
 
-const OUT_PATH = "public/models/player/emotes.glb";
+const OUT_PATH = playerPath("emotes");
 const TWO_PI = Math.PI * 2;
 
-const rig = loadRig("public/models/player/base.glb");
+const rig = loadRig(playerPath("base"));
 
 // ---------- wave: 오른팔 들고 좌우로 흔드는 인사 (1.6초 루프) ----------
 // 캐릭터는 +Z를 바라봄. 오른팔 들기 = 월드 Z축 음수 회전 (좌우 비대칭 주의)
@@ -118,7 +119,12 @@ const danceClip = solveClip(rig, {
 // 검증: wave는 손이 머리 위로 올라갔는지, dance는 스웨이 극점 포즈 확인
 printPose(rig, waveClip, ["RightArm", "RightForeArm", "RightHand", "Head"], 4);
 console.log();
-printPose(rig, danceClip, ["Hips", "LeftHand", "RightHand", "LeftFoot", "Head"], 6);
+printPose(
+  rig,
+  danceClip,
+  ["Hips", "LeftHand", "RightHand", "LeftFoot", "Head"],
+  6,
+);
 
 writeClipGlb(OUT_PATH, rig, [waveClip, danceClip]);
 console.log(`\n✅ ${OUT_PATH} 생성 완료 (wave 1.6s, dance 2.4s)`);

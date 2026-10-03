@@ -1,3 +1,4 @@
+import { playerPath, gltfCli } from "./lib/assets.mjs";
 /**
  * base.glb 용량 최적화 (고품질 원본 약 6.5MB → 약 2.2MB).
  *
@@ -17,15 +18,15 @@
  */
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import { readGlb, writeFileAtomic } from "./lib/glb.mjs";
 import os from "node:os";
 import path from "node:path";
 
-const SRC = "public/models/player/base.glb";
+const SRC = playerPath("base");
 const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "panda-glb-"));
 const optimized = path.join(tmpDir, "base-meshopt.glb");
 
-const run = (args) =>
-  execFileSync("npx", ["gltf-transform", ...args], { stdio: "inherit" });
+const run = (args) => execFileSync(gltfCli, args, { stdio: "inherit" });
 
 const mb = (p) => (fs.statSync(p).size / 1048576).toFixed(2) + "MB";
 
@@ -46,9 +47,7 @@ try {
   ]);
 
   // 최소 구조 검증: 스킨·본·애니메이션이 살아 있어야 함
-  const glb = fs.readFileSync(optimized);
-  const jsonLen = glb.readUInt32LE(12);
-  const json = JSON.parse(glb.slice(20, 20 + jsonLen).toString());
+  const { json } = readGlb(optimized);
   const meshNode = json.nodes.find((n) => n.mesh !== undefined);
   if ((json.skins?.length ?? 0) < 1 || meshNode?.skin === undefined)
     throw new Error("최적화 후 스킨이 유실됨");
@@ -57,7 +56,7 @@ try {
   if (!json.nodes.some((n) => n.name === "Hips"))
     throw new Error("최적화 후 본 계층이 유실됨");
 
-  fs.copyFileSync(optimized, SRC);
+  writeFileAtomic(SRC, fs.readFileSync(optimized));
   console.log(`✅ ${SRC}: ${before} → ${mb(SRC)}`);
 } finally {
   fs.rmSync(tmpDir, { recursive: true, force: true });

@@ -1,0 +1,32 @@
+{
+  "player": {
+    "urls": {
+      "base": "/models/player/base.glb",
+      "idle": "/models/player/idle.glb",
+      "walking": "/models/player/walking.glb",
+      "running": "/models/player/running.glb",
+      "sitting": "/models/player/sitting.glb",
+      "emotes": "/models/player/emotes.glb",
+      "lodMedium": "/models/player/lod-medium.glb",
+      "lodFar": "/models/player/lod-far.glb"
+    },
+    "meshNode": "char1",
+    "material": "Material_1",
+    "scale": 0.01,
+    "sources": {
+      "base": "assets/player/source/base-rig-v3.glb",
+      "walking": "assets/player/source/walking-source.glb",
+      "running": "assets/player/source/running-source.glb"
+    }
+  },
+  "scenery": {
+    "house": {
+      "source": "assets/scenery/source/panda_house.glb",
+      "url": "/models/house/panda_house.glb"
+    },
+    "tree": {
+      "source": "assets/scenery/source/cherry_blossom_tree.glb",
+      "url": "/models/tree/cherry_blossom_tree.glb"
+    }
+  }
+}

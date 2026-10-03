@@ -30,9 +30,19 @@
  *
  * 사용법: node scripts/fix-fallback-weights.mjs
  */
-import fs from "node:fs";
+import {
+  readGlb,
+  packedAccessorRange,
+  assertLegacySkin,
+  assertSkinWeights,
+  writeFileAtomic,
+} from "./lib/glb.mjs";
 
-const GLB_PATH = "public/models/player/base.glb";
+const GLB_PATH = process.argv[2];
+if (!GLB_PATH)
+  throw new Error(
+    "Usage: node scripts/fix-fallback-weights.mjs <uncompressed-legacy-source.glb>",
+  );
 
 const FALLBACK_BONES = ["Hips", "LeftLeg", "RightLeg", "Spine02"];
 const FALLBACK_W_MIN = 0.15;
@@ -46,22 +56,13 @@ const SPINE_CHAIN = [
   { name: "Spine", y: 1.245 },
 ];
 
-const glb = fs.readFileSync(GLB_PATH);
-const jsonLen = glb.readUInt32LE(12);
-const json = JSON.parse(glb.slice(20, 20 + jsonLen).toString());
-const binStart = 20 + jsonLen + 8;
+const document = readGlb(GLB_PATH);
+const { glb, json } = document;
 
-const accessorRange = (i) => {
-  const acc = json.accessors[i];
-  const bv = json.bufferViews[acc.bufferView];
-  return {
-    offset: binStart + (bv.byteOffset ?? 0) + (acc.byteOffset ?? 0),
-    count: acc.count,
-    componentType: acc.componentType,
-  };
-};
+const accessorRange = (i) => packedAccessorRange(document, i);
 
 const mesh = json.meshes[0].primitives[0];
+assertLegacySkin(document, mesh);
 const jRange = accessorRange(mesh.attributes.JOINTS_0);
 const wRange = accessorRange(mesh.attributes.WEIGHTS_0);
 const pRange = accessorRange(mesh.attributes.POSITION);
@@ -76,9 +77,21 @@ for (const b of SPINE_CHAIN)
   if (!jointIndexByName.has(b.name)) throw new Error(`본 없음: ${b.name}`);
 const vertexCount = wRange.count;
 
-const joints = new Uint8Array(glb.buffer, glb.byteOffset + jRange.offset, vertexCount * 4);
-const weights = new Float32Array(glb.buffer, glb.byteOffset + wRange.offset, vertexCount * 4);
-const positions = new Float32Array(glb.buffer, glb.byteOffset + pRange.offset, vertexCount * 3);
+const joints = new Uint8Array(
+  glb.buffer,
+  glb.byteOffset + jRange.offset,
+  vertexCount * 4,
+);
+const weights = new Float32Array(
+  glb.buffer,
+  glb.byteOffset + wRange.offset,
+  vertexCount * 4,
+);
+const positions = new Float32Array(
+  glb.buffer,
+  glb.byteOffset + pRange.offset,
+  vertexCount * 3,
+);
 
 // y 높이 → 척추 체인 구간 선형 블렌딩 (본 인덱스·가중치 최대 2개 반환)
 const spineBlend = (y) => {
@@ -209,7 +222,6 @@ for (let v = 0; v < vertexCount; v++) {
   crossPurged++;
 }
 
-fs.writeFileSync(GLB_PATH, glb);
 console.log(
   `정점 ${vertexCount}개 중 폴백 재할당 ${reassigned}개, 무릎 퍼지 ${kneePurged}개, 교차측 퍼지 ${crossPurged}개`,
 );
@@ -217,8 +229,14 @@ console.log(
 // ── 사후 검증 ──
 // 1. 모든 정점 가중치 합 1  2. 등 뒤(z<-0.4) 깊은 영역에 다리 가중치 잔존 없음
 const LEG_BONES = new Set([
-  "LeftUpLeg", "LeftLeg", "LeftFoot", "LeftToeBase",
-  "RightUpLeg", "RightLeg", "RightFoot", "RightToeBase",
+  "LeftUpLeg",
+  "LeftLeg",
+  "LeftFoot",
+  "LeftToeBase",
+  "RightUpLeg",
+  "RightLeg",
+  "RightFoot",
+  "RightToeBase",
 ]);
 let deepBackLeg = 0;
 for (let v = 0; v < vertexCount; v++) {
@@ -268,3 +286,6 @@ if (crossResidual > 0)
 console.log(
   "✅ 가중치 합 정규화 + 폴백 전무 + 상체 무릎 영향 전무 + 교차측 전무 검증 통과",
 );
+
+assertSkinWeights(document, mesh, json.skins[0].joints.length);
+writeFileAtomic(GLB_PATH, glb);

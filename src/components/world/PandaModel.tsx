@@ -1,5 +1,7 @@
 "use client";
 
+import assets from "@/constants/assets.json";
+
 import { useGraph, ObjectMap, useFrame } from "@react-three/fiber";
 import { useGLTF, Billboard, Text } from "@react-three/drei";
 import { useCallback, useMemo, useRef, useEffect, RefObject } from "react";
@@ -15,19 +17,22 @@ import {
   PlayerAnimType,
 } from "@/constants/playerAnimations";
 
-const BASE_URL = "/models/player/base.glb";
-const WALK_URL = "/models/player/walking.glb";
-const RUN_URL = "/models/player/running.glb";
+const BASE_URL = assets.player.urls.base;
+const WALK_URL = assets.player.urls.walking;
+const RUN_URL = assets.player.urls.running;
 // scripts/generate-*-clip(s).mjs로 생성한 네이티브 클립 (본 계층 + 애니메이션만 포함)
-const IDLE_URL = "/models/player/idle.glb";
-const SIT_URL = "/models/player/sitting.glb";
-const EMOTE_URL = "/models/player/emotes.glb";
+const IDLE_URL = assets.player.urls.idle;
+const SIT_URL = assets.player.urls.sitting;
+const EMOTE_URL = assets.player.urls.emotes;
 
 /**
  * 판다 모델 공용 훅 (Player / RemotePlayer 공유)
  * base/walking/running GLB를 로드해 복제된 노드와 애니메이션 제어를 제공합니다.
  */
-export const usePandaModel = (groupRef: RefObject<THREE.Group>, remote = false) => {
+export const usePandaModel = (
+  groupRef: RefObject<THREE.Group>,
+  remote = false,
+) => {
   const { scene: baseScene } = useGLTF(BASE_URL);
   const { animations: idleAnims } = useGLTF(IDLE_URL);
   const { animations: walkAnims } = useGLTF(WALK_URL);
@@ -38,11 +43,14 @@ export const usePandaModel = (groupRef: RefObject<THREE.Group>, remote = false) 
   // 여러 캐릭터가 동일 GLB를 공유하므로 스켈레톤 단위로 복제
   const clone = useMemo(() => SkeletonUtils.clone(baseScene), [baseScene]);
   const { nodes, materials } = useGraph(clone);
-  useEffect(() => () => {
-    clone.traverse((node) => {
-      if (node instanceof THREE.SkinnedMesh) node.skeleton.dispose();
-    });
-  }, [clone]);
+  useEffect(
+    () => () => {
+      clone.traverse((node) => {
+        if (node instanceof THREE.SkinnedMesh) node.skeleton.dispose();
+      });
+    },
+    [clone],
+  );
 
   const allAnimations = useMemo(
     () => [...idleAnims, ...walkAnims, ...runAnims, ...sitAnims, ...emoteAnims],
@@ -68,16 +76,20 @@ export const usePandaModel = (groupRef: RefObject<THREE.Group>, remote = false) 
     pendingDelta.current += Math.min(delta, 0.1);
     let interval = 0;
     if (remote) {
-      if (!group.visible) { pendingDelta.current = 0; return; }
+      if (!group.visible) {
+        pendingDelta.current = 0;
+        return;
+      }
       const distance = state.camera.position.distanceTo(group.position);
       const preset = GRAPHICS_PRESETS[useGraphicsStore.getState().quality];
-      interval = 1 / (distance > 50 ? 6 : distance > 30 ? 10 : preset.remoteAnimationFps);
+      interval =
+        1 /
+        (distance > 50 ? 6 : distance > 30 ? 10 : preset.remoteAnimationFps);
     }
     if (pendingDelta.current < interval) return;
     mixer.update(pendingDelta.current);
     pendingDelta.current = 0;
   });
-
 
   // 현재 클립에서 지정 클립으로 페이드 전환 (동일 클립이면 no-op)
   // timeScaleFactor: 기준 이동 속도 대비 배율 (NPC처럼 느리게 걷는 경우)
@@ -86,8 +98,11 @@ export const usePandaModel = (groupRef: RefObject<THREE.Group>, remote = false) 
       if (currentActionRef.current === name) return;
       const clip = allAnimations.find((animation) => animation.name === name);
       if (!clip || !groupRef.current) return;
-      const next = actions.current[name] ?? (actions.current[name] = mixer.clipAction(clip, groupRef.current));
-      if (currentActionRef.current) actions.current[currentActionRef.current]?.fadeOut(fade);
+      const next =
+        actions.current[name] ??
+        (actions.current[name] = mixer.clipAction(clip, groupRef.current));
+      if (currentActionRef.current)
+        actions.current[currentActionRef.current]?.fadeOut(fade);
       // 걷기/달리기는 발 미끄러짐 보정을 위해 가속 재생
       next.setEffectiveTimeScale(
         (PLAYER_ANIM_TIMESCALE[name as PlayerAnimType] ?? 1) * timeScaleFactor,
@@ -98,7 +113,10 @@ export const usePandaModel = (groupRef: RefObject<THREE.Group>, remote = false) 
     [allAnimations, groupRef, mixer],
   );
 
-  const getCurrentAction = useCallback(() => currentActionRef.current ?? PLAYER_ANIM.IDLE, []);
+  const getCurrentAction = useCallback(
+    () => currentActionRef.current ?? PLAYER_ANIM.IDLE,
+    [],
+  );
 
   return { nodes, materials, playAction, getCurrentAction };
 };
@@ -124,8 +142,8 @@ export const PandaBody = ({
   const worldPosition = useRef(new THREE.Vector3());
   const currentLod = useRef(0);
   // GLB 그래프는 런타임에만 형상이 확정되므로 단언 대신 instanceof로 검증
-  const char1 = nodes.char1;
-  const srcMaterial = materials.Material_1;
+  const char1 = nodes[assets.player.meshNode];
+  const srcMaterial = materials[assets.player.material];
 
   // Meshy 원본 재질은 베이스컬러 텍스처 전체를 emissive(1,1,1)로도 쓰고
   // 스페큘러가 2배라 조명을 무시한 자체발광 + 주황 조명 번들거림이 생김.
@@ -146,14 +164,25 @@ export const PandaBody = ({
 
   useEffect(() => () => material.dispose(), [material]);
   useFrame((state) => {
-    if (!lodGeometries || !(char1 instanceof THREE.SkinnedMesh) || !meshRef.current) return;
+    if (
+      !lodGeometries ||
+      !(char1 instanceof THREE.SkinnedMesh) ||
+      !meshRef.current
+    )
+      return;
     meshRef.current.getWorldPosition(worldPosition.current);
     const distance = state.camera.position.distanceTo(worldPosition.current);
     // Separate enter/exit distances prevent geometry chatter while orbiting.
     const previous = currentLod.current;
-    const next = distance > (previous === 2 ? 47 : 52) ? 2 : distance > (previous >= 1 ? 25 : 30) ? 1 : 0;
+    const next =
+      distance > (previous === 2 ? 47 : 52)
+        ? 2
+        : distance > (previous >= 1 ? 25 : 30)
+          ? 1
+          : 0;
     if (next !== previous) {
-      meshRef.current.geometry = next === 0 ? char1.geometry : lodGeometries[next - 1];
+      meshRef.current.geometry =
+        next === 0 ? char1.geometry : lodGeometries[next - 1];
       currentLod.current = next;
     }
   });
@@ -162,7 +191,7 @@ export const PandaBody = ({
 
   return (
     <group name="Scene">
-      <group name="Armature" scale={0.01}>
+      <group name="Armature" scale={assets.player.scale}>
         <primitive object={nodes.Hips} />
         <skinnedMesh
           ref={meshRef}

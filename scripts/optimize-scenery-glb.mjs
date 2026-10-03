@@ -12,23 +12,20 @@
  * 사용: pnpm scenery:optimize
  */
 import { execFileSync } from "node:child_process";
-import { mkdirSync, existsSync, statSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const CLI = join(ROOT, "node_modules/.bin/gltf-transform");
-
-const TARGETS = [
-  {
-    source: "assets/scenery/source/panda_house.glb",
-    output: "public/models/house/panda_house.glb",
-  },
-  {
-    source: "assets/scenery/source/cherry_blossom_tree.glb",
-    output: "public/models/tree/cherry_blossom_tree.glb",
-  },
-];
+import { mkdirSync, statSync } from "node:fs";
+import { dirname, join } from "node:path";
+import {
+  manifest,
+  ROOT,
+  sourcePath,
+  outputRoot,
+  gltfCli as CLI,
+} from "./lib/assets.mjs";
+import { buildAssetSet } from "./lib/publish-assets.mjs";
+const TARGETS = Object.values(manifest.scenery);
+const flags = process.argv.slice(2);
+if (flags.some((flag) => flag !== "--check"))
+  throw new Error("Usage: node scripts/optimize-scenery-glb.mjs [--check]");
 
 const OPTIONS = [
   "--compress",
@@ -52,32 +49,40 @@ const mb = (bytes) => `${(bytes / 1024 / 1024).toFixed(2)} MB`;
 let totalBefore = 0;
 let totalAfter = 0;
 
-for (const { source, output } of TARGETS) {
-  const sourcePath = join(ROOT, source);
-  const outputPath = join(ROOT, output);
+buildAssetSet({
+  outputRoot,
+  urls: TARGETS.map((target) => target.url),
+  checkOnly: flags.includes("--check"),
+  build({ stagedRoot }) {
+    for (const { source, url: output } of TARGETS) {
+      const input = sourcePath(source);
+      const outputPath = join(stagedRoot, output.slice(1));
 
-  if (!existsSync(sourcePath)) {
-    throw new Error(`원본을 찾을 수 없습니다: ${source}`);
-  }
+      mkdirSync(dirname(outputPath), { recursive: true });
 
-  mkdirSync(dirname(outputPath), { recursive: true });
+      const before = statSync(input).size;
+      console.log(`\n▶ ${source} (${mb(before)})`);
 
-  const before = statSync(sourcePath).size;
-  console.log(`\n▶ ${source} (${mb(before)})`);
+      execFileSync(CLI, ["optimize", input, outputPath, ...OPTIONS], {
+        stdio: "inherit",
+      });
 
-  execFileSync(CLI, ["optimize", sourcePath, outputPath, ...OPTIONS], {
-    stdio: "inherit",
-  });
+      const after = statSync(outputPath).size;
+      totalBefore += before;
+      totalAfter += after;
 
-  const after = statSync(outputPath).size;
-  totalBefore += before;
-  totalAfter += after;
-
-  const ratio = ((1 - after / before) * 100).toFixed(1);
-  console.log(`✔ ${output} — ${mb(before)} → ${mb(after)} (-${ratio}%)`);
-}
+      const ratio = ((1 - after / before) * 100).toFixed(1);
+      console.log(`✔ ${output} — ${mb(before)} → ${mb(after)} (-${ratio}%)`);
+    }
+  },
+  validate({ env }) {
+    execFileSync(
+      process.execPath,
+      [join(ROOT, "scripts/validate-scenery-glb.mjs")],
+      { stdio: "inherit", cwd: ROOT, env },
+    );
+  },
+});
 
 const totalRatio = ((1 - totalAfter / totalBefore) * 100).toFixed(1);
-console.log(
-  `\n합계: ${mb(totalBefore)} → ${mb(totalAfter)} (-${totalRatio}%)`,
-);
+console.log(`\n합계: ${mb(totalBefore)} → ${mb(totalAfter)} (-${totalRatio}%)`);

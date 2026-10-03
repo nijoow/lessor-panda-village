@@ -31,3 +31,13 @@
 - 실서버 3~4인 접속·재연결, 실기기 한글 입력·가상 키보드, 다양한 시점의 캐릭터·벤치 간섭 확인.
 
 로컬 SQL·모의 브라우저 검증은 실제 서버나 목표 장비 검증을 대신하지 않는다. `pnpm test:world-db`는 격리된 DB 검사이고, 계정과 데이터를 만드는 `world:verify`는 별도 테스트 환경에서만 실행한다.
+
+## 에셋 생성과 게시
+
+`src/constants/assets.json`이 런타임 URL·원본 경로·플레이어 메시/재질/scale의 공통 정의다. 생성·검증 스크립트는 `scripts/lib/assets.mjs`에서 프로젝트 절대 경로와 출력 경로를 도출한다.
+
+`player:rebuild`와 `scenery:optimize`는 임시 public 루트에서 전체 결과를 만들고 검증한 뒤 게시한다. 게시 전에 모든 파일을 대상 파일시스템에 준비하고, 교체 중 실패하면 이전 파일 세트를 복구한다. 복구 자체가 실패할 경우 오류에 복구용 backup 경로를 남긴다. 개별 파일 교체는 rename으로 처리하지만 여러 파일의 동시 교체까지 보장하는 배포 트랜잭션은 아니다. 운영 배포는 검증된 전체 디렉터리를 배포 시스템에서 전환한다.
+
+`node scripts/rebuild-player-model.mjs --check`와 `node scripts/optimize-scenery-glb.mjs --check`는 전체 생성·검증을 실행하고 게시를 생략한다. 내부 작업자는 `PANDA_ASSET_OUTPUT_ROOT`로 격리 경로를 받는다. 플레이어 검증은 기본 리그·클립뿐 아니라 두 LOD의 본 순서·휴식 변환·속성·가중치·인덱스도 검사한다.
+
+과거 가중치/꼬리 수리 스크립트에는 수정할 비압축 원본 파일을 명시적으로 전달한다. float POSITION/WEIGHTS, uint8 JOINTS, packed·비정규화·비압축 레이아웃을 확인하며, 메모리상의 사후 검증이 끝난 뒤 파일을 교체한다. 현재 양자화·압축된 배포 파일에 이 수리 도구를 적용하지 않는다. GLB 컨테이너 파싱·accessor 경계·패킹·원자적 파일 쓰기는 `scripts/lib/glb.mjs`에서 공유한다.

@@ -1,3 +1,4 @@
+import { playerPath } from "./lib/assets.mjs";
 /**
  * 걷기/달리기 클립 리파인:
  * 1. 상체 회전 감쇠 — Meshy 리타게팅 클립이 어깨와 머리를 과하게 내려
@@ -11,7 +12,7 @@
  * 사용법: node scripts/refine-locomotion-clips.mjs
  *   (add-tail-rig.mjs 적용된 base.glb + 클립 전용 walking/running.glb 전제)
  */
-import fs from "node:fs";
+import { readGlb, accessorInfo, readComponent, writeGlb } from "./lib/glb.mjs";
 import { loadRig, qmul, qnorm, axisAngle, X, Y } from "./lib/clip-gen.mjs";
 
 const BONE_FACTORS = new Map([
@@ -30,7 +31,7 @@ const BONE_FACTORS = new Map([
 const TAIL_KEYS = 17;
 
 // 꼬리 본 rest TRS는 base.glb에서 가져옴
-const baseRig = loadRig("public/models/player/base.glb");
+const baseRig = loadRig(playerPath("base"));
 const TAIL_BONES = ["Tail1", "Tail2", "Tail3", "Tail4"];
 for (const t of TAIL_BONES)
   if (!baseRig.boneByName.has(t))
@@ -38,17 +39,20 @@ for (const t of TAIL_BONES)
 
 // ---------- 클립 GLB 로드 ----------
 const loadClipGlb = (path) => {
-  const glb = fs.readFileSync(path);
-  const jsonLen = glb.readUInt32LE(12);
-  const json = JSON.parse(glb.slice(20, 20 + jsonLen).toString());
-  const binStart = 20 + jsonLen + 8;
+  const document = readGlb(path),
+    { json } = document;
   const acc = (i) => {
-    const a = json.accessors[i];
-    const bv = json.bufferViews[a.bufferView];
-    const off = binStart + (bv.byteOffset ?? 0) + (a.byteOffset ?? 0);
-    const n = { SCALAR: 1, VEC3: 3, VEC4: 4 }[a.type];
+    const info = accessorInfo(document, i);
+    if (info.accessor.componentType !== 5126 || info.accessor.normalized)
+      throw new Error("Animation must have float accessors");
     return Array.from(
-      new Float32Array(glb.buffer, glb.byteOffset + off, a.count * n),
+      { length: info.accessor.count * info.elementCount },
+      (_, j) =>
+        readComponent(
+          info,
+          Math.floor(j / info.elementCount),
+          j % info.elementCount,
+        ),
     );
   };
   const nodes = json.nodes.map((n) => ({ ...n }));
@@ -83,7 +87,8 @@ const saveClipGlb = (path, clip) => {
   });
   // 원본 children 보존 (parent 필드가 없던 기존 노드)
   clip.nodes.forEach((n, i) => {
-    if (n.children) outNodes[i].children = [...(outNodes[i].children ?? []), ...n.children];
+    if (n.children)
+      outNodes[i].children = [...(outNodes[i].children ?? []), ...n.children];
   });
 
   const binParts = [];
@@ -92,11 +97,20 @@ const saveClipGlb = (path, clip) => {
   const bufferViews = [];
   const pushAccessor = (data, type) => {
     const buf = Buffer.from(new Float32Array(data).buffer);
-    bufferViews.push({ buffer: 0, byteOffset: binOffset, byteLength: buf.length });
+    bufferViews.push({
+      buffer: 0,
+      byteOffset: binOffset,
+      byteLength: buf.length,
+    });
     binParts.push(buf);
     binOffset += buf.length;
     const n = { SCALAR: 1, VEC3: 3, VEC4: 4 }[type];
-    const a = { bufferView: bufferViews.length - 1, componentType: 5126, count: data.length / n, type };
+    const a = {
+      bufferView: bufferViews.length - 1,
+      componentType: 5126,
+      count: data.length / n,
+      type,
+    };
     if (type === "SCALAR") {
       a.min = [Math.min(...data)];
       a.max = [Math.max(...data)];
@@ -109,7 +123,10 @@ const saveClipGlb = (path, clip) => {
   const channels = [];
   for (const t of clip.tracks) {
     const input = pushAccessor(t.times, "SCALAR");
-    const output = pushAccessor(t.values, t.path === "rotation" ? "VEC4" : "VEC3");
+    const output = pushAccessor(
+      t.values,
+      t.path === "rotation" ? "VEC4" : "VEC3",
+    );
     samplers.push({ input, interpolation: t.interpolation, output });
     channels.push({
       sampler: samplers.length - 1,
@@ -127,23 +144,7 @@ const saveClipGlb = (path, clip) => {
     bufferViews,
     accessors,
   };
-  const jsonBuf = Buffer.from(JSON.stringify(gltf));
-  const jsonPad = (4 - (jsonBuf.length % 4)) % 4;
-  const jsonChunk = Buffer.concat([jsonBuf, Buffer.alloc(jsonPad, 0x20)]);
-  const binBuf = Buffer.concat(binParts);
-  const binPad = (4 - (binBuf.length % 4)) % 4;
-  const binChunk = Buffer.concat([binBuf, Buffer.alloc(binPad)]);
-  const header = Buffer.alloc(12);
-  header.writeUInt32LE(0x46546c67, 0);
-  header.writeUInt32LE(2, 4);
-  header.writeUInt32LE(12 + 8 + jsonChunk.length + 8 + binChunk.length, 8);
-  const jsonHeader = Buffer.alloc(8);
-  jsonHeader.writeUInt32LE(jsonChunk.length, 0);
-  jsonHeader.writeUInt32LE(0x4e4f534a, 4);
-  const binHeader = Buffer.alloc(8);
-  binHeader.writeUInt32LE(binChunk.length, 0);
-  binHeader.writeUInt32LE(0x004e4942, 4);
-  fs.writeFileSync(path, Buffer.concat([header, jsonHeader, jsonChunk, binHeader, binChunk]));
+  writeGlb(path, { json: gltf, bin: Buffer.concat(binParts) });
 };
 
 // ---------- nlerp (소각도 감쇠용) ----------
@@ -177,7 +178,12 @@ const refine = (path, spec) => {
   // 2. 꼬리 노드 + 스웨이 트랙 추가
   for (const name of TAIL_BONES) {
     const b = baseRig.boneByName.get(name);
-    clip.nodes.push({ name, translation: b.t, rotation: b.r, parent: b.parent });
+    clip.nodes.push({
+      name,
+      translation: b.t,
+      rotation: b.r,
+      parent: b.parent,
+    });
   }
   const times = Array.from(
     { length: TAIL_KEYS },
@@ -211,12 +217,12 @@ const refine = (path, spec) => {
 };
 
 // 걷기: 좌우 스웨이 위주 / 달리기: 상하 바운스 위주
-refine("public/models/player/walking.glb", {
+refine(playerPath("walking"), {
   yawAmp: 2.5,
   pitchAmp: 1.2,
   phaseLag: 0.5,
 });
-refine("public/models/player/running.glb", {
+refine(playerPath("running"), {
   yawAmp: 1.5,
   pitchAmp: 2.2,
   phaseLag: 0.6,

@@ -7,7 +7,7 @@
  *
  * 사용처: generate-sit-clip.mjs, generate-emote-clips.mjs
  */
-import fs from "node:fs";
+import { readGlb, writeGlb } from "./glb.mjs";
 
 // ---------- 쿼터니언/벡터 유틸 ([x, y, z, w]) ----------
 export const qmul = (a, b) => [
@@ -19,6 +19,7 @@ export const qmul = (a, b) => [
 export const qconj = (q) => [-q[0], -q[1], -q[2], q[3]];
 export const qnorm = (q) => {
   const l = Math.hypot(...q);
+  if (!Number.isFinite(l) || l < 1e-12) throw new Error("Invalid quaternion");
   return q.map((v) => v / l);
 };
 export const qrot = (q, v) => {
@@ -53,9 +54,7 @@ export const IDENTITY = [0, 0, 0, 1];
  *   restWorld: Map<본이름, 휴식 포즈 월드 회전 쿼터니언>
  */
 export const loadRig = (glbPath) => {
-  const glb = fs.readFileSync(glbPath);
-  const jsonLen = glb.readUInt32LE(12);
-  const json = JSON.parse(glb.slice(20, 20 + jsonLen).toString());
+  const { json } = readGlb(glbPath);
 
   const srcNodes = json.nodes;
   const armatureIdx = srcNodes.findIndex((n) => n.name === "Armature");
@@ -82,7 +81,12 @@ export const loadRig = (glbPath) => {
     restWorld.set(b.name, qnorm(qmul(parentQ, b.r)));
   }
 
-  return { bones, boneByName: new Map(bones.map((b) => [b.name, b])), restWorld, srcNodes };
+  return {
+    bones,
+    boneByName: new Map(bones.map((b) => [b.name, b])),
+    restWorld,
+    srcNodes,
+  };
 };
 
 // ---------- 클립 솔버 ----------
@@ -161,9 +165,15 @@ export const posedWorldPositions = (rig, clip, keyIndex = 0) => {
         : b.t;
     const scaled = t.map((v, i) => v * pS[i]);
     const rotated = qrot(pQ, scaled);
-    worldPos.set(b.name, rotated.map((v, i) => pPos[i] + v));
+    worldPos.set(
+      b.name,
+      rotated.map((v, i) => pPos[i] + v),
+    );
     worldQ.set(b.name, qnorm(qmul(pQ, local)));
-    worldS.set(b.name, b.s.map((v, i) => v * pS[i]));
+    worldS.set(
+      b.name,
+      b.s.map((v, i) => v * pS[i]),
+    );
   }
   return worldPos;
 };
@@ -174,7 +184,10 @@ export const printPose = (rig, clip, boneNames, keyIndex = 0) => {
   for (const name of boneNames) {
     console.log(
       name.padEnd(13),
-      pos.get(name).map((v) => v.toFixed(2)).join(", "),
+      pos
+        .get(name)
+        .map((v) => v.toFixed(2))
+        .join(", "),
     );
   }
 };
@@ -191,14 +204,20 @@ export const writeClipGlb = (outPath, rig, clips) => {
 
   const pushAccessor = (data, type, { min, max } = {}) => {
     const buf = Buffer.from(new Float32Array(data).buffer);
-    bufferViews.push({ buffer: 0, byteOffset: binOffset, byteLength: buf.length });
+    bufferViews.push({
+      buffer: 0,
+      byteOffset: binOffset,
+      byteLength: buf.length,
+    });
     binParts.push(buf);
     binOffset += buf.length;
     const acc = {
       bufferView: bufferViews.length - 1,
       componentType: 5126, // FLOAT
       count:
-        type === "SCALAR" ? data.length : data.length / (type === "VEC3" ? 3 : 4),
+        type === "SCALAR"
+          ? data.length
+          : data.length / (type === "VEC3" ? 3 : 4),
       type,
     };
     if (min) acc.min = min;
@@ -231,14 +250,22 @@ export const writeClipGlb = (outPath, rig, clips) => {
     const channels = [];
     for (const b of bones) {
       const out = pushAccessor(clip.rotationTracks.get(b.name), "VEC4");
-      samplers.push({ input: timeAccessor, interpolation: "LINEAR", output: out });
+      samplers.push({
+        input: timeAccessor,
+        interpolation: "LINEAR",
+        output: out,
+      });
       channels.push({
         sampler: samplers.length - 1,
         target: { node: outIndex.get(b.name), path: "rotation" },
       });
     }
     const out = pushAccessor(clip.hipsTranslations, "VEC3");
-    samplers.push({ input: timeAccessor, interpolation: "LINEAR", output: out });
+    samplers.push({
+      input: timeAccessor,
+      interpolation: "LINEAR",
+      output: out,
+    });
     channels.push({
       sampler: samplers.length - 1,
       target: { node: outIndex.get("Hips"), path: "translation" },
@@ -257,26 +284,5 @@ export const writeClipGlb = (outPath, rig, clips) => {
     accessors,
   };
 
-  const jsonBuf = Buffer.from(JSON.stringify(gltf));
-  const jsonPad = (4 - (jsonBuf.length % 4)) % 4;
-  const jsonChunk = Buffer.concat([jsonBuf, Buffer.alloc(jsonPad, 0x20)]);
-  const binBuf = Buffer.concat(binParts);
-  const binPad = (4 - (binBuf.length % 4)) % 4;
-  const binChunk = Buffer.concat([binBuf, Buffer.alloc(binPad)]);
-
-  const header = Buffer.alloc(12);
-  header.writeUInt32LE(0x46546c67, 0); // glTF magic
-  header.writeUInt32LE(2, 4);
-  header.writeUInt32LE(12 + 8 + jsonChunk.length + 8 + binChunk.length, 8);
-  const jsonHeader = Buffer.alloc(8);
-  jsonHeader.writeUInt32LE(jsonChunk.length, 0);
-  jsonHeader.writeUInt32LE(0x4e4f534a, 4); // JSON
-  const binHeader = Buffer.alloc(8);
-  binHeader.writeUInt32LE(binChunk.length, 0);
-  binHeader.writeUInt32LE(0x004e4942, 4); // BIN
-
-  fs.writeFileSync(
-    outPath,
-    Buffer.concat([header, jsonHeader, jsonChunk, binHeader, binChunk]),
-  );
+  writeGlb(outPath, { json: gltf, bin: Buffer.concat(binParts) });
 };
