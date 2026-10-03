@@ -1,183 +1,220 @@
-# 전체 코드 검토
+# 전체 코드 검토 및 개선 결과
 
-검토 기준: 코드 품질, 추상화 수준, 캡슐화, 응집도, 결합도, SSOT, 비동기 상태 일관성, 리소스 소유권, 신뢰 경계.
+검토·수정일: 2026-10-03. 기준 커밋: `5c2c0e3`.
 
-검토 대상은 `src`의 텍스트 소스 64개, 기존 스크립트 19개, SQL 마이그레이션 18개 및 프로젝트 설정·문서다. 새 클라이언트 회귀 테스트도 검토·실행했다. 변경된 파일에 한정하지 않고 전체 수작업 코드를 읽었다. 의존성 내부와 바이너리 에셋은 소스 리뷰 범위에서 제외했으며, 에셋은 기존 검증기로 별도 확인했다. 파일 목록은 끝에 기록했다.
+검토 기준은 코드 품질, 추상화 수준, 캡슐화, 응집도, 결합도, SSOT, 비동기 상태 일관성, 리소스 소유권과 신뢰 경계다. 변경 파일에 한정하지 않고 기존 `src` 텍스트 소스 64개, 스크립트 19개, SQL 마이그레이션 18개와 설정·문서를 읽고, 발견한 문제를 책임별로 수정·검증·커밋했다. 아래 내용은 초기 권장 목록을 실제 구현 결과로 갱신한 보고서다.
 
-## 판단
+최종 검토 범위는 `src` 텍스트 파일 102개(TS/TSX 100개, CSS 1개, JSON 1개), 스크립트 30개, SQL 마이그레이션 19개와 설정·문서다. TS 파일 수에는 생성된 Database 타입 1개가 포함된다. 외부 의존성 내부·바이너리 에셋은 수작업 소스 리뷰 대상에서 제외했다. 잠금 파일은 의존성·버전 설정을 확인했고, 에셋은 파서·런타임 디코드·전체 재생성으로 별도 검사했다.
 
-기능별 디렉터리와 월드 배치 데이터의 분리는 적절하다. 가장 큰 개선 지점은 **상태를 누가 소유하고 어떤 경로로 변경하는가**다. `Player`에는 여러 기능의 의사결정이 집중되어 있고, 방명록과 프레임 상태는 여러 소비자가 내부 표현을 알아야 갱신할 수 있다. 이번에 수정한 삭제 경쟁 조건과 그림자 구독 오류는 이 경계가 약할 때 생기는 실제 사례다.
+## 전체 판단
 
-3~4명 규모의 WebGL 월드에 맞춰 현재의 프레임 루프와 Zustand를 유지하면서 책임과 변경 API를 분리하는 방향을 권한다. 아래 설계 개선은 후속 작업이다. 이번 변경은 재현된 버그 4건과 회귀 테스트에 집중했다.
+기존 월드 배치 데이터, R3F 프레임 루프, Zustand와 익명 인증 구조를 유지하면서 **의사결정, 상태 변경, 외부 효과의 소유자**를 분리했다. 초기 검토의 10개 개선 항목은 모두 구현에 반영했다. 이 범위에서 재현하거나 확인한 코드 문제는 수정했고, 수정한 경계에는 의미 있는 회귀 검증을 추가했다.
 
-## 이번에 수정한 오류
+플레이어 제어는 순수 도메인 모듈, 렌더링·오디오·store 반영은 어댑터, 방명록 요청 수명은 session, SDK 접근은 repository, 프레임 데이터와 캐시는 각각 명시적인 변경 API를 사용한다. 전체 로컬 정적 import/export 그래프의 130개 모듈에서 순환 의존은 발견하지 않았다. 이는 런타임의 모든 동작을 보증하는 결과는 아니며, 실제 서버·기기 검증의 한계는 아래에 기록했다.
 
-| 오류 | 원인과 수정 | 회귀 검사 |
+## 관점별 검토와 해결
+
+| 관점 | 발견한 문제 | 최종 변경·소유자 |
 | --- | --- | --- |
-| 삭제한 쪽지가 다시 나타남 | `useGuestbook.remove`가 진행 중인 조회를 무효화하지 않았다. 삭제 확인 후 조회 토큰을 갱신하고, 목록·전역 상태·캐시에서 제거한 뒤 다시 조회한다. | 이전 조회의 성공·실패, 삭제 실패, 삭제 후 재조회 실패 |
-| 화면 밖에서 이동한 상대가 오래된 위치부터 보간됨 | `RemotePlayer`가 보이지 않을 때 초기화 여부를 유지했다. 숨김·데이터 소실 후 다시 보이면 최신 위치와 회전에 바로 맞추고 이후 보간한다. | 화면 재진입, 데이터 복구, 계속 보이는 상대의 보간 유지 |
-| ±π 경계에서 먼 방향으로 회전함 | JavaScript의 음수 나머지를 정규화하지 않았다. `lerpAngle`의 차이를 양수 나머지로 정규화한 후 최단 호를 선택한다. | 양방향 경계 통과와 누적 회전 |
-| 죽순 수확·재생성 후 그림자가 갱신되지 않음 | 그림자 구독이 내부에서 직접 변경하는 동일한 `Set` 참조를 비교했다. 불변 갱신되는 `harvestedIds`를 구독 기준으로 사용한다. | 실제 수확 store의 수확·재생성 모두 그림자 revision 증가 |
+| 추상화 수준 | Player 프레임 콜백에 입력·충돌·상호작용·표현·전송·카메라가 혼재 | `PlayerController`가 pose·이벤트를 계산하고 `usePlayerController`가 외부 효과를 적용. 카메라·전송은 별도 훅 |
+| 응집도 | Environment에 배치·기하·인스턴싱·culling·리소스 생성이 집중 | `environment`의 placements, geometry, instanceData, Structures, BambooField, CulledInstances, StaticScenery로 책임 분리 |
+| 캡슐화 | 여러 store의 프레임 필드와 수확 Set을 소비자가 직접 변경 | `worldFrameState`의 읽기 전용 뷰·변경 API, 수확 store의 비공개 Set·조회 함수·revision, 오디오의 읽기 전용 muted getter |
+| 결합도 | 도메인 규칙이 React·SDK·store 내부 표현에 의존 | 중립 `src/domain`과 명시적인 world·repository·cache ports. collision은 수확 조회 함수를 주입하고 앱 어댑터에서 연결 |
+| SSOT | 상호작용 우선순위·벤치 치수·에셋 경로·문자 수·fog 판정이 여러 곳에 복제 | 공통 선택 함수, `BENCH_SPEC`, `assets.json`, `domain/text`, 공통 fog culling 사용 |
+| 상태 일관성 | 방명록 목록·게시판·캐시 수동 동기화와 오래된 비동기 조회 | `GuestbookSession`의 조회 세대·재시도와 boardState의 확인된 mutation·snapshot 적용 경계 |
+| 권한 경계 | 인증 상태와 Realtime 준비 상태를 같은 기능 권한처럼 취급 | `useVillageSession`이 DB 쓰기·채팅·원격 이동 capability를 각각 도출 |
+| 외부 계약 | 무타입 DB client·검증되지 않은 공개 DTO·payload 작성자 신뢰 | 생성 Database 타입, 허용 컬럼으로 좁힌 client 타입, unknown decoder, 사용자별 인증 topic |
+| 리소스 수명 | 일부 자체 생성 geometry·texture·오디오 타이머에 해제 경로 없음 | 생성 소유자에 dispose·cleanup 추가. 공유 GLTF 캐시와 자신이 소유한 복제 리소스의 수명 구분 |
+| 검증·가독성 | 판단 로직이 훅 내부에 있고 긴 JSX·표현식이 변경 확인을 어렵게 함 | 순수 제어기·품질 판단과 실제 소스 회귀 검사, 전체 소스·도구 포맷 정돈, 실제 DOM 수명에 연결한 대화상자 포커스 |
 
-삭제 후 재조회는 패널의 페이지를 첫 페이지로 갱신한다. 재조회가 실패해도 확인된 삭제를 되돌리지 않고, 수정한 캐시를 유지하면서 조회 오류를 표시한다.
+### 1. 플레이어 제어·상호작용·표현
 
-## 개선 우선순위
+`src/domain/player`의 이동·수직 운동·근접 탐색·애니메이션 정책은 React, Three.js, Supabase, store를 import하지 않는다. `PlayerController.step`은 프레임 입력·명시적인 월드 조회에서 읽기 전용 pose·근접 결과·이벤트를 반환하며 내부 경로·좌석·키 경계·명령 카운터를 소유한다. 이 읽기 전용 결과는 프레임용 재사용 뷰이므로 장기 저장하는 어댑터는 필요한 값을 복사한다.
 
-### 1. Player의 제어·상호작용·표현 책임 분리 — 높음
+`Player`는 렌더 조합을 담당하고, R3F 어댑터가 store·zone·오디오·방명록·수확에 이벤트를 반영한다. `useFollowPlayer`는 카메라, `usePlayerBroadcast`는 변경된 pose의 최대 10fps 전송과 최초 발행을 관리한다. 쓰지 않던 imperative ref와 상위 컴포넌트 연결은 제거했다.
 
-근거: `src/components/world/Player.tsx:245`, `src/components/ui/InteractionPrompt.tsx:24`, `src/utils/collision.ts:14`.
+프롬프트와 E 키는 같은 `chooseInteraction` 우선순위를 사용한다. 입력 차단 중 명령과 키 경계는 소비하여 해제 후 재생하지 않는다. 클릭 경로 탐색·대각선 이동·경로 단축은 같은 충돌 정책을 사용한다. 실제 이동 거리로 발소리를 계산하며 막힌 경로는 종료한다. 추가 검토에서 발견한 대각선 모서리 진입은 X 이동을 반영한 목적지에서 Z 충돌을 검사하도록 수정했다.
 
-`Player`는 입력, 클릭 경로, 좌석 선택, 점프·이동·충돌, 방명록·수확, 애니메이션, 소리, 존·미니맵 상태, 그림자, 네트워크 전송, 카메라 추적을 함께 처리한다. 로컬 모듈 13개와 store 6개에 직접 의존한다. 고수준의 “무엇을 할 것인가”와 Three.js·네트워크·저장소의 “어떻게 반영하는가”가 같은 프레임 콜백에 있다.
+### 2. 방명록 데이터와 요청 수명
 
-상호작용 우선순위도 프롬프트와 제어기에 각각 있다. 규칙을 변경하면 표시 버튼과 E 키 동작을 함께 확인해야 한다. 클릭 이동과 이모트는 입력 차단 중 요청을 소비하는 방식도 서로 다르므로, 요청을 보류할지 폐기할지 정책을 명시해야 한다.
+기존 단일 `lib/guestbook.ts`와 큰 훅을 다음 경계로 나눴다.
 
-권장 변경:
+- `repository`: typed SDK 조회·작성·삭제, 실제 반환 행 확인, 중복 요청의 작성자·장소·본문 일치 확인.
+- `codec`: unknown 응답에서 쪽지 모델·공개 표시 DTO로 변환. UUID·본문·시각·이름·색상과 목록 크기를 검증.
+- `cache`: 버전·7일 수명·저장 형식과 동일 decoder에 의한 읽기·쓰기.
+- `boardState`: 게시판 projection·캐시·상태의 snapshot 및 확인된 작성·삭제 적용.
+- `GuestbookSession`: 페이지·필터·커서·조회 세대·submit 상태·재시도 요청 ID.
+- `useGuestbook`: React 외부 store 구독, 활성 수명과 재조회 신호 연결.
 
-- 이동·점프 계산, 상호작용 선택, 애니메이션 선택을 순수 함수로 분리한다.
-- 제어기는 프레임 입력과 월드 상태를 받아 pose 및 발생한 이벤트를 반환한다.
-- React/R3F 어댑터에서 store·오디오·브로드캐스트에 이벤트를 반영하고 카메라 추적은 별도 훅에 둔다.
-- `InteractionPrompt`도 동일한 상호작용 선택 결과를 소비한다.
-- 충돌 함수는 수확 여부를 store에서 직접 읽기보다 명시적인 조회 함수나 월드 상태 인자를 받게 한다.
+삭제나 작성이 확인되면 이전 조회를 무효화하고 게시판·캐시에 반영한다. 후속 조회가 실패해도 확인된 삭제를 복원하지 않는다. 네트워크 결과가 불명확한 작성 재시도는 같은 요청 ID를 사용하고, 성공 확인 후 죽순을 한 번 차감한다. 동시에 제출하는 호출은 차단한다.
 
-프레임마다 React 상태를 갱신할 필요는 없다. 현재 scratch 객체와 ref 재사용, 변경된 pose만 제한된 주기로 전송하는 최적화는 유지할 가치가 있다.
+게시판의 최근 쪽지와 패널의 내 쪽지·다음 페이지는 용도가 다른 projection으로 유지한다. 내 쪽지 필터가 공용 게시판의 원본을 덮어쓰지 않도록 별도 조회한다. 작성 당시 닉네임·색상 snapshot도 계정 삭제 후 보존 요구를 위해 유지한다.
 
-### 2. 방명록 데이터 갱신의 소유자 명확화 — 높음
+### 3. 프레임 상태·수확 상태의 변경 경계
 
-근거: `src/hooks/useGuestbook.ts:28`, `src/hooks/useGuestbook.ts:38`, `src/hooks/useGuestbook.ts:103`, `src/stores/guestbookStore.ts:43`, `src/lib/guestbook.ts`.
+`zoneStore.playerPos/playerPose`와 `graphicsStore.runtime`에 흩어진 프레임 상태를 `runtime/worldFrameState`로 이동했다. 안정된 읽기 전용 뷰를 제공하며 `publishPlayer`, `invalidateShadows`, `resetPlayer`로만 갱신한다. 프레임마다 React 상태를 갱신하지 않는 방식은 유지한다.
 
-훅 하나가 DB 조회, 공개 스냅샷, 캐시, 페이지 커서, 내 쪽지 필터, 요청 중복 방지, 죽순 차감, 상대 알림, UI 오류를 처리한다. 같은 쪽지에 대한 갱신이 `visibleNotes`, 전역 `notes`, localStorage에 수동으로 전파된다. 삭제 오류를 수정해도 다른 mutation을 추가할 때 같은 동기화 규칙을 다시 지켜야 한다.
+수확 store의 충돌용 Set은 비공개이며 소비자는 `isHarvested`로 조회한다. 렌더링은 불변 배열, 그림자 신호는 revision을 구독한다. 수확·재생성의 시각 상태와 충돌 상태는 같은 소유자에서 변경한다. 중복 수확과 잘못된 죽순 차감 값도 거부한다.
 
-게시판의 최근 쪽지와 패널의 필터·페이지 목록은 목적이 다른 projection이다. 이를 무조건 하나의 배열로 합치는 것보다 원본 데이터와 query 결과의 소유자를 명확히 하는 것이 중요하다.
+### 4. 도메인 계약·배치·표시 정책의 SSOT
 
-권장 변경:
+월드 ID, 게시판 ID, 닉네임·채팅·쪽지 길이, 쪽지 비용·페이지 크기, 플레이어 운동 상수와 중립 타입을 도메인에서 정의한다. 페이지는 임의의 첫 게시판 fallback을 복제하지 않고 같은 게시판 ID를 사용한다.
 
-- Supabase 조회·mutation을 repository 함수로, localStorage 읽기·쓰기를 cache 모듈로 분리한다.
-- 쪽지 snapshot과 mutation의 적용을 한 경계에서 처리한다. `applySnapshot`, `confirmDeletion`처럼 의도를 드러내는 API로 쪽지·상태·캐시 시각을 함께 갱신한다.
-- 패널 페이지·필터는 query 상태로 유지하고, 게시판은 최근 쪽지 projection을 읽는다.
-- 조회 무효화와 idempotency 규칙은 해당 경계에서 관리하고 훅은 UI 흐름을 조율한다.
+벤치 렌더링·충돌·좌석·일어서기·접근 범위는 `BENCH_SPEC`을 읽는다. 입자·나비 위치는 월드의 랜드마크 배치에서 도출한다. fog의 거리·구 경계 판정은 공유 helper를 사용해 정적 경관과 원격 플레이어의 서로 다른 hardcoded 판정을 없앴다.
 
-### 3. 프레임 상태의 내부 표현 숨기기 — 높음
+문자 길이는 PostgreSQL `char_length`와 일치하도록 Unicode code point로 통일했다. 닉네임·쪽지·채팅의 검증, 표시 카운터와 절단에 같은 helper를 사용하며 UTF-16 surrogate를 자르지 않는다. 이는 grapheme cluster 수가 아니므로 결합 문자·복합 이모지는 여러 글자로 센다.
 
-근거: `src/stores/zoneStore.ts:17`, `src/stores/graphicsStore.ts:25`, `src/stores/harvestStore.ts:18`, `src/components/world/Player.tsx:560`, `src/components/Scene.tsx:138`.
+### 5. 경관 렌더링·리소스 소유권
 
-플레이어 위치·회전은 zone store, 높이는 graphics store, 이모트 여부는 다시 zone store에 있다. 쓰는 쪽과 읽는 쪽 모두 여러 store의 내부 구조를 알아야 한다. `runtime.shadowRevision += 1`도 여러 렌더링 컴포넌트에서 직접 실행한다.
+Environment를 책임별 모듈로 분리하고 인스턴싱·거리 culling·품질별 업데이트 제한을 유지했다. 화면 가장자리에 걸친 구의 fog 판정도 공유 view-space 규칙을 사용한다.
 
-수확 store의 불변 배열과 가변 Set은 렌더 구독과 O(1) 충돌 조회라는 서로 다른 요구를 충족한다. 그러나 외부 코드가 표현 차이를 알아야 정확히 구독할 수 있고, 실제로 이번 그림자 오류가 발생했다.
+Ground가 복제한 texture, River가 생성한 geometry·flow texture, StaticScenery와 BambooField의 자체 geometry·material, WebAudio context·연속 음원·예약 타이머에는 명시적인 정리 경로를 추가했다. `useGLTF`의 공유 에셋을 소비자 cleanup에서 해제하지 않으며, 캐릭터 스켈레톤·가림 material의 복제와 복구는 기존 소유권을 유지한다.
 
-권장 변경은 플레이어 프레임 상태의 소유자를 하나로 정하고 `publishPose`, `readPose`, `invalidateShadows`, `isHarvested`, 수확 revision 같은 API를 제공하는 것이다. 비반응형 객체는 계속 사용할 수 있지만 외부에서 필드를 직접 변경하는 경로는 제한한다. 존 배너 상태와 그래픽 설정은 각 기능의 store에 남긴다.
+`FrameQualityMonitor`는 순수 클래스로 분리했다. 숨긴 탭에서 경과한 시간을 품질 판단에 넣지 않고 지속된 가시 샘플로 조정한다. 목표 GPU 성능은 실제 장비에서 추가 측정해야 한다.
 
-### 4. Realtime 발신자와 payload ID의 신뢰 경계 — 높음
+### 6. Realtime 작성자 신뢰·채널 수명
 
-근거: `src/hooks/useMultiplayer.ts:178`, `src/hooks/useMultiplayer.ts:204`, `supabase/migrations/20260728122935_authorize_global_world_realtime.sql:10`.
+Supabase Realtime의 `realtime.messages` RLS는 JOIN 권한 검사에 사용되고 권한이 연결에 캐시된다. 매 payload의 `id`를 확인하는 정책만으로 발신자를 인증할 수 없으므로 전송 계약을 변경했다.
 
-수신자는 `payload.id`가 presence 목록에 있는지만 확인한다. 현재 SQL 정책은 인증 사용자가 지정된 topic에 접속·전송하도록 허용하지만 payload의 ID를 실제 JWT 사용자와 묶지 않는다. 따라서 이 코드의 검증만으로는 다른 접속자의 ID·닉네임을 넣은 채팅이나 이동 메시지를 구분할 수 없다. presence key도 클라이언트가 지정한다.
+공유 `world:panda-village` 채널은 presence 후보 탐색과 방명록 무효화에만 사용한다. 이동·채팅은 비공개 `world:panda-village:player:<auth.uid()>` 채널로 발행한다. 새 INSERT 정책은 자기 ID의 topic만 허용하며 수신자는 구독한 topic의 ID를 사용한다. payload의 작성자 ID는 사용하지 않는다.
 
-좌표·길이·애니메이션 검증은 좋은 입력 방어지만 작성자 인증과는 별개다. 공개 접속에서 작성자 신뢰가 필요하다면 서버가 인증한 발신자 정보를 수신자가 검증할 수 있는 전송 경계를 마련해야 한다. 채팅은 인증된 서버 경유 전송을 검토하고, 이동·presence도 동일한 신뢰 요구를 명시해야 한다. 클라이언트에서 ID를 한 번 더 비교하는 것만으로 해결되지 않는다.
+presence는 인증된 캐릭터 정보가 아니다. 후보 발견에만 사용하며, 해당 인증 topic에서 검증된 이동을 받기 전에는 캐릭터·접속 인원에 추가하지 않는다. UUID 후보 구독은 최대 64개로 제한한다. 전체 presence meta로 사용자 퇴장을 판단해 여러 탭 중 하나가 닫혀도 나머지 탭의 캐릭터를 제거하지 않는다.
 
-이는 정적 검토에서 확인한 프로토콜 한계이며 실서버 공격 검증은 수행하지 않았다. 이번 변경에서는 서버·프로토콜을 변경하지 않았다. 방명록은 알림 payload의 내용을 믿지 않고 RLS가 적용된 DB에서 다시 읽으므로 이 문제와 경계가 다르다.
+`WorldTransport`는 실제 세션 ID 확인·setAuth·채널·2초 heartbeat·오래된 콜백 무효화·정리를 소유한다. 공유 채널과 자기 발행 채널이 준비되고 track이 성공해야 연결 완료로 표시한다. 마지막 pose는 복사하여 heartbeat와 늦게 접속한 상대에게 전달한다. payload의 좌표·회전·애니메이션·텍스트는 unknown decoder에서 검증한다.
 
-### 5. 도메인 상수·타입과 배치 데이터의 SSOT 정리 — 중간
+새 SQL 파일은 CLI로 생성한 `supabase/migrations/20261003055537_authorize_player_realtime_topics.sql`이다. **실제 Supabase 프로젝트에는 적용하지 않았다.** 배포 전에 먼저 적용해야 하며 이전 프로토콜과 새 프로토콜의 이동·채팅은 호환되지 않으므로 배포 후 기존 클라이언트 새로고침이 필요하다. 기존 공유 채널 정책은 탐색과 이전 클라이언트 호환을 위해 유지한다.
 
-근거: `src/hooks/useGlobalWorld.ts:7`, `src/components/ui/GuestbookPanel.tsx:6`, `src/stores/guestbookStore.ts:4`, `src/components/world/Player.tsx:31`, `src/types/multiplayer.ts:16`, `src/constants/world/index.ts:91`, `src/components/world/Particles.tsx:15`.
+### 7. 인증·연결 capability
 
-`GLOBAL_WORLD_KEY`는 인증 훅에, 쪽지 타입·비용·표시 슬롯 수는 Zustand store에, 키보드 Controls는 렌더 컴포넌트에 있다. UI가 글자 수 상수를 얻으려고 데이터 조회 훅을 import한다. `lib/guestbook`도 타입을 store에서 가져온다. 타입 전용 import는 런타임 결합을 만들지는 않지만 도메인 계약의 위치가 저장 구현에 종속된다.
+익명 인증·프로필은 `useGlobalWorld`와 worldAccess, 전송 상태는 WorldTransport가 소유하고 `useVillageSession`이 조율한다. DB에 인증되어 쪽지를 쓸 수 있는 상태와 채팅 채널이 준비된 상태는 각각 판단한다. UI가 연결 여부를 직접 조합하거나 모든 기능을 동일한 online flag로 묶지 않는다.
 
-중립적인 도메인 모듈에 타입·정책 상수를 두고 UI·훅·store가 함께 읽게 한다. pose는 `Player` prop과 `PlayerState`에 중복된 형태 대신 공통 타입을 쓰고, 내부 애니메이션 값에는 `PlayerAnimType`을 사용하면 오타를 컴파일 단계에서 잡을 수 있다.
+인증 실패 시 로컬 산책과 공개 스냅샷·캐시 읽기 경로는 유지한다. Supabase와 캐시가 모두 없으면 쪽지 목록을 제공할 수 없으며 인터넷 없는 최초 실행을 보장하지 않는다.
 
-월드 배치에서 collision과 minimap을 도출하는 현재 구조는 좋은 SSOT다. 다만 아래 값은 별도로 관리한다.
+### 8. DB 타입·외부 응답 계약
 
-- 마을 고목 배치는 `(-1, 6)`이지만 꽃잎 중심과 고목 주석이 붙은 나비 앵커는 `(-6, 5)`다. 효과 중심이 나무 배치를 따를 의도라면 배치에서 도출해야 한다.
-- 벤치 시각 치수, 충돌 반폭·반깊이, 좌석 오프셋이 각 파일에 있다. 관련 규격을 한 정의에서 도출하면 크기 변경 시 상호작용을 함께 맞출 수 있다.
-- 집·게시판의 수동 충돌 박스는 위치·크기와의 관계를 검증할 계약이 필요하다. 시각 bbox와 충돌 범위가 의도적으로 다를 수 있으므로 무조건 동일하게 만들 필요는 없다.
-- 모델 URL·노드 이름·scale과 스크립트의 입출력 경로는 공통 에셋 manifest 후보다.
-- 그래픽 preset의 `shadows`와 별도의 low 품질 분기, 서버 route의 `50`과 `NOTE_PAGE_SIZE`는 변경 시 함께 점검해야 한다.
+읽기 전용으로 현재 프로젝트의 Database 타입을 생성해 client에 연결했다. 쓰기 타입은 실제 컬럼 권한에 맞게 좁혀 trigger가 채우는 snapshot 필드 등을 클라이언트가 입력하지 않게 한다. 도메인 모델은 SDK row 타입을 직접 사용하지 않는다.
 
-SQL과 프런트엔드의 세계 ID·장소 ID·길이 제한은 언어 경계를 넘어 공유되는 계약이다. 적용된 migration을 다시 편집하지 말고 현재 계약을 문서화·검증하는 테스트로 차이를 잡는다. 경계마다 수행하는 입력 검증은 유지한다.
+공개 snapshot API는 unknown RPC 결과를 검증하고 표시용 5개 필드만 반환한다. 캐시·공개 API·DB 응답은 같은 쪽지 변환 계약을 사용한다. SQL의 RLS·컬럼 권한·서버 trigger는 신뢰 경계의 최종 강제로 유지하며, UI 검증과 서버 검증은 각각 필요하므로 단순 중복으로 제거하지 않았다.
 
-### 6. Environment의 추상화 수준과 렌더링 정책 분리 — 중간
+### 9. 에셋 GLB 계약·검증 후 게시
 
-근거: `src/components/world/Environment.tsx:49`, `src/components/world/Environment.tsx:717`, `src/components/world/Environment.tsx:1024`, `src/components/world/DistanceCulledGroup.tsx:21`, `src/components/world/RemotePlayer.tsx:52`.
+`assets.json`이 원본 경로·런타임 URL·플레이어 메시/재질/scale을 정의하고 렌더러와 모든 도구가 읽는다. 공통 GLB reader/writer는 헤더·길이·chunk·정렬·buffer/accessor 경계를 확인하며 stride를 반영한다. 미지원 sparse·압축·외부 buffer 입력을 잘못된 float 배열로 해석하지 않는다. quaternion 연산과 LOD 계약도 공유한다.
 
-`Environment`는 도형 생성, 절차적 배치, 개별 시설물 표현, 정적 인스턴스 기록, GPU 데이터 압축, culling, 월드 조합을 함께 담는다. 파일 길이 자체보다 변경 이유가 다른 계층들이 섞여 있다는 점이 문제다.
+과거 가중치·꼬리 수리 도구는 수정할 비압축 원본 경로를 필수 인자로 받는다. 예상 component type·packed·비정규화·비압축 레이아웃과 가중치·본 범위를 확인하고, 사후 검증까지 메모리에서 마친 뒤 파일을 교체한다. 압축·양자화된 런타임 파일을 기본 입력으로 쓰지 않는다.
 
-공통 인스턴스 렌더링·culling, 식생, 시설물, 최상위 조합으로 책임을 나누는 것이 적절하다. 여러 culling 구현에서 사용하는 fog far·view-space depth·margin의 공통 계산은 공유할 수 있다. 정적 그룹·인스턴스·이동 캐릭터는 경계와 갱신 주기가 다르므로 모든 기능을 하나의 범용 훅으로 합칠 필요는 없다.
+재생성·경관 최적화는 임시 public 루트에서 전체 결과를 생성·검증한다. 모든 게시 파일을 대상 파일시스템에 준비한 뒤 교체하므로 서로 다른 마운트의 rename 실패를 피한다. 게시 중 오류는 이전 파일 세트로 rollback하며 복구 실패 시 backup 경로를 남긴다. 단일 파일 교체는 atomic rename이지만 여러 파일의 동시 배포 트랜잭션은 아니다. 운영 배포는 검증된 전체 디렉터리를 배포 시스템으로 전환한다.
 
-Three.js 리소스는 소유권도 함께 명시한다. GLTF에서 공유하는 geometry·material, 카메라 가림을 위해 복제한 material, 직접 생성한 texture는 수명이 다르다. `useCameraOccluder`의 복제·정리 패턴은 좋은 예다. `Ground`의 texture clone, `River`의 CanvasTexture, 전역 오디오 타이머·oscillator는 월드 재마운트 시 유지할지 해제할지 계약을 보강할 후보다. 현재 리뷰만으로 메모리 누수를 실측했다고 판단하지는 않는다.
+`--check`로 실제 전체 생성·검증을 실행했고 게시는 생략했다. 플레이어 기본 모델·클립과 두 LOD의 본 순서·휴식 변환·속성·가중치·인덱스, 경관 Meshopt 디코드·geometry·bbox가 통과했다. 원본과 배포 바이너리는 변경하지 않았다.
 
-### 7. 인증 상태와 연결 상태의 조율 책임 — 중간
+### 10. UI·검증 경계·가독성
 
-근거: `src/hooks/useGlobalWorld.ts:10`, `src/hooks/useMultiplayer.ts:61`, `src/app/page.tsx:135`.
+전체 TS/TSX·스크립트의 긴 JSX와 표현식을 정돈했다. 목적이 다른 UI를 하나의 범용 컴포넌트로 묶는 추상화는 도입하지 않았다. 채팅은 store의 20개 제한을 그대로 사용하고 접힌 상태의 최근 3개만 UI에서 선택한다.
 
-인증 훅은 세션·프로필·온라인/오프라인 모드를 관리하고 multiplayer 훅은 세션을 다시 읽어 Realtime 인증·연결·재시도를 관리한다. page는 두 결과와 재시도 키, 패널 상태로 각 기능의 허용 여부를 결정한다. 인증과 transport의 책임을 구분한 점은 좋지만 전이 규칙이 여러 곳에 분산되어 있다.
+브라우저에서 확인한 방명록 포커스 누락은 AnimatePresence가 실제 DOM을 연결하는 시점에 포커스 제어가 설치되지 않은 문제였다. `useDialogFocus`가 callback ref로 전달된 DOM 노드를 소유하고 노드·열림 상태의 수명에 맞춰 focus·Tab trap·Escape·복원을 설치·해제한다. 데스크톱과 모바일 viewport에서 확인했다. 로딩 이미지에도 실제 표시 크기와 맞는 responsive sizes를 추가했다.
 
-인증 성공과 Realtime 연결 성공은 서로 다른 상태다. DB 쓰기가 가능한데 채팅 연결은 끊길 수 있다. 하나의 `online` boolean으로 합치기보다, 조율 경계에서 `canWriteNotes`, `canChat`, `canMoveRemotely` 같은 capability를 도출하고 각 UI가 이를 사용하게 한다. transport는 연결·취소·heartbeat를 소유하고 인증은 세션·프로필을 소유하도록 유지한다.
+테스트는 실제 프로젝트 소스를 실행하지만 모든 React/R3F·SDK 환경을 그대로 실행하는 것은 아니다. 순수 정책·요청 수명·권한·실패 시 파일 보존처럼 필요한 계약을 검증하고, UI 수명은 별도 실제 브라우저 검사로 보완했다.
 
-### 8. DB 어댑터 타입과 외부 응답 검증 — 중간
+## 재현된 오류와 회귀 검증
 
-근거: `src/lib/supabase.ts:10`, `src/hooks/useGuestbook.ts:10`, `src/app/api/world-snapshot/route.ts:17`, `src/lib/guestbook.ts`.
-
-Supabase client가 생성된 Database 타입을 사용하지 않아 조회 컬럼·쓰기 응답과 migration의 계약이 컴파일 시 연결되지 않는다. 공개 snapshot route도 배열인지 확인한 뒤 원소의 구조는 그대로 읽는다. 반면 클라이언트의 `toGuestbookNote`는 unknown 응답을 표시 타입으로 바꾸는 좋은 경계다.
-
-Database 타입과 명시적인 DB DTO를 어댑터에 두고 query의 컬럼 선택·변환을 한 곳에서 관리한다. 서버 공개 projection도 원소의 타입을 검증하면 DB 계약 변경이나 비정상 응답을 더 명확히 처리할 수 있다. 도메인 모델에서 Supabase row 타입을 직접 사용하지 않는 편이 변경 범위를 줄인다.
-
-### 9. 에셋 스크립트의 공통 처리와 검증 후 게시 — 중간
-
-근거: `scripts/lib/clip-gen.mjs:55`, `scripts/add-tail-rig.mjs:68`, `scripts/fix-skin-weights.mjs:134`, `scripts/fix-face-weights.mjs:97`, `scripts/fix-fallback-weights.mjs:212`, `scripts/add-tail-rig.mjs:270`, `scripts/rebuild-player-model.mjs:21`.
-
-GLB의 chunk 파싱, accessor 해석, padding·조립, quaternion 연산이 여러 스크립트에서 반복된다. `clip-gen`의 공통 수학·클립 생성기는 이미 유용한 경계다. 반면 과거의 가중치 수정 스크립트는 float 입력을 전제로 현재 배포 경로를 직접 수정하므로, 압축·양자화된 런타임 GLB에 적용하지 않도록 입력 형식을 분명히 제한해야 한다.
-
-세 가지 weight 수정 스크립트와 tail rig 추가는 사후 검증보다 파일 쓰기가 먼저다. 검증이 실패하면 실패한 결과가 이미 파일에 남는다. rebuild도 런타임 디렉터리에서 여러 단계를 실행해 중간 실패 시 파일 세트가 부분 갱신될 수 있다. `optimize-base-glb`가 임시 결과를 검사하고 교체하는 방식은 더 안전하다.
-
-공통 GLB reader/writer에서 component type·stride·normalized·압축 조건을 검증하고, 원본을 읽어 임시 출력 전체를 검증한 뒤 게시하는 흐름을 권한다. 과거 1회성 수리 도구와 반복 실행할 빌드 도구도 구분한다. 이 검토에서 에셋 재생성·쓰기 도구는 실행하지 않았다.
-
-### 10. 테스트 경계와 작은 품질 개선 — 중간 / 낮음
-
-근거: `scripts/tests/world-rls.mjs:29`, `scripts/tests/client-state.test.mjs`, `src/hooks/useGraphicsMonitor.ts:9`, `src/components/ui`.
-
-DB 테스트는 권한·소유권·중복 재시도·공개 projection·계정 삭제 후 보존을 검증한다. 다만 선정한 현재 world migration과 후속 파일을 적용하며, 폐기된 room migration과 Realtime 서비스까지 포함한 전체 이력 재생은 아니다. 새 클라이언트 테스트도 실제 TypeScript 소스를 실행하지만 React 훅 스케줄링과 R3F 프레임은 제어한 모의 환경이다.
-
-다음 검증 우선순위는 순수 제어기·상호작용 정책, 필터·페이지 조회와 mutation의 경쟁, 인증·transport 상태 전이, 실제 브라우저의 재연결·모바일 입력이다. `FrameQualityMonitor`처럼 순수 판단 로직은 React 모듈에서 분리하면 검증하기 쉽다. PGlite 테스트와 별도 서버 접근 검증 도구의 역할 구분은 유지한다.
-
-UI의 작은 기능 컴포넌트들은 대체로 응집도가 높다. 방명록 패널의 포커스 처리, 채팅 입력의 한글 조합 처리도 확인했다. `EmoteBar`, `InventoryHUD`, 그래픽 설정 등의 긴 한 줄 JSX와 조밀한 조회 체인은 포맷을 풀어 리뷰·디버깅 가독성을 높일 수 있다. 공통 컴포넌트는 실제 반복되는 행동이 있을 때 추출하고, UI·훅·DB의 신뢰 경계 검증을 중복이라는 이유로 제거하지 않는다.
-
-## 유지할 설계
-
-- zone 배치를 중심으로 world 렌더링·collision·minimap 데이터를 도출하는 구조.
-- 프레임 상태의 ref·scratch 객체 재사용, 공간 해시 충돌, 이동 상태 변화에 따른 전송 제한, 거리·품질에 따른 애니메이션 빈도 조절.
-- GLTF 스켈레톤 복제와 mixer 정리, 카메라 가림용 material의 복제·복구·해제.
-- 방명록 알림은 무효화 신호로만 사용하고 실제 내용은 DB에서 읽는 경계.
-- 작성 당시 이름·색상의 불변 snapshot. 계정 삭제 후 쪽지를 보존하는 제품 요구를 충족하므로 프로필과의 중복을 무조건 정규화하지 않는다.
-- RLS·컬럼 권한·서버 trigger로 소유권과 쓰기 계약을 강제하는 설계.
-- 외부 설정이나 인증 실패 시 로컬 월드를 열고 읽기 전용 snapshot·캐시로 전환하는 경로.
-- 정적 로컬 import 그래프에서 순환 의존을 발견하지 않았다. 순환이 없어도 의미적 결합과 변경 책임은 위 항목처럼 개선할 수 있다.
-
-## 권장 작업 순서
-
-1. 프레임 상태 변경 API와 방명록 mutation 적용 경계를 먼저 정리한다. 이번 오류가 발생한 경계를 좁히는 작업이다.
-2. 중립 도메인 타입·상수와 공통 상호작용 선택 함수를 분리한다.
-3. 이동·상호작용 제어기를 순수 로직으로 옮기고 기존 어댑터에서 연결한다. 동작별 회귀 검증을 추가한다.
-4. 외부 발신자 신뢰 요구를 정하고 Realtime 전송 계약을 보강한다. 공개 배포에서 작성자 인증이 필요하면 우선순위를 앞당긴다.
-5. Environment와 GLB 도구를 책임별로 나누고 에셋 검증 후 게시를 적용한다.
-
-## 실행한 검증
-
-| 검사 | 결과 | 범위 |
+| 오류 | 수정 | 검증 |
 | --- | --- | --- |
-| ESLint | 통과 | 프로젝트 전체 |
-| TypeScript `--noEmit --incremental false` | 통과 | 전체 타입 검사 |
-| Next.js production build | 통과 | 컴파일·정적 생성·route 구성 |
-| `test:client` | 11/11 통과 | 위 4건의 실제 소스에 대한 모의 클라이언트 회귀 검사 |
-| `test:world-db` | 25/25 통과 | 격리된 PGlite의 DB 권한·정책·trigger·snapshot 계약 |
-| `player:validate` | 통과 | 플레이어 rig·geometry·가중치 계약 |
-| `scenery:validate` | 통과 | 경관 GLB 디코드·기하·bbox; 실제 텍스처 표시는 범위 밖 |
+| 삭제한 쪽지가 늦은 조회로 다시 나타남 | 확인된 삭제 후 조회 세대 무효화·목록/게시판/캐시 적용 | 오래된 조회 성공·실패, 삭제 실패, 후속 조회 실패 |
+| 화면 밖에서 이동한 상대가 이전 pose부터 보간됨 | 숨김·데이터 소실 시 초기화 해제, 복귀 시 최신 pose 적용 | 재진입·데이터 복구·가시 상태의 보간 유지 |
+| ±π 경계에서 긴 방향으로 회전 | 음수 나머지를 정규화한 최단 호 계산 | 양방향 경계·누적 회전 |
+| 수확·재생성 시 그림자 갱신 누락 | 수확 소유자의 변경 revision 구독 | 실제 store의 수확·재생성 |
+| 축별 충돌은 통과하지만 합친 대각선이 장애물 안으로 진입 | 수용된 X 위치로 Z 목적지 검사 | 수정 전 실패 재현, 수정 후 반복 이동 및 실제 게시판 경로 통과 |
+| 입력 차단 중 요청이 나중에 실행되거나 막혀도 발소리 발생 | 명령·키 경계 소비와 실제 이동 거리 사용 | 잠금 해제·벽 충돌·클릭 이동 |
+| 닉네임·쪽지·채팅의 이모지 길이가 SQL과 불일치 | Unicode code point 계산·절단 통일 | 클라이언트·SQL 80개 이모지, 닉네임 10개·채팅 100개 제한 |
+| Realtime payload가 다른 사용자를 사칭할 수 있음 | 자기 JWT topic 발행과 topic 기반 수신자 식별 | 위조 payload ID·presence, 채널 실패·재연결·여러 탭, RLS 역할별 topic 권한 |
+| GLB 사후 검사·다중 파일 게시 실패가 원본을 변경 | 검증 후 쓰기·전체 세트 준비·rollback | 실제 수리 검사 실패, 게시 전 검사 실패, 주입한 게시 실패에서 원본 보존 |
+| 방명록이 열려도 키보드 포커스가 밖에 남음 | 실제 DOM 연결에 포커스 수명 결속 | 데스크톱·390×844에서 Tab/Shift+Tab·Escape·포커스 복원 |
 
-같은 클라이언트 회귀 테스트를 변경 전 HEAD 소스로 구성한 임시 환경에서도 실행했다. 변경 전에는 3개 통과·8개 실패했고, 수정 후에는 11개 모두 통과했다. 임시 환경은 검사 후 삭제했다.
+초기 4건의 동일 회귀 테스트는 수정 전 HEAD로 구성한 임시 환경에서 3개 통과·8개 실패했고, 첫 수정 뒤 11개 모두 통과했다. 이후 구조 변경과 추가 문제에 맞춰 45개로 확장했으며 최종 전체 검사가 통과했다.
 
-실서버에 쓰는 `world:verify`, 실기기 브라우저·WebGL 시각 검사, 목표 GPU의 성능 측정은 실행하지 않았다. DB migration과 에셋은 변경하지 않았다.
+## 실행한 검증과 한계
 
-## 파일별 검토 범위
+| 검사 | 최종 결과 | 범위 |
+| --- | --- | --- |
+| `node node_modules/eslint/bin/eslint.js .` | 통과 | 전체 프로젝트 lint |
+| `node node_modules/typescript/bin/tsc --noEmit --incremental false` | 통과 | 전체 타입 검사 |
+| `node node_modules/next/dist/bin/next build` | 통과 | Next.js 16.3.4 production 컴파일·정적 생성·route |
+| `node --test scripts/tests/*.test.mjs` | 45/45 통과 | 기존 클라이언트 11·도메인 4·방명록 7·전송 8·플레이어 9·에셋 6 |
+| `node scripts/tests/world-rls.mjs` | 32/32 통과 | 격리 PostgreSQL의 RLS·컬럼/trigger·snapshot·Unicode·Realtime topic 권한 |
+| `node scripts/validate-player-model.mjs` | 통과 | 기본 rig·클립·가중치와 두 LOD 계약 |
+| `node scripts/validate-scenery-glb.mjs` | 통과 | 실제 런타임 decoder 경관 geometry·bbox |
+| `node scripts/rebuild-player-model.mjs --check` | 통과 | 원본부터 전체 플레이어 생성·최적화·LOD·검증, 게시 생략 |
+| `node scripts/optimize-scenery-glb.mjs --check` | 통과 | 전체 경관 생성·최적화·디코드 검증, 게시 생략 |
+| 로컬 정적 import/export 그래프 | 순환 0개 | src TS/TSX 100개·scripts MJS 30개, 외부 의존성 제외 |
+| Chromium WebGL 실제 브라우저 | 통과 | 입장·캐릭터/경관·WASD·게시판 이동·입력 잠금·읽기 전용 채팅·캐시 쪽지·설정·반응형·포커스 |
 
-아래 목록은 전체 코드 읽기의 범위다. 개별 파일에 문제가 없다는 증명이나 자동 테스트의 커버리지 목록은 아니다. 각 묶음의 결과는 위 개선 항목과 유지할 설계에 반영했다.
+브라우저 검사는 Supabase 공개 환경 변수를 비운 명시적인 로컬 모드로 실행했다. 설정 없는 snapshot API의 503과 캐시 fallback은 예상한 경로이며 페이지 JavaScript 오류는 없었다. WebGL은 소프트웨어 렌더러를 사용했다. 로딩 이미지 sizes 경고는 수정했으며 Three.js dependency의 Clock deprecation 경고는 남아 있다. 실제 서버 인증·쓰기·웹소켓을 검사했다는 의미는 아니다.
+
+PGlite는 실제 PostgreSQL 정책을 실행하지만 hosted Auth/PostgREST/Realtime 서비스, 여러 DB 연결의 advisory-lock 경쟁이나 폐기된 room migration을 포함한 전체 이력 재생을 대신하지 않는다. Realtime SQL 검사는 JOIN 권한의 로컬 계약을 확인하며 실제 서비스의 연결·권한 캐시 동작은 별도 확인해야 한다. 자동 테스트 수는 전체 코드의 완전한 커버리지 수치가 아니다.
+
+## 운영에서 남은 확인
+
+1. 실제 Supabase에 새 사용자별 topic migration을 먼저 적용한 뒤 클라이언트를 배포하고 기존 클라이언트를 새로고침한다. 이번 작업은 로컬 파일·격리 검증까지 수행했다.
+2. 배포 환경에서 3~4인 접속, 늦은 입장, 여러 탭 퇴장, 네트워크 단절·재연결, 인증 갱신과 쪽지 교환을 확인한다. 계정·데이터를 생성하는 `world:verify`는 별도 테스트 환경에서 실행한다.
+3. 실제 모바일의 한글 조합·가상 키보드, 여러 카메라 시점의 벤치·캐릭터 간섭을 확인한다. viewport 검사는 실제 전화기 입력을 대신하지 않는다.
+4. Quadro P400 2GB에서 1080p·30fps, 낮밤·대숲·여러 캐릭터와 실제 내부 렌더 해상도를 측정한다. 소프트웨어 WebGL로 목표 장비 성능을 보증하지 않는다.
+
+이 항목들은 이번 소스 리팩터링의 미완료 권장 목록이 아니라 배포 순서와 실제 환경에서 확인할 범위다.
+
+## 유지한 설계
+
+- 월드 배치를 중심으로 렌더링·collision·minimap을 도출하는 구조.
+- 프레임 객체 재사용, 공간 해시, 변경된 pose 전송 제한과 거리·품질별 애니메이션 갱신.
+- GLTF 스켈레톤 복제·mixer 정리와 카메라 가림용 material의 복제·복구·해제.
+- 방명록 알림은 무효화 신호로만 사용하고 내용은 DB에서 조회하는 경계.
+- 작성 당시 닉네임·색상 snapshot과 계정·프로필 삭제 뒤 쪽지 보존.
+- 서버의 RLS·컬럼 권한·trigger와 입력 경계의 검증.
+- 인증 실패 시 로컬 월드, 읽기 전용 공개 스냅샷·캐시 fallback.
+
+## 파일별 최종 검토 범위
+
+아래는 소스 검토의 파일 목록이다. 개별 파일의 무결성 증명이나 테스트 커버리지 목록은 아니다. 새로 생성된 Database 타입은 SDK 연결·허용 컬럼 계약을 확인했다.
+
+### scripts — 17개
+
+- `scripts/add-tail-rig.mjs`
+- `scripts/extract-clip-glb.mjs`
+- `scripts/fix-face-weights.mjs`
+- `scripts/fix-fallback-weights.mjs`
+- `scripts/fix-skin-weights.mjs`
+- `scripts/generate-emote-clips.mjs`
+- `scripts/generate-idle-clip.mjs`
+- `scripts/generate-player-lods.mjs`
+- `scripts/generate-sit-clip.mjs`
+- `scripts/optimize-base-glb.mjs`
+- `scripts/optimize-scenery-glb.mjs`
+- `scripts/rebuild-player-model.mjs`
+- `scripts/refine-locomotion-clips.mjs`
+- `scripts/rigidify-tail-weights.mjs`
+- `scripts/validate-player-model.mjs`
+- `scripts/validate-scenery-glb.mjs`
+- `scripts/verify-world-access.mjs`
+
+### scripts/lib — 5개
+
+- `scripts/lib/assets.mjs`
+- `scripts/lib/clip-gen.mjs`
+- `scripts/lib/glb.mjs`
+- `scripts/lib/player-lod.mjs`
+- `scripts/lib/publish-assets.mjs`
+
+### scripts/tests — 7개
+
+- `scripts/tests/assets.test.mjs`
+- `scripts/tests/client-state.test.mjs`
+- `scripts/tests/domain.test.mjs`
+- `scripts/tests/guestbook.test.mjs`
+- `scripts/tests/multiplayer.test.mjs`
+- `scripts/tests/player.test.mjs`
+- `scripts/tests/world-rls.mjs`
+
+### scripts/tests/helpers — 1개
+
+- `scripts/tests/helpers/load-source.mjs`
 
 ### src/app/api/world-snapshot — 1개
 
@@ -226,37 +263,97 @@ UI의 작은 기능 컴포넌트들은 대체로 응집도가 높다. 방명록 
 - `src/components/world/River.tsx`
 - `src/components/world/World.tsx`
 
-### src/constants — 2개
+### src/components/world/environment — 7개
 
+- `src/components/world/environment/BambooField.tsx`
+- `src/components/world/environment/CulledInstances.tsx`
+- `src/components/world/environment/StaticScenery.tsx`
+- `src/components/world/environment/Structures.tsx`
+- `src/components/world/environment/geometry.ts`
+- `src/components/world/environment/instanceData.ts`
+- `src/components/world/environment/placements.ts`
+
+### src/constants — 3개
+
+- `src/constants/assets.json`
 - `src/constants/playerAnimations.ts`
 - `src/constants/rendering.ts`
 
-### src/constants/world — 8개
+### src/constants/world — 9개
 
 - `src/constants/world/bambooGrove.ts`
 - `src/constants/world/bounds.ts`
 - `src/constants/world/index.ts`
+- `src/constants/world/objects.ts`
 - `src/constants/world/riverside.ts`
 - `src/constants/world/southField.ts`
 - `src/constants/world/types.ts`
 - `src/constants/world/village.ts`
 - `src/constants/world/wilds.ts`
 
-### src/hooks — 7개
+### src/domain — 6개
+
+- `src/domain/capabilities.ts`
+- `src/domain/guestbook.ts`
+- `src/domain/interaction.ts`
+- `src/domain/player.ts`
+- `src/domain/text.ts`
+- `src/domain/world.ts`
+
+### src/domain/player — 4개
+
+- `src/domain/player/animation.ts`
+- `src/domain/player/controller.ts`
+- `src/domain/player/movement.ts`
+- `src/domain/player/proximity.ts`
+
+### src/domain/rendering — 1개
+
+- `src/domain/rendering/FrameQualityMonitor.ts`
+
+### src/hooks — 13개
 
 - `src/hooks/useCameraOccluder.ts`
 - `src/hooks/useDayNightCycle.ts`
+- `src/hooks/useDialogFocus.ts`
+- `src/hooks/useFollowPlayer.ts`
 - `src/hooks/useGlobalWorld.ts`
 - `src/hooks/useGraphicsMonitor.ts`
 - `src/hooks/useGuestbook.ts`
 - `src/hooks/useMultiplayer.ts`
+- `src/hooks/usePlayerBroadcast.ts`
+- `src/hooks/usePlayerController.ts`
 - `src/hooks/useViewportHeight.ts`
+- `src/hooks/useVillageSession.ts`
+- `src/hooks/useWorldShadowSignals.ts`
 
-### src/lib — 3개
+### src/lib — 4개
 
 - `src/lib/audio.ts`
-- `src/lib/guestbook.ts`
 - `src/lib/supabase.ts`
+- `src/lib/worldAccess.ts`
+- `src/lib/worldCollision.ts`
+
+### src/lib/guestbook — 5개
+
+- `src/lib/guestbook/boardState.ts`
+- `src/lib/guestbook/cache.ts`
+- `src/lib/guestbook/codec.ts`
+- `src/lib/guestbook/repository.ts`
+- `src/lib/guestbook/session.ts`
+
+### src/lib/multiplayer — 2개
+
+- `src/lib/multiplayer/WorldTransport.ts`
+- `src/lib/multiplayer/protocol.ts`
+
+### src/lib/rendering — 1개
+
+- `src/lib/rendering/culling.ts`
+
+### src/runtime — 1개
+
+- `src/runtime/worldFrameState.ts`
 
 ### src/stores — 7개
 
@@ -268,8 +365,10 @@ UI의 작은 기능 컴포넌트들은 대체로 응집도가 높다. 방명록 
 - `src/stores/moveTargetStore.ts`
 - `src/stores/zoneStore.ts`
 
-### src/types — 1개
+### src/types — 3개
 
+- `src/types/clientDatabase.ts`
+- `src/types/database.ts`
 - `src/types/multiplayer.ts`
 
 ### src/utils — 4개
@@ -279,36 +378,7 @@ UI의 작은 기능 컴포넌트들은 대체로 응집도가 높다. 방명록 
 - `src/utils/math.ts`
 - `src/utils/pathfinder.ts`
 
-### scripts — 17개
-
-- `scripts/add-tail-rig.mjs`
-- `scripts/extract-clip-glb.mjs`
-- `scripts/fix-face-weights.mjs`
-- `scripts/fix-fallback-weights.mjs`
-- `scripts/fix-skin-weights.mjs`
-- `scripts/generate-emote-clips.mjs`
-- `scripts/generate-idle-clip.mjs`
-- `scripts/generate-player-lods.mjs`
-- `scripts/generate-sit-clip.mjs`
-- `scripts/optimize-base-glb.mjs`
-- `scripts/optimize-scenery-glb.mjs`
-- `scripts/rebuild-player-model.mjs`
-- `scripts/refine-locomotion-clips.mjs`
-- `scripts/rigidify-tail-weights.mjs`
-- `scripts/validate-player-model.mjs`
-- `scripts/validate-scenery-glb.mjs`
-- `scripts/verify-world-access.mjs`
-
-### scripts/lib — 1개
-
-- `scripts/lib/clip-gen.mjs`
-
-### scripts/tests — 2개
-
-- `scripts/tests/client-state.test.mjs`
-- `scripts/tests/world-rls.mjs`
-
-### supabase/migrations — 18개
+### supabase/migrations — 19개
 
 - `supabase/migrations/20260723164016_social_rooms_v1.sql`
 - `supabase/migrations/20260723164041_social_rooms_v1_advisor_fixes.sql`
@@ -328,10 +398,12 @@ UI의 작은 기능 컴포넌트들은 대체로 응집도가 높다. 방명록 
 - `supabase/migrations/20260816173623_allow_profile_upsert_conflict_target.sql`
 - `supabase/migrations/20260907075944_preserve_world_traces_and_public_snapshot.sql`
 - `supabase/migrations/20260907081511_preserve_snapshot_color_mapping.sql`
+- `supabase/migrations/20261003055537_authorize_player_realtime_topics.sql`
 
 ### 설정·문서
 
 - `.gitignore`
+- `.vscode/settings.json`
 - `package.json`
 - `pnpm-lock.yaml`
 - `tsconfig.json`
@@ -340,5 +412,6 @@ UI의 작은 기능 컴포넌트들은 대체로 응집도가 높다. 방명록 
 - `postcss.config.mjs`
 - `README.md`
 - `docs/architecture.md`
+- `docs/code-review.md`
 
-잠금 파일은 의존성·버전 설정을 확인했으며 생성된 모든 항목을 수작업 코드처럼 검토한 것은 아니다. 로컬 `AGENTS.md`의 Next.js 지침과 에셋 원본 관련 문서도 확인했다.
+로컬 `AGENTS.md`와 해당 Next.js 버전의 번들 문서도 확인했다. 의존성 소스·favicon 등 바이너리 파일과 에셋 자체는 위 수작업 코드 목록에 포함하지 않았다.

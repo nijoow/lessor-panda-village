@@ -14,6 +14,8 @@
 - `PlayerController`는 프레임 입력에서 pose·상호작용 이벤트를 계산한다. R3F 어댑터가 store·오디오에 반영하며 카메라 추적과 전송 주기는 별도 훅이 관리한다.
 - 방명록 repository는 DB 계약, cache는 저장 형식, `GuestbookSession`은 요청 수명·페이지·필터·재시도, boardState는 게시판 projection과 캐시 갱신을 소유한다. 확인된 쓰기·삭제를 오래된 조회 결과로 되돌리지 않는다.
 - `useVillageSession`이 capability를 도출한다. 인증된 DB 쓰기와 Realtime 채팅 연결은 각각 판단한다.
+- 닉네임·쪽지·채팅 길이는 `src/domain/text`의 Unicode code point 계산을 사용해 PostgreSQL `char_length`와 일치시킨다. 결합 문자·복합 이모지는 여러 글자로 셀 수 있다.
+- 방명록 포커스는 `useDialogFocus`가 실제 연결된 DOM 노드의 수명에 맞춰 관리한다. AnimatePresence의 지연 마운트 뒤에도 포커스 이동·Tab 제한·Escape·복원이 설치된다.
 
 ## Realtime 전송 계약
 
