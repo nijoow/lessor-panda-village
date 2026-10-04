@@ -82,7 +82,7 @@ presence는 인증된 캐릭터 정보가 아니다. 후보 발견에만 사용�
 
 `WorldTransport`는 실제 세션 ID 확인·setAuth·채널·2초 heartbeat·오래된 콜백 무효화·정리를 소유한다. 공유 채널과 자기 발행 채널이 준비되고 track이 성공해야 연결 완료로 표시한다. 마지막 pose는 복사하여 heartbeat와 늦게 접속한 상대에게 전달한다. payload의 좌표·회전·애니메이션·텍스트는 unknown decoder에서 검증한다.
 
-새 SQL 파일은 CLI로 생성한 `supabase/migrations/20261003055537_authorize_player_realtime_topics.sql`이다. **실제 Supabase 프로젝트에는 적용하지 않았다.** 배포 전에 먼저 적용해야 하며 이전 프로토콜과 새 프로토콜의 이동·채팅은 호환되지 않으므로 배포 후 기존 클라이언트 새로고침이 필요하다. 기존 공유 채널 정책은 탐색과 이전 클라이언트 호환을 위해 유지한다.
+새 SQL 파일은 CLI로 생성한 뒤 실제 적용 버전에 맞춰 이름을 정리한 `supabase/migrations/20261004172615_authorize_player_realtime_topics.sql`이다. **2026-10-05(KST) 실제 Supabase 프로젝트에 적용했다.** 기존 18개를 포함해 총 19개 이력이 일치하고 운영 DB의 실제 정책식 7가지 경우·14개 판정을 확인했다. 배포 순서는 DB 적용 후 클라이언트이며 이전 프로토콜과 새 프로토콜의 이동·채팅은 호환되지 않으므로 배포 후 기존 클라이언트 새로고침이 필요하다. 기존 공유 채널 정책은 탐색과 이전 클라이언트 호환을 위해 유지한다.
 
 ### 7. 인증·연결 capability
 
@@ -153,7 +153,7 @@ PGlite는 실제 PostgreSQL 정책을 실행하지만 hosted Auth/PostgREST/Real
 
 ## 운영에서 남은 확인
 
-1. 실제 Supabase에 새 사용자별 topic migration을 먼저 적용한 뒤 클라이언트를 배포하고 기존 클라이언트를 새로고침한다. 이번 작업은 로컬 파일·격리 검증까지 수행했다.
+1. 실제 Supabase의 사용자별 topic migration 적용은 2026-10-05(KST) 완료했다. 클라이언트 배포 후 기존 클라이언트는 새로고침해야 한다.
 2. 배포 환경에서 3~4인 접속, 늦은 입장, 여러 탭 퇴장, 네트워크 단절·재연결, 인증 갱신과 쪽지 교환을 확인한다. 계정·데이터를 생성하는 `world:verify`는 별도 테스트 환경에서 실행한다.
 3. 실제 모바일의 한글 조합·가상 키보드, 여러 카메라 시점의 벤치·캐릭터 간섭을 확인한다. viewport 검사는 실제 전화기 입력을 대신하지 않는다.
 4. Quadro P400 2GB에서 1080p·30fps, 낮밤·대숲·여러 캐릭터와 실제 내부 렌더 해상도를 측정한다. 소프트웨어 WebGL로 목표 장비 성능을 보증하지 않는다.
@@ -398,7 +398,7 @@ PGlite는 실제 PostgreSQL 정책을 실행하지만 hosted Auth/PostgREST/Real
 - `supabase/migrations/20260816173623_allow_profile_upsert_conflict_target.sql`
 - `supabase/migrations/20260907075944_preserve_world_traces_and_public_snapshot.sql`
 - `supabase/migrations/20260907081511_preserve_snapshot_color_mapping.sql`
-- `supabase/migrations/20261003055537_authorize_player_realtime_topics.sql`
+- `supabase/migrations/20261004172615_authorize_player_realtime_topics.sql`
 
 ### 설정·문서
 
