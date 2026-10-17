@@ -3,7 +3,7 @@ import { ChatMessage } from "@/types/multiplayer";
 
 const MAX_LOG_SIZE = 20;
 
-export interface ChatLogEntry extends ChatMessage {
+interface ChatLogEntry extends ChatMessage {
   /** 리스트 렌더링용 로컬 고유 키 (네트워크로 전송되지 않음) */
   messageId: string;
 }
