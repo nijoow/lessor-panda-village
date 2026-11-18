@@ -1,7 +1,6 @@
 # 래서판다 빌리지
 
-- 닉네임을 정하고 마을을 산책하는 3D 웹 프로젝트
-- 방문자가 남긴 쪽지와 실시간 채팅으로 소통
+닉네임을 정해 3D 마을을 산책하고, 다른 방문자와 쪽지 및 실시간 채팅으로 소통할 수 있는 웹 프로젝트입니다.
 
 [마을 둘러보기](https://lessor-panda-village.vercel.app)
 
@@ -14,25 +13,33 @@
 
 ## 주요 기능
 
-- 걷기·달리기·점프·벤치 앉기
-- 인사·춤·죽순 수확
-- 방명록·실시간 채팅
-- 그래픽 품질 자동·수동 조절
-- 서버 연결이 끊겨도 불러온 마을 산책
+- 걷기, 달리기, 점프, 벤치 앉기
+- 인사, 춤, 죽순 수확
+- 방명록 및 실시간 채팅
+- 그래픽 품질 자동 및 수동 조절
+- 서버 연결이 끊겨도 불러온 마을 산책 가능
 
-## 제작
+## 기술 스택
 
-- 체험·화면 기획, 프론트엔드 구성과 인터랙션 작업
-- AI 코딩 도구로 구현·수정, 생성형 3D 에셋 사용
-- 월드 배치 데이터를 렌더링·충돌·미니맵에서 공유
-- 쪽지는 DB에 저장하고 캐릭터 움직임은 실시간 전달
-- 모델 변환 스크립트와 원격 캐릭터의 거리별 LOD 적용
+Next.js, React, TypeScript, React Three Fiber, Three.js, Zustand, Supabase, Tailwind CSS
 
-## 기술
+## 실행
 
-Next.js · React · TypeScript · React Three Fiber · Three.js · Zustand · Supabase · Tailwind CSS
+```sh
+pnpm install
+pnpm dev
+```
 
-## 참고
+- Node.js 22 이상 환경이 필요합니다.
+- 채팅과 쪽지 기능을 쓰려면 `.env.local`에 `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`를 설정하고 Supabase 익명 로그인을 활성화해야 합니다. 환경 변수 없이도 마을 화면 자체는 실행할 수 있습니다.
+- DB 변경 사항은 `supabase/migrations`에 추가해 클라이언트보다 먼저 적용합니다.
 
-- P400의 1080p·30fps와 실서버 3~4인 동시 접속은 실측 성능을 보장하지 않음
-- [설계와 성능 확인 항목](docs/architecture.md)
+## 개발 명령
+
+- `pnpm lint`: 린트 검사
+- `pnpm test:client`: 클라이언트 테스트
+- `pnpm test:world-db`: 격리 DB에서 권한 검사
+- `pnpm build`: 프로덕션 빌드
+- `pnpm world:verify`: 통합 검증 (테스트 환경 전용)
+
+[코드 구조와 에셋 처리](docs/architecture.md)
